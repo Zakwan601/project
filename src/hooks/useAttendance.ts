@@ -105,3 +105,32 @@ export function useSyncDailyAttendance() {
     onError: (e: Error) => toast.error(e.message),
   })
 }
+
+export function useMarkAttendanceVacation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      date,
+      name,
+      description,
+    }: {
+      date: string
+      name: string
+      description?: string
+    }) => attendanceService.markDateAsVacation(date, name, description),
+    onSuccess: data => {
+      qc.invalidateQueries({ queryKey: [RECORDS_KEY] })
+      qc.invalidateQueries({ queryKey: [SESSIONS_KEY] })
+      qc.invalidateQueries({ queryKey: ['daily_stats'] })
+      qc.invalidateQueries({ queryKey: ['student_dashboard_stats'] })
+      qc.invalidateQueries({ queryKey: ['student_weekly_attendance'] })
+      qc.invalidateQueries({ queryKey: ['holidays'] })
+      toast.success(
+        data.sessions_removed > 0
+          ? `Vacation added and ${data.sessions_removed} attendance sheet${data.sessions_removed === 1 ? '' : 's'} removed`
+          : 'Vacation added',
+      )
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}

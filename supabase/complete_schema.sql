@@ -516,7 +516,17 @@ CREATE INDEX IF NOT EXISTS device_logs_processed_idx ON device_logs(processed);
 
 DROP POLICY IF EXISTS "device_logs_select" ON device_logs;
 CREATE POLICY "device_logs_select" ON device_logs FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'teacher')));
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+    OR EXISTS (
+      SELECT 1 FROM students AS student
+      WHERE student.profile_id = auth.uid()
+        AND student.admission_number = device_logs.student_biometric_id
+    )
+  );
 
 DROP POLICY IF EXISTS "device_logs_insert" ON device_logs;
 CREATE POLICY "device_logs_insert" ON device_logs FOR INSERT TO authenticated
@@ -724,4 +734,3 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION generate_attendance_sessions(date) TO authenticated;
-

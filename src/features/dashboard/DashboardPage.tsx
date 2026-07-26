@@ -6,6 +6,7 @@ import { useDashboardStats, useWeeklyAttendance } from '@/hooks/useDashboard'
 import { useDevices } from '@/hooks/useDevices'
 import { useAuth } from '@/contexts/AuthContext'
 import { StudentDashboard } from '@/features/dashboard/StudentDashboard'
+import { PunchHistoryCard } from '@/components/attendance/PunchHistoryCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
@@ -198,6 +199,11 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <PunchHistoryCard
+        title="All Punches"
+        description="Every biometric punch across all students, newest first"
+      />
     </div>
   )
 }

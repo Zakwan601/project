@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
+import { PunchHistoryCard } from '@/components/attendance/PunchHistoryCard'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
@@ -23,17 +24,17 @@ const chartConfig = {
   late: { label: 'Late', color: 'var(--chart-4)' },
 } satisfies ChartConfig
 
-function useStudentId() {
+function useStudentIdentity() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['my_student_id', user?.id],
+    queryKey: ['my_student_identity', user?.id],
     queryFn: async () => {
       const { data } = await db
         .from('students')
-        .select('id')
+        .select('id, admission_number')
         .eq('profile_id', user!.id)
         .maybeSingle()
-      return data?.id as string | undefined
+      return data as { id: string; admission_number: string } | null
     },
     enabled: !!user?.id,
   })
@@ -75,7 +76,8 @@ function StatCard({ title, value, description, icon: Icon, delay = 0, colorClass
 
 export function StudentDashboard() {
   const { profile } = useAuth()
-  const { data: studentId, isLoading: idLoading } = useStudentId()
+  const { data: student, isLoading: idLoading } = useStudentIdentity()
+  const studentId = student?.id
   const { data: stats, isLoading: statsLoading, error } = useStudentDashboardStats(studentId)
   const { data: subjectStats } = useStudentSubjectAttendance(studentId)
   const { data: weekly } = useStudentWeeklyAttendance(studentId)
@@ -229,6 +231,20 @@ export function StudentDashboard() {
               ))}
             </CardContent>
           </Card>
+        </motion.div>
+      )}
+
+      {student?.admission_number && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.3 }}
+        >
+          <PunchHistoryCard
+            admissionNumber={student.admission_number}
+            title="My Punches"
+            description="All of your biometric punches, newest first"
+          />
         </motion.div>
       )}
     </div>

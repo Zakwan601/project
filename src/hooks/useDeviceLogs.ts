@@ -10,3 +10,11 @@ export function useStudentPunches(admissionNumber: string | null) {
     enabled: Boolean(admissionNumber),
   })
 }
+
+export function useDashboardPunches(admissionNumber?: string) {
+  return useQuery({
+    queryKey: [DEVICE_LOGS_KEY, 'dashboard', admissionNumber ?? 'all'],
+    queryFn: () => deviceLogsService.getDashboardPunches(admissionNumber),
+    refetchInterval: 60_000,
+  })
+}

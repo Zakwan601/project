@@ -223,6 +223,13 @@ export interface DeviceLogWithDevice extends DeviceLog {
   } | null
 }
 
+export interface DashboardPunch extends DeviceLog {
+  student: Pick<
+    Student,
+    'admission_number' | 'first_name' | 'last_name' | 'photo_url'
+  > | null
+}
+
 // Dashboard stats types
 export interface DashboardStats {
   totalStudents: number

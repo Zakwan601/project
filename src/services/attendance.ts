@@ -145,4 +145,18 @@ export const attendanceService = {
       device_logs_unmatched: number
     }
   },
+
+  async markDateAsVacation(date: string, name: string, description?: string) {
+    const { data, error } = await db.rpc('mark_attendance_vacation', {
+      p_date: date,
+      p_name: name,
+      p_description: description || null,
+    })
+    if (error) throw error
+    return data as {
+      date: string
+      holiday_id: string
+      sessions_removed: number
+    }
+  },
 }

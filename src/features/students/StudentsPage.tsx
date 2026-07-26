@@ -377,7 +377,7 @@ function PunchHistoryDialog({
             Punching Data — {student?.first_name} {student?.last_name}
           </DialogTitle>
           <DialogDescription>
-            Matched where student_biometric_id equals admission number{' '}
+            Biometric Id = {' '}
             <span className="font-mono font-medium text-foreground">
               {student?.admission_number}
             </span>

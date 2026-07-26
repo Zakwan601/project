@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle, RefreshCw, UserX, Users } from 'lucide-react'
+import { CalendarOff, CheckCircle, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import {
   useAttendanceRecords,
   useAttendanceSessions,
+  useMarkAttendanceVacation,
   useSyncDailyAttendance,
 } from '@/hooks/useAttendance'
+import { useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
@@ -15,10 +17,19 @@ import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/s
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { AttendanceSessionWithDetails, AttendanceStatus } from '@/types/database'
 
 // Handwritten database types do not include all nested relationship selections.
@@ -43,11 +54,20 @@ function StaffDailyAttendance() {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [selectedClassId, setSelectedClassId] = useState('all')
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [vacationDialogOpen, setVacationDialogOpen] = useState(false)
+  const [vacationName, setVacationName] = useState('')
+  const [vacationDescription, setVacationDescription] = useState('')
 
   const classFilter = selectedClassId === 'all' ? undefined : selectedClassId
   const { data: sessions = [], isLoading, error } = useAttendanceSessions(classFilter, selectedDate)
   const { data: classes = [] } = useClasses()
+  const { data: holidays = [] } = useHolidays(selectedDate, selectedDate)
   const syncAttendance = useSyncDailyAttendance()
+  const markVacation = useMarkAttendanceVacation()
+  const deleteHoliday = useDeleteHoliday()
+  const selectedHoliday = holidays[0] ?? null
+  const selectedDateIsWeekend = isWeekend(selectedDate)
+  const isNonSchoolDay = selectedDateIsWeekend || Boolean(selectedHoliday)
 
   useEffect(() => {
     if (sessions.length === 0) {
@@ -70,14 +90,26 @@ function StaffDailyAttendance() {
         title="Daily Attendance"
         description="One biometric attendance result per student, per day"
         action={isAdmin ? (
-          <Button
-            size="sm"
-            onClick={() => syncAttendance.mutate(selectedDate)}
-            disabled={syncAttendance.isPending}
-          >
-            <RefreshCw className={`mr-1.5 h-4 w-4 ${syncAttendance.isPending ? 'animate-spin' : ''}`} />
-            {syncAttendance.isPending ? 'Syncing…' : 'Sync Attendance'}
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {!isNonSchoolDay && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setVacationDialogOpen(true)}
+              >
+                <CalendarOff className="mr-1.5 h-4 w-4" />
+                Add Vacation
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => syncAttendance.mutate(selectedDate)}
+              disabled={syncAttendance.isPending || isNonSchoolDay}
+            >
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${syncAttendance.isPending ? 'animate-spin' : ''}`} />
+              {syncAttendance.isPending ? 'Syncing…' : 'Sync Attendance'}
+            </Button>
+          </div>
         ) : undefined}
       />
 
@@ -109,7 +141,45 @@ function StaffDailyAttendance() {
         </CardContent>
       </Card>
 
-      {sessions.length === 0 ? (
+      {isNonSchoolDay && (
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div className="rounded-lg bg-blue-500/10 p-2 text-blue-600 dark:text-blue-400">
+              <CalendarOff className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-semibold">
+                {selectedDateIsWeekend ? 'Weekend' : selectedHoliday?.name}
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {selectedDateIsWeekend
+                  ? 'Friday and Saturday are automatic non-attendance days.'
+                  : selectedHoliday?.description || 'This date is marked as a vacation.'}
+                {' '}Attendance is not counted for this date.
+              </p>
+            </div>
+          </div>
+          {isAdmin && selectedHoliday && !selectedDateIsWeekend && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => deleteHoliday.mutate(selectedHoliday.id)}
+              disabled={deleteHoliday.isPending}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Remove Vacation
+            </Button>
+          )}
+        </div>
+      )}
+
+      {isNonSchoolDay ? (
+        <EmptyState
+          title={selectedDateIsWeekend ? 'Weekend — no attendance' : 'Vacation — no attendance'}
+          description="This date is excluded from attendance totals and percentages."
+        />
+      ) : sessions.length === 0 ? (
         <EmptyState
           title="No daily attendance yet"
           description={isAdmin
@@ -147,6 +217,69 @@ function StaffDailyAttendance() {
           {activeSession && <DailyAttendanceSheet session={activeSession} />}
         </div>
       )}
+
+      <Dialog open={vacationDialogOpen} onOpenChange={setVacationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Vacation</DialogTitle>
+            <DialogDescription>
+              Mark {databaseDate(selectedDate)} as a non-attendance day. Any attendance
+              already synchronized for this date will be removed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="vacation-name">Vacation name</Label>
+              <Input
+                id="vacation-name"
+                value={vacationName}
+                onChange={event => setVacationName(event.target.value)}
+                placeholder="e.g. Summer Vacation"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="vacation-description">Description (optional)</Label>
+              <Textarea
+                id="vacation-description"
+                value={vacationDescription}
+                onChange={event => setVacationDescription(event.target.value)}
+                placeholder="Reason or additional details"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setVacationDialogOpen(false)}
+              disabled={markVacation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => markVacation.mutate(
+                {
+                  date: selectedDate,
+                  name: vacationName.trim(),
+                  description: vacationDescription.trim() || undefined,
+                },
+                {
+                  onSuccess: () => {
+                    setVacationDialogOpen(false)
+                    setVacationName('')
+                    setVacationDescription('')
+                  },
+                },
+              )}
+              disabled={!vacationName.trim() || markVacation.isPending}
+            >
+              <CalendarOff className="mr-1.5 h-4 w-4" />
+              {markVacation.isPending ? 'Adding…' : 'Add Vacation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -357,6 +490,12 @@ function Summary({
 function databaseDate(value: string) {
   const [year, month, day] = value.split('-').map(Number)
   return format(new Date(year, month - 1, day), 'EEEE, MMMM d, yyyy')
+}
+
+function isWeekend(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  const dayOfWeek = new Date(year, month - 1, day).getDay()
+  return dayOfWeek === 5 || dayOfWeek === 6
 }
 
 function databaseTimestamp(value: string | null) {
