@@ -1,0 +1,122 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Verify the caller is authenticated and is an admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return jsonResponse(401, { error: "Missing authorization header" });
+    }
+
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData.user) {
+      return jsonResponse(401, { error: "Invalid or expired token" });
+    }
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check caller's role
+    const { data: callerProfile, error: profileErr } = await adminClient
+      .from("profiles")
+      .select("role")
+      .eq("id", userData.user.id)
+      .maybeSingle();
+
+    if (profileErr || !callerProfile) {
+      return jsonResponse(403, { error: "Profile not found" });
+    }
+
+    if (callerProfile.role !== "admin") {
+      return jsonResponse(403, { error: "Only admins can create accounts" });
+    }
+
+    // Parse request body
+    const body = await req.json();
+    const { email, password, full_name, role, extra } = body;
+
+    if (!email || !password || !full_name || !role) {
+      return jsonResponse(400, { error: "Missing required fields: email, password, full_name, role" });
+    }
+
+    if (role !== "student") {
+      return jsonResponse(400, { error: "Role must be 'student'" });
+    }
+
+    if (password.length < 6) {
+      return jsonResponse(400, { error: "Password must be at least 6 characters" });
+    }
+
+    // Create the auth user with admin API
+    const { data: newUserData, error: createErr } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name, role },
+    });
+
+    if (createErr) {
+      return jsonResponse(400, { error: createErr.message });
+    }
+
+    const newUserId = newUserData.user.id;
+
+    // The trigger will create the profile automatically, but we update it with extra fields
+    if (extra?.phone || extra?.address) {
+      await adminClient
+        .from("profiles")
+        .update({
+          phone: extra.phone || null,
+          address: extra.address || null,
+        })
+        .eq("id", newUserId);
+    }
+
+    // Link the student record to the new auth user.
+    if (extra?.student_id) {
+      const { error: linkErr } = await adminClient
+        .from("students")
+        .update({ profile_id: newUserId })
+        .eq("id", extra.student_id);
+
+      if (linkErr) {
+        await adminClient.auth.admin.deleteUser(newUserId);
+        return jsonResponse(400, { error: `Failed to link student: ${linkErr.message}` });
+      }
+    }
+
+    return jsonResponse(200, {
+      success: true,
+      user_id: newUserId,
+      email,
+      role,
+      full_name,
+    });
+  } catch (err) {
+    return jsonResponse(500, { error: (err as Error).message });
+  }
+});
+
+function jsonResponse(status: number, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}

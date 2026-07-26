@@ -1,0 +1,419 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
+import { BarChart3, Download } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any
+
+import { useClasses } from '@/hooks/useClasses'
+import { PageHeader, LoadingState, ErrorState } from '@/components/shared/PageHeader'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import type { ChartConfig } from '@/components/ui/chart'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import type { AttendanceStatus } from '@/types/database'
+
+const chartConfig: ChartConfig = {
+  present: { label: 'Present', color: 'var(--chart-2)' },
+  absent: { label: 'Absent', color: 'var(--chart-5)' },
+  late: { label: 'Late', color: 'var(--chart-4)' },
+}
+
+interface StudentReportRow {
+  id: string
+  name: string
+  admission: string
+  roll: number | null
+  present: number
+  absent: number
+  late: number
+  excused: number
+  total: number
+  percentage: number
+}
+
+function escapeCsvCell(value: string | number | null) {
+  const text = value == null ? '' : String(value)
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function useClassAttendanceReport(classId: string, startDate: string, endDate: string) {
+  return useQuery<StudentReportRow[]>({
+    queryKey: ['attendance_report', classId, startDate, endDate],
+    queryFn: async () => {
+      if (!classId) return []
+
+      const { data: sessions, error: sErr } = await db
+        .from('attendance_sessions')
+        .select('id, date')
+        .eq('class_id', classId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date')
+
+      if (sErr) throw sErr
+      if (!sessions?.length) return []
+
+      const sessionIds = (sessions as Array<{ id: string }>).map(s => s.id)
+
+      const { data: records, error: rErr } = await db
+        .from('attendance_records')
+        .select('student_id, status')
+        .in('session_id', sessionIds)
+
+      if (rErr) throw rErr
+
+      const { data: studentsData, error: stErr } = await db
+        .from('students')
+        .select('id, first_name, last_name, admission_number, roll_number')
+        .eq('class_id', classId)
+
+      if (stErr) throw stErr
+
+      const studentMap = new Map<string, StudentReportRow>()
+
+      const students = (studentsData ?? []) as Array<{ id: string; first_name: string; last_name: string; admission_number: string; roll_number: number | null }>
+      students.forEach(s => {
+        studentMap.set(s.id, {
+          id: s.id,
+          name: `${s.first_name} ${s.last_name}`,
+          admission: s.admission_number,
+          roll: s.roll_number,
+          present: 0,
+          absent: 0,
+          late: 0,
+          excused: 0,
+          total: 0,
+          percentage: 0,
+        })
+      })
+
+      const recs = (records ?? []) as Array<{ student_id: string; status: string }>
+      recs.forEach(r => {
+        const entry = studentMap.get(r.student_id)
+        if (!entry) return
+        const status = r.status as AttendanceStatus
+        entry[status]++
+        entry.total++
+      })
+
+      return Array.from(studentMap.values()).map(row => ({
+        ...row,
+        percentage: row.total > 0 ? Math.round(((row.present + row.late) / row.total) * 100) : 0,
+      })).sort((a, b) => (a.roll ?? 999) - (b.roll ?? 999))
+    },
+    enabled: !!classId && !!startDate && !!endDate,
+  })
+}
+
+interface DailyPoint { date: string; present: number; absent: number; late: number }
+
+function useDailyReport(startDate: string, endDate: string) {
+  return useQuery<DailyPoint[]>({
+    queryKey: ['daily_report', startDate, endDate],
+    queryFn: async () => {
+      const days: string[] = []
+      const d = new Date(startDate)
+      const end = new Date(endDate)
+      while (d <= end) {
+        days.push(format(d, 'yyyy-MM-dd'))
+        d.setDate(d.getDate() + 1)
+      }
+
+      const results: DailyPoint[] = []
+      for (const date of days) {
+        const { data: sessions } = await db
+          .from('attendance_sessions')
+          .select('id')
+          .eq('date', date)
+
+        const sessionIds = ((sessions ?? []) as Array<{ id: string }>).map(s => s.id)
+        if (!sessionIds.length) {
+          results.push({ date: format(new Date(date), 'MMM d'), present: 0, absent: 0, late: 0 })
+          continue
+        }
+
+        const { data: rec } = await db
+          .from('attendance_records')
+          .select('status')
+          .in('session_id', sessionIds)
+
+        results.push({
+          date: format(new Date(date), 'MMM d'),
+          present: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'present').length,
+          absent: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'absent').length,
+          late: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'late').length,
+        })
+      }
+      return results
+    },
+  })
+}
+
+interface SubjectReportRow {
+  subject: string
+  present: number
+  absent: number
+  late: number
+  excused: number
+  total: number
+  percentage: number
+}
+
+function useSubjectAttendanceReport(classId: string, startDate: string, endDate: string) {
+  return useQuery<SubjectReportRow[]>({
+    queryKey: ['subject_report', classId, startDate, endDate],
+    queryFn: async () => {
+      if (!classId) return []
+
+      const { data, error } = await db
+        .from('attendance_records')
+        .select('status, attendance_sessions!inner(id, subject_id, notes, subjects(id, name, code))')
+        .eq('attendance_sessions.class_id', classId)
+        .gte('attendance_sessions.date', startDate)
+        .lte('attendance_sessions.date', endDate)
+
+      if (error) throw error
+
+      const bySubject: Record<string, SubjectReportRow> = {}
+      ;(data ?? []).forEach((r: { status: string; attendance_sessions: { notes: string | null; subjects: { name: string } | null } }) => {
+        const session = r.attendance_sessions
+        if (!session) return
+        const subjectName = session.subjects?.name ?? session.notes ?? 'General'
+        if (!bySubject[subjectName]) {
+          bySubject[subjectName] = { subject: subjectName, present: 0, absent: 0, late: 0, excused: 0, total: 0, percentage: 0 }
+        }
+        const entry = bySubject[subjectName]
+        const status = r.status as AttendanceStatus
+        entry[status]++
+        entry.total++
+      })
+
+      return Object.values(bySubject).map(row => ({
+        ...row,
+        percentage: row.total > 0 ? Math.round(((row.present + row.late) / row.total) * 100) : 0,
+      })).sort((a, b) => b.percentage - a.percentage)
+    },
+    enabled: !!classId && !!startDate && !!endDate,
+  })
+}
+
+export function ReportsPage() {
+  const { data: classes } = useClasses()
+  const [selectedClass, setSelectedClass] = useState('')
+  const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
+  const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
+
+  const { data: studentReport, isLoading: studentLoading, error: studentError } = useClassAttendanceReport(selectedClass, startDate, endDate)
+  const { data: subjectReport } = useSubjectAttendanceReport(selectedClass, startDate, endDate)
+  const selectedClassName = classes?.find(c => c.id === selectedClass)?.name ?? 'selected class'
+  const { data: dailyData, isLoading: dailyLoading } = useDailyReport(
+    format(subDays(new Date(), 14), 'yyyy-MM-dd'),
+    format(new Date(), 'yyyy-MM-dd')
+  )
+
+  const exportStudentReport = () => {
+    if (!studentReport?.length) return
+
+    const headers = ['Roll', 'Student', 'Admission No.', 'Present', 'Absent', 'Late', 'Excused', 'Total Days', 'Attendance %']
+    const rows = studentReport.map(row => [
+      row.roll,
+      row.name,
+      row.admission,
+      row.present,
+      row.absent,
+      row.late,
+      row.excused,
+      row.total,
+      row.percentage,
+    ])
+    const csv = [headers, ...rows]
+      .map(row => row.map(escapeCsvCell).join(','))
+      .join('\r\n')
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const classSlug = selectedClassName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'class'
+    link.href = url
+    link.download = `attendance-${classSlug}-${startDate}-to-${endDate}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Reports"
+        description="Attendance analytics and insights"
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>14-Day Attendance Trend</CardTitle>
+          <CardDescription>Daily attendance breakdown over the last 2 weeks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {dailyLoading ? (
+            <LoadingState />
+          ) : (
+            <ChartContainer config={chartConfig} className="h-[240px] w-full sm:h-[280px] aspect-auto">
+              <BarChart accessibilityLayer data={dailyData}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 11 }} />
+                <YAxis tickLine={false} axisLine={false} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="present" fill="var(--color-present)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="absent" fill="var(--color-absent)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="late" fill="var(--color-late)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" /> Student Attendance Report
+          </CardTitle>
+          <CardDescription>Individual student attendance summary by class and date range</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4 mb-4">
+            <div className="space-y-1.5 min-w-[200px]">
+              <Label className="text-xs">Class</Label>
+              <Select value={selectedClass} onValueChange={setSelectedClass}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select class" />
+                </SelectTrigger>
+                <SelectContent>
+                  {classes?.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.grade}-{c.section})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Start Date</Label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-36" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">End Date</Label>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-36" />
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={exportStudentReport}
+                disabled={!studentReport?.length || studentLoading}
+              >
+                <Download /> Export CSV
+              </Button>
+            </div>
+          </div>
+
+          {!selectedClass && (
+            <div className="py-12 text-center text-muted-foreground text-sm">Select a class to view the report</div>
+          )}
+
+          {studentLoading && selectedClass && <LoadingState />}
+          {studentError && <ErrorState message={(studentError as Error).message} />}
+
+          {studentReport && studentReport.length > 0 && (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Roll</TableHead>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Admission No.</TableHead>
+                    <TableHead className="text-center">Present</TableHead>
+                    <TableHead className="text-center">Absent</TableHead>
+                    <TableHead className="text-center">Late</TableHead>
+                    <TableHead className="text-center">Excused</TableHead>
+                    <TableHead className="text-center">Total Days</TableHead>
+                    <TableHead className="text-center">%</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {studentReport.map(row => (
+                    <TableRow key={row.id}>
+                      <TableCell>{row.roll ?? '—'}</TableCell>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell className="font-mono text-sm">{row.admission}</TableCell>
+                      <TableCell className="text-center text-emerald-600 dark:text-emerald-400">{row.present}</TableCell>
+                      <TableCell className="text-center text-red-600 dark:text-red-400">{row.absent}</TableCell>
+                      <TableCell className="text-center text-amber-600 dark:text-amber-400">{row.late}</TableCell>
+                      <TableCell className="text-center text-blue-600 dark:text-blue-400">{row.excused}</TableCell>
+                      <TableCell className="text-center">{row.total}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={row.percentage >= 75 ? 'default' : 'destructive'}
+                          className="text-xs"
+                        >
+                          {row.percentage}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {studentReport && studentReport.length === 0 && selectedClass && !studentLoading && (
+            <div className="py-12 text-center text-muted-foreground text-sm">
+              No attendance data for selected period
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Subject-wise Report */}
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle className="text-base">Subject-wise Attendance</CardTitle>
+          <CardDescription>Present percentage per subject for {selectedClassName}</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {subjectReport && subjectReport.length > 0 ? (
+            <div className="space-y-4">
+              {subjectReport.map(row => (
+                <div key={row.subject} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{row.subject}</span>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="text-emerald-600">{row.present}P</span>
+                      <span className="text-amber-600">{row.late}L</span>
+                      <span className="text-red-600">{row.absent}A</span>
+                      <Badge variant={row.percentage >= 75 ? 'default' : 'destructive'} className="text-xs">
+                        {row.percentage}%
+                      </Badge>
+                    </div>
+                  </div>
+                  <Progress
+                    value={row.percentage}
+                    className="h-2"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground text-sm">
+              {selectedClass ? 'No subject-wise data for selected period' : 'Select a class to view report'}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

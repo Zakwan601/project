@@ -1,0 +1,245 @@
+export type UserRole = 'admin' | 'student'
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
+export type SessionType = 'morning' | 'afternoon' | 'period' | 'full_day'
+export type AttendanceSource = 'manual' | 'biometric' | 'system'
+
+export interface Database {
+  public: {
+    Tables: {
+      profiles: {
+        Row: Profile
+        Insert: Omit<Profile, 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Profile, 'id' | 'created_at'>>
+      }
+      academic_years: {
+        Row: AcademicYear
+        Insert: Omit<AcademicYear, 'id' | 'created_at'>
+        Update: Partial<Omit<AcademicYear, 'id' | 'created_at'>>
+      }
+      classes: {
+        Row: Class
+        Insert: Omit<Class, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Class, 'id' | 'created_at'>>
+      }
+      students: {
+        Row: Student
+        Insert: Omit<Student, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Student, 'id' | 'created_at'>>
+      }
+      subjects: {
+        Row: Subject
+        Insert: Omit<Subject, 'id' | 'created_at'>
+        Update: Partial<Omit<Subject, 'id' | 'created_at'>>
+      }
+      attendance_sessions: {
+        Row: AttendanceSession
+        Insert: Omit<AttendanceSession, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<AttendanceSession, 'id' | 'created_at'>>
+      }
+      attendance_records: {
+        Row: AttendanceRecord
+        Insert: Omit<AttendanceRecord, 'id' | 'created_at'>
+        Update: Partial<Omit<AttendanceRecord, 'id' | 'created_at'>>
+      }
+      devices: {
+        Row: Device
+        Insert: Omit<Device, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Device, 'id' | 'created_at'>>
+      }
+      device_logs: {
+        Row: DeviceLog
+        Insert: Omit<DeviceLog, 'id' | 'created_at'>
+        Update: Partial<Omit<DeviceLog, 'id' | 'created_at'>>
+      }
+    }
+    Enums: {
+      user_role: UserRole
+      attendance_status: AttendanceStatus
+      session_type: SessionType
+      attendance_source: AttendanceSource
+    }
+  }
+}
+
+export interface Profile {
+  id: string
+  role: UserRole
+  full_name: string
+  avatar_url: string | null
+  phone: string | null
+  address: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AcademicYear {
+  id: string
+  name: string
+  start_date: string
+  end_date: string
+  is_current: boolean
+  created_at: string
+}
+
+export interface Class {
+  id: string
+  name: string
+  grade: string
+  section: string
+  academic_year_id: string | null
+  capacity: number
+  room: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ClassWithDetails extends Class {
+  academic_years: AcademicYear | null
+  student_count?: number
+}
+
+export interface Student {
+  id: string
+  profile_id: string | null
+  admission_number: string
+  class_id: string | null
+  roll_number: number | null
+  first_name: string
+  last_name: string
+  date_of_birth: string | null
+  gender: string | null
+  guardian_name: string | null
+  guardian_phone: string | null
+  guardian_email: string | null
+  address: string | null
+  date_of_admission: string
+  biometric_id: string | null
+  photo_url: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface StudentWithClass extends Student {
+  classes: Class | null
+}
+
+export interface Subject {
+  id: string
+  name: string
+  code: string
+  class_id: string | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface AttendanceSession {
+  id: string
+  class_id: string
+  subject_id: string | null
+  date: string
+  session_type: SessionType
+  taken_by: string | null
+  source: AttendanceSource
+  is_finalized: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AttendanceSessionWithDetails extends AttendanceSession {
+  classes: Class
+  subjects: Subject | null
+  profiles: Profile | null
+}
+
+export interface AttendanceRecord {
+  id: string
+  session_id: string
+  student_id: string
+  status: AttendanceStatus
+  biometric_verified: boolean
+  remarks: string | null
+  marked_at: string
+  created_at: string
+}
+
+export interface AttendanceRecordWithStudent extends AttendanceRecord {
+  students: Student
+}
+
+export interface Device {
+  id: string
+  device_serial: string
+  name: string
+  location: string | null
+  ip_address: string | null
+  port: number | null
+  model: string | null
+  is_active: boolean
+  last_sync_at: string | null
+  created_at: string
+  updated_at: string
+  sn: string
+  alias: string | null
+  firmware_version: string | null
+  push_version: string | null
+  area: string | null
+  user_count: number
+  fingerprint_count: number
+  face_count: number
+  palm_count: number
+  transaction_count: number
+  last_activity: string | null
+  push_time: string | null
+  transfer_interval: string | null
+  attendance_status: string | null
+  device_state: string | null
+  is_online: boolean
+  raw_data: Record<string, unknown> | null
+  synced_at: string | null
+}
+
+export interface DeviceLog {
+  id: string
+  device_id: string | null
+  student_biometric_id: string
+  punched_at: string
+  processed: boolean
+  attendance_record_id: string | null
+  raw_data: Record<string, unknown> | null
+  created_at: string | null
+}
+
+export interface DeviceLogWithDevice extends DeviceLog {
+  devices: {
+    id: string
+    name: string
+    sn: string
+    device_serial: string
+    alias: string | null
+  } | null
+}
+
+// Dashboard stats types
+export interface DashboardStats {
+  totalStudents: number
+  totalClasses: number
+  todayAttendanceRate: number
+  presentToday: number
+  absentToday: number
+  lateToday: number
+}
+
+// Holiday types
+export interface Holiday {
+  id: string
+  date: string
+  name: string
+  description: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
