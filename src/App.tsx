@@ -15,6 +15,7 @@ import { SettingsPage } from '@/features/settings/SettingsPage'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { RecentPunchesPage } from '@/features/punches/RecentPunchesPage'
 import { StudentReportsPage } from '@/features/reports/StudentReportsPage'
+import { ComplaintsPage } from '@/features/reports/ComplaintsPage'
 import { AttendanceAutoSync } from '@/components/attendance/AttendanceAutoSync'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
@@ -52,6 +53,14 @@ function App() {
                   )}
                 />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route
+                  path="/complaints"
+                  element={(
+                    <ProtectedRoute roles={['admin']}>
+                      <ComplaintsPage />
+                    </ProtectedRoute>
+                  )}
+                />
                 <Route
                   path="/report-issue"
                   element={(

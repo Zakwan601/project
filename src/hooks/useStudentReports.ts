@@ -28,10 +28,18 @@ export function useSubmitStudentReport() {
   })
 }
 
-export function useAdminStudentReports() {
+export function useAdminStudentReports({
+  enabled = true,
+  subscribe = false,
+}: {
+  enabled?: boolean
+  subscribe?: boolean
+} = {}) {
   const queryClient = useQueryClient()
 
   useEffect(() => {
+    if (!enabled || !subscribe) return
+
     const channel = supabase
       .channel('admin-student-reports')
       .on(
@@ -39,18 +47,31 @@ export function useAdminStudentReports() {
         { event: '*', schema: 'public', table: 'student_reports' },
         payload => {
           queryClient.invalidateQueries({ queryKey: [STUDENT_REPORTS_KEY, 'admin'] })
-          if (payload.eventType === 'INSERT') toast.info('New student report received')
+          if (payload.eventType === 'INSERT') toast.info('New complaint received')
         },
       )
       .subscribe()
 
     return () => { void supabase.removeChannel(channel) }
-  }, [queryClient])
+  }, [enabled, queryClient, subscribe])
 
   return useQuery({
     queryKey: [STUDENT_REPORTS_KEY, 'admin'],
     queryFn: () => studentReportsService.getAdminRecent(),
+    enabled,
     refetchInterval: 30_000,
+  })
+}
+
+export function useSolveStudentReport() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: studentReportsService.markSolved,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [STUDENT_REPORTS_KEY, 'admin'] })
+      toast.success('Complaint marked as solved')
+    },
+    onError: (error: Error) => toast.error(error.message),
   })
 }
 

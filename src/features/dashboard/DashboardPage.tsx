@@ -9,7 +9,6 @@ import { StudentDashboard } from '@/features/dashboard/StudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
-import { StudentReportNotifications } from '@/components/reports/StudentReportNotifications'
 import type { SyncServiceHealth, SyncServiceStatus } from '@/types/database'
 import {
   ChartContainer,
@@ -151,8 +150,6 @@ export function DashboardPage() {
           </div>
         </CardContent>
       </Card>
-
-      <StudentReportNotifications />
 
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">

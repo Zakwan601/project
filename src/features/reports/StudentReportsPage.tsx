@@ -87,6 +87,7 @@ export function StudentReportsPage() {
                   placeholder="Brief summary"
                   required
                 />
+                <p className="text-xs text-muted-foreground">Minimum 3 characters</p>
               </div>
             </div>
             <div className="space-y-2">
@@ -101,11 +102,13 @@ export function StudentReportsPage() {
                 placeholder="Describe what happened and include any useful details."
                 required
               />
-              <p className="text-right text-xs text-muted-foreground">{message.length}/2000</p>
+              <p className="text-right text-xs text-muted-foreground">
+                Minimum 10 characters · {message.length}/2000
+              </p>
             </div>
             <Button
               type="submit"
-              disabled={submitReport.isPending || subject.trim().length < 3 || message.trim().length < 10}
+              disabled={submitReport.isPending}
             >
               <Send className="mr-1.5 h-4 w-4" />
               {submitReport.isPending ? 'Sending...' : 'Send Report'}
@@ -135,7 +138,9 @@ export function StudentReportsPage() {
                       <p className="font-medium">{report.subject}</p>
                       <p className="mt-0.5 text-xs capitalize text-muted-foreground">{report.category}</p>
                     </div>
-                    <Badge className={statusStyles[report.status]}>{report.status}</Badge>
+                    <Badge className={statusStyles[report.status]}>
+                      {report.status === 'resolved' ? 'solved' : report.status}
+                    </Badge>
                   </div>
                   <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{report.message}</p>
                   <p className="mt-3 text-xs text-muted-foreground">

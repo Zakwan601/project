@@ -27,7 +27,6 @@ export const studentReportsService = {
       .from('student_reports')
       .select('*, students(first_name, last_name, admission_number)')
       .order('created_at', { ascending: false })
-      .limit(20)
     if (error) throw error
     return data as StudentReportWithStudent[]
   },
@@ -38,6 +37,20 @@ export const studentReportsService = {
       .update({
         admin_read_at: new Date().toISOString(),
         status: 'reviewed',
+      })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    return data as StudentReport
+  },
+
+  async markSolved(id: string) {
+    const { data, error } = await db
+      .from('student_reports')
+      .update({
+        admin_read_at: new Date().toISOString(),
+        status: 'resolved',
       })
       .eq('id', id)
       .select()
