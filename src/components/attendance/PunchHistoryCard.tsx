@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle, ChevronDown, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound } from 'lucide-react'
+import { CheckCircle, ChevronDown, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound, XCircle } from 'lucide-react'
 import { useDashboardPunches } from '@/hooks/useDeviceLogs'
 import type { DashboardPunch } from '@/types/database'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -87,6 +87,7 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
     : ''
   const arrival = splitPunchTime(day.checkIn.punched_at)
   const departure = day.checkOut ? splitPunchTime(day.checkOut.punched_at) : null
+  const isPresent = isOnTimeArrival(day.checkIn.punched_at)
 
   return (
     <div className="border-b last:border-b-0">
@@ -103,9 +104,13 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{day.studentBiometricId}</p>
             <p className="truncate text-sm text-muted-foreground">{name}</p>
-            <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
-              <CheckCircle className="h-3.5 w-3.5" />
-              Present
+            <p className={`mt-1 flex items-center gap-1 text-xs font-medium ${
+              isPresent ? 'text-emerald-600' : 'text-red-600'
+            }`}>
+              {isPresent
+                ? <CheckCircle className="h-3.5 w-3.5" />
+                : <XCircle className="h-3.5 w-3.5" />}
+              {isPresent ? 'Present' : 'Absent — after 9:00 AM'}
             </p>
           </div>
         </div>
@@ -182,6 +187,11 @@ function groupDailyPunches(punches: DashboardPunch[]): DailyPunches[] {
 function punchTime(value: string) {
   const timestamp = new Date(value).getTime()
   return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+function isOnTimeArrival(value: string) {
+  const { time } = splitPunchTime(value)
+  return /^\d{2}:\d{2}:\d{2}$/.test(time) && time <= '09:00:00'
 }
 
 function splitPunchTime(value: string) {

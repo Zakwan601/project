@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
-  BarChart3, Cpu, Settings, User, GraduationCap, LogOut, ScanLine,
+  BarChart3, Cpu, Settings, User, GraduationCap, LogOut, ScanLine, MessageSquareWarning,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import type { UserRole } from '@/types/database'
@@ -25,7 +25,8 @@ const navItems: NavItem[] = [
   { title: 'Students', href: '/students', icon: Users, roles: ['admin'] },
   { title: 'Classes', href: '/classes', icon: BookOpen, roles: ['admin'] },
   { title: 'Attendance', href: '/attendance', icon: ClipboardList, roles: ['admin', 'student'] },
-  { title: 'Recent Punches', href: '/punches', icon: ScanLine, roles: ['admin'] },
+  { title: 'Punches', href: '/punches', icon: ScanLine, roles: ['admin', 'student'] },
+  { title: 'Report Issue', href: '/report-issue', icon: MessageSquareWarning, roles: ['student'] },
   { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin'] },
   { title: 'Devices', href: '/devices', icon: Cpu, roles: ['admin'] },
 ]

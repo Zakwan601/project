@@ -392,9 +392,12 @@ function StudentDailyAttendance() {
         .eq('student_id', student.id)
         .gte('attendance_sessions.date', monthStart)
         .lte('attendance_sessions.date', monthEnd)
-        .order('marked_at', { ascending: false })
+        .order('date', { referencedTable: 'attendance_sessions', ascending: false })
       if (recordsError) throw recordsError
-      return { student, records: records ?? [] }
+      return {
+        student,
+        records: (records ?? []) as StudentDailyAttendanceRecord[],
+      }
     },
     enabled: Boolean(user),
   })
@@ -404,6 +407,12 @@ function StudentDailyAttendance() {
   if (!data?.student) {
     return <EmptyState title="Student profile not linked" description="Contact your administrator." />
   }
+
+  const sortedRecords = [...data.records].sort((a, b) => {
+    const dateOrder = b.attendance_sessions.date.localeCompare(a.attendance_sessions.date)
+    if (dateOrder !== 0) return dateOrder
+    return b.marked_at.localeCompare(a.marked_at)
+  })
 
   return (
     <div>
@@ -433,15 +442,7 @@ function StudentDailyAttendance() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.records.map((record: {
-              id: string
-              status: AttendanceStatus
-              biometric_verified: boolean
-              marked_at: string
-              check_in_at: string | null
-              check_out_at: string | null
-              attendance_sessions: { date: string }
-            }) => (
+            {sortedRecords.map(record => (
               <TableRow key={record.id}>
                 <TableCell>{databaseDate(record.attendance_sessions.date)}</TableCell>
                 <TableCell>
@@ -468,6 +469,16 @@ function StudentDailyAttendance() {
       </Card>
     </div>
   )
+}
+
+interface StudentDailyAttendanceRecord {
+  id: string
+  status: AttendanceStatus
+  biometric_verified: boolean
+  marked_at: string
+  check_in_at: string | null
+  check_out_at: string | null
+  attendance_sessions: { date: string }
 }
 
 function Summary({

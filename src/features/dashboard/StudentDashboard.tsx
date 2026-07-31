@@ -1,44 +1,20 @@
 import { motion } from 'framer-motion'
 import { CheckCircle, UserX, Clock, TrendingUp, GraduationCap, Sparkles } from 'lucide-react'
 import { format } from 'date-fns'
-import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
-import { useStudentDashboardStats, useStudentSubjectAttendance, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
+import { useStudentDashboardStats, useStudentIdentity, useStudentSubjectAttendance, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
-import { PunchHistoryCard } from '@/components/attendance/PunchHistoryCard'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-import { supabase } from '@/lib/supabase'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as any
-
 const chartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
   absent: { label: 'Absent', color: 'var(--chart-5)' },
   late: { label: 'Late', color: 'var(--chart-4)' },
 } satisfies ChartConfig
-
-function useStudentIdentity() {
-  const { user } = useAuth()
-  return useQuery({
-    queryKey: ['my_student_identity', user?.id],
-    queryFn: async () => {
-      const { data } = await db
-        .from('students')
-        .select('id, admission_number')
-        .eq('profile_id', user!.id)
-        .maybeSingle()
-      return data as { id: string; admission_number: string } | null
-    },
-    enabled: !!user?.id,
-  })
-}
 
 function StatCard({ title, value, description, icon: Icon, delay = 0, colorClass = 'bg-primary/10 text-primary', accentClass = 'bg-primary' }: {
   title: string
@@ -64,7 +40,7 @@ function StatCard({ title, value, description, icon: Icon, delay = 0, colorClass
               <p className="text-3xl font-bold tracking-tight">{value}</p>
               {description && <p className="text-xs text-muted-foreground">{description}</p>}
             </div>
-            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110 ${colorClass}`}>
+            <div className={`flex h-6 w-6 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110 ${colorClass}`}>
               <Icon className="h-6 w-6" />
             </div>
           </div>
@@ -82,8 +58,9 @@ export function StudentDashboard() {
   const { data: subjectStats } = useStudentSubjectAttendance(studentId)
   const { data: weekly } = useStudentWeeklyAttendance(studentId)
 
+  const today = format(new Date(), 'yyyy-MM-dd')
   const weeklyChartData = weekly?.map(d => ({
-    date: format(new Date(d.date), 'EEE'),
+    date: d.date === today ? 'Today' : format(new Date(d.date), 'EEE'),
     present: d.present,
     absent: d.absent,
     late: d.late,
@@ -128,9 +105,9 @@ export function StudentDashboard() {
       </motion.div>
 
       {/* Personal attendance stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="My Attendance"
+          title="Attendance"
           value={`${stats?.attendanceRate ?? 0}%`}
           icon={TrendingUp}
           delay={0}
@@ -234,19 +211,6 @@ export function StudentDashboard() {
         </motion.div>
       )}
 
-      {student?.admission_number && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.3 }}
-        >
-          <PunchHistoryCard
-            admissionNumber={student.admission_number}
-            title="My Punches"
-            description="Daily arrival and departure times, newest first"
-          />
-        </motion.div>
-      )}
     </div>
   )
 }

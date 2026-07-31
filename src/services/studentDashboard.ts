@@ -103,7 +103,7 @@ export const studentDashboardService = {
 
   async getWeeklyAttendance(studentId: string): Promise<WeeklyAttendanceDay[]> {
     const days = Array.from({ length: 7 }, (_, i) => {
-      const d = subDays(new Date(), 6 - i)
+      const d = subDays(new Date(), i)
       return format(d, 'yyyy-MM-dd')
     })
 

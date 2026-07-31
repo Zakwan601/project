@@ -51,6 +51,11 @@ export interface Database {
         Insert: Omit<DeviceLog, 'id' | 'created_at'>
         Update: Partial<Omit<DeviceLog, 'id' | 'created_at'>>
       }
+      student_reports: {
+        Row: StudentReport
+        Insert: Omit<StudentReport, 'id' | 'status' | 'admin_read_at' | 'discord_delivered' | 'created_at' | 'updated_at'>
+        Update: Partial<Pick<StudentReport, 'status' | 'admin_read_at'>>
+      }
     }
     Enums: {
       user_role: UserRole
@@ -254,6 +259,26 @@ export interface SyncServiceHealth {
   last_error: string | null
   updated_at: string
   is_running: boolean
+}
+
+export type StudentReportCategory = 'attendance' | 'academic' | 'safety' | 'technical' | 'other'
+export type StudentReportStatus = 'submitted' | 'reviewed' | 'resolved'
+
+export interface StudentReport {
+  id: string
+  student_id: string
+  category: StudentReportCategory
+  subject: string
+  message: string
+  status: StudentReportStatus
+  admin_read_at: string | null
+  discord_delivered: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface StudentReportWithStudent extends StudentReport {
+  students: Pick<Student, 'first_name' | 'last_name' | 'admission_number'>
 }
 
 // Holiday types

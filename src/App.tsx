@@ -14,6 +14,7 @@ import { DevicesPage } from '@/features/devices/DevicesPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { RecentPunchesPage } from '@/features/punches/RecentPunchesPage'
+import { StudentReportsPage } from '@/features/reports/StudentReportsPage'
 import { AttendanceAutoSync } from '@/components/attendance/AttendanceAutoSync'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
@@ -45,12 +46,20 @@ function App() {
                 <Route
                   path="/punches"
                   element={(
-                    <ProtectedRoute roles={['admin']}>
+                    <ProtectedRoute roles={['admin', 'student']}>
                       <RecentPunchesPage />
                     </ProtectedRoute>
                   )}
                 />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route
+                  path="/report-issue"
+                  element={(
+                    <ProtectedRoute roles={['student']}>
+                      <StudentReportsPage />
+                    </ProtectedRoute>
+                  )}
+                />
                 <Route path="/devices" element={<DevicesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />

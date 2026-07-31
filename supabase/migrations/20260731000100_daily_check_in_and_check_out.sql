@@ -1,7 +1,8 @@
 /*
   Store the daily arrival and departure punches on the attendance record.
 
-  - The first punch marks the student present and is stored as check_in_at.
+  - The first punch is stored as check_in_at and marks the student present
+    only when it is at or before 09:00:00.
   - The second punch is stored as check_out_at.
   - A missing departure remains NULL and never changes attendance status.
 */
@@ -38,6 +39,21 @@ UPDATE public.attendance_records
 SET check_in_at = marked_at
 WHERE biometric_verified = true
   AND check_in_at IS NULL;
+
+UPDATE public.attendance_records
+SET
+  status = CASE
+    WHEN (check_in_at AT TIME ZONE 'UTC')::time <= TIME '09:00:00'
+      THEN 'present'::attendance_status
+    ELSE 'absent'::attendance_status
+  END,
+  remarks = CASE
+    WHEN (check_in_at AT TIME ZONE 'UTC')::time <= TIME '09:00:00'
+      THEN 'Synchronized from daily biometric punches'
+    ELSE 'Arrival after the 09:00 attendance cutoff'
+  END
+WHERE biometric_verified = true
+  AND check_in_at IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.sync_daily_attendance(p_date date)
 RETURNS jsonb
@@ -133,13 +149,24 @@ BEGIN
     marked_at, check_in_at, check_out_at
   )
   SELECT
-    session_id, student_id, 'present'::attendance_status, true,
-    'Synchronized from daily biometric punches',
+    session_id,
+    student_id,
+    CASE
+      WHEN (check_in_at AT TIME ZONE 'UTC')::time <= TIME '09:00:00'
+        THEN 'present'::attendance_status
+      ELSE 'absent'::attendance_status
+    END,
+    true,
+    CASE
+      WHEN (check_in_at AT TIME ZONE 'UTC')::time <= TIME '09:00:00'
+        THEN 'Synchronized from daily biometric punches'
+      ELSE 'Arrival after the 09:00 attendance cutoff'
+    END,
     check_in_at, check_in_at, check_out_at
   FROM daily_punches
   ON CONFLICT (session_id, student_id) DO UPDATE
   SET
-    status = 'present'::attendance_status,
+    status = EXCLUDED.status,
     biometric_verified = true,
     remarks = EXCLUDED.remarks,
     marked_at = EXCLUDED.marked_at,
@@ -147,6 +174,16 @@ BEGIN
     check_out_at = EXCLUDED.check_out_at;
 
   GET DIAGNOSTICS v_present_records = ROW_COUNT;
+
+  SELECT COUNT(*)
+  INTO v_present_records
+  FROM public.attendance_records AS record
+  JOIN public.attendance_sessions AS session
+    ON session.id = record.session_id
+  WHERE session.date = p_date
+    AND session.source = 'system'
+    AND record.status = 'present'::attendance_status
+    AND record.biometric_verified = true;
 
   UPDATE public.device_logs AS log
   SET
@@ -200,10 +237,10 @@ REVOKE ALL ON FUNCTION public.sync_daily_attendance(date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sync_daily_attendance(date) TO authenticated;
 
 COMMENT ON FUNCTION public.sync_daily_attendance(date) IS
-  'Marks attendance from the first daily punch and stores a later punch as departure.';
+  'Marks attendance present for arrival by 09:00, absent afterward, and stores departure data.';
 
 COMMENT ON COLUMN public.attendance_records.check_in_at IS
-  'First matched biometric punch for the school day; this marks the student present.';
+  'First matched biometric punch; arrival through 09:00 marks present, later arrival remains absent.';
 
 COMMENT ON COLUMN public.attendance_records.check_out_at IS
   'Second matched biometric punch; NULL when departure is missing. Later punches remain raw logs.';
