@@ -326,7 +326,8 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
                 <TableHead>Student</TableHead>
                 <TableHead>Admission No.</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>First punch</TableHead>
+                <TableHead>Arrival</TableHead>
+                <TableHead>Departure</TableHead>
                 <TableHead>Verification</TableHead>
               </TableRow>
             </TableHeader>
@@ -347,7 +348,10 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {record?.biometric_verified ? databaseTimestamp(record.marked_at) : '—'}
+                      {record?.check_in_at ? databaseTimestamp(record.check_in_at) : '—'}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">
+                      {record?.check_out_at ? databaseTimestamp(record.check_out_at) : '—'}
                     </TableCell>
                     <TableCell>
                       <Badge variant={record?.biometric_verified ? 'default' : 'secondary'}>
@@ -384,7 +388,7 @@ function StudentDailyAttendance() {
 
       const { data: records, error: recordsError } = await db
         .from('attendance_records')
-        .select('id, status, biometric_verified, marked_at, attendance_sessions!inner(date)')
+        .select('id, status, biometric_verified, marked_at, check_in_at, check_out_at, attendance_sessions!inner(date)')
         .eq('student_id', student.id)
         .gte('attendance_sessions.date', monthStart)
         .lte('attendance_sessions.date', monthEnd)
@@ -423,7 +427,8 @@ function StudentDailyAttendance() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>First punch</TableHead>
+              <TableHead>Arrival</TableHead>
+              <TableHead>Departure</TableHead>
               <TableHead>Verification</TableHead>
             </TableRow>
           </TableHeader>
@@ -433,6 +438,8 @@ function StudentDailyAttendance() {
               status: AttendanceStatus
               biometric_verified: boolean
               marked_at: string
+              check_in_at: string | null
+              check_out_at: string | null
               attendance_sessions: { date: string }
             }) => (
               <TableRow key={record.id}>
@@ -443,7 +450,10 @@ function StudentDailyAttendance() {
                   </Badge>
                 </TableCell>
                 <TableCell className="font-mono text-xs">
-                  {record.biometric_verified ? databaseTimestamp(record.marked_at) : '—'}
+                  {record.check_in_at ? databaseTimestamp(record.check_in_at) : '—'}
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                  {record.check_out_at ? databaseTimestamp(record.check_out_at) : '—'}
                 </TableCell>
                 <TableCell>
                   {record.biometric_verified ? 'Biometric' : 'No punch'}

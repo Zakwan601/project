@@ -13,7 +13,9 @@ import { ReportsPage } from '@/features/reports/ReportsPage'
 import { DevicesPage } from '@/features/devices/DevicesPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { ProfilePage } from '@/features/profile/ProfilePage'
+import { RecentPunchesPage } from '@/features/punches/RecentPunchesPage'
 import { AttendanceAutoSync } from '@/components/attendance/AttendanceAutoSync'
+import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +42,14 @@ function App() {
                 <Route path="/students" element={<StudentsPage />} />
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/attendance" element={<AttendancePage />} />
+                <Route
+                  path="/punches"
+                  element={(
+                    <ProtectedRoute roles={['admin']}>
+                      <RecentPunchesPage />
+                    </ProtectedRoute>
+                  )}
+                />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/devices" element={<DevicesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

@@ -13,6 +13,7 @@ const pageLabels: Record<string, string> = {
   '/students': 'Students',
   '/classes': 'Classes',
   '/attendance': 'Attendance',
+  '/punches': 'Recent Punches',
   '/reports': 'Reports',
   '/devices': 'Devices',
   '/settings': 'Settings',

@@ -1,12 +1,23 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 import { supabase } from '@/lib/supabase'
-import type { DashboardStats } from '@/types/database'
+import type { DashboardStats, SyncServiceHealth } from '@/types/database'
 import { format } from 'date-fns'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 
 export const dashboardService = {
+  async getSyncServiceHealth(): Promise<SyncServiceHealth | null> {
+    const { data, error } = await db
+      .from('sync_service_health')
+      .select('*')
+      .eq('service_key', 'zkbio-sync-service')
+      .maybeSingle()
+
+    if (error) throw error
+    return data as SyncServiceHealth | null
+  },
+
   async getStats(): Promise<DashboardStats> {
     const today = format(new Date(), 'yyyy-MM-dd')
 

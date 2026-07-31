@@ -1,15 +1,15 @@
 import { motion } from 'framer-motion'
-import { CheckCircle, Clock, Cpu, GraduationCap, Users, UserX, Wifi, WifiOff } from 'lucide-react'
-import { format } from 'date-fns'
+import { Activity, CheckCircle, Clock, Cpu, GraduationCap, Users, UserX, Wifi, WifiOff } from 'lucide-react'
+import { format, formatDistanceToNow } from 'date-fns'
 import { Bar, BarChart, CartesianGrid, Label, Pie, PieChart, XAxis } from 'recharts'
-import { useDashboardStats, useWeeklyAttendance } from '@/hooks/useDashboard'
+import { useDashboardStats, useSyncServiceHealth, useWeeklyAttendance } from '@/hooks/useDashboard'
 import { useDevices } from '@/hooks/useDevices'
 import { useAuth } from '@/contexts/AuthContext'
 import { StudentDashboard } from '@/features/dashboard/StudentDashboard'
-import { PunchHistoryCard } from '@/components/attendance/PunchHistoryCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
+import type { SyncServiceHealth, SyncServiceStatus } from '@/types/database'
 import {
   ChartContainer,
   ChartLegend,
@@ -33,6 +33,11 @@ export function DashboardPage() {
   const { data: stats, isLoading, error } = useDashboardStats()
   const { data: weekly } = useWeeklyAttendance()
   const { data: devices, isLoading: devicesLoading } = useDevices()
+  const {
+    data: syncService,
+    isLoading: syncServiceLoading,
+    error: syncServiceError,
+  } = useSyncServiceHealth()
 
   if (isLoading) return <LoadingState message="Loading dashboard..." />
   if (error) return <ErrorState message={(error as Error).message} />
@@ -88,15 +93,23 @@ export function DashboardPage() {
             Machine Status
           </CardTitle>
           <CardDescription>
-            Live status from the biometric devices table, refreshed every minute
+            Live biometric machine and desktop sync service status, refreshed every minute
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {devicesLoading ? (
-            <p className="text-sm text-muted-foreground">Checking machine status...</p>
-          ) : devices && devices.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {devices.map(device => (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <SyncServiceStatusCard
+              health={syncService}
+              isLoading={syncServiceLoading}
+              hasError={Boolean(syncServiceError)}
+            />
+
+            {devicesLoading ? (
+              <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                Checking machine status...
+              </div>
+            ) : devices && devices.length > 0 ? (
+              devices.map(device => (
                 <div
                   key={device.id}
                   className="flex items-center justify-between gap-4 rounded-xl border bg-muted/20 p-4"
@@ -128,11 +141,13 @@ export function DashboardPage() {
                     </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No biometric machine is registered.</p>
-          )}
+              ))
+            ) : (
+              <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                No biometric machine is registered.
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -200,12 +215,71 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <PunchHistoryCard
-        title="All Punches"
-        description="Every biometric punch across all students, newest first"
-      />
     </div>
   )
+}
+
+function SyncServiceStatusCard({
+  health,
+  isLoading,
+  hasError,
+}: {
+  health: SyncServiceHealth | null | undefined
+  isLoading: boolean
+  hasError: boolean
+}) {
+  const isRunning = health?.is_running === true
+
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/20 p-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`rounded-lg p-2.5 ${
+          isRunning
+            ? 'bg-emerald-500/10 text-emerald-600'
+            : 'bg-muted text-muted-foreground'
+        }`}>
+          <Activity className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">Desktop Sync Service</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {syncServiceDetail(health, isLoading, hasError)}
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <Badge
+          variant={isRunning ? 'default' : 'secondary'}
+          className={isRunning ? 'bg-emerald-600 hover:bg-emerald-600' : ''}
+        >
+          {isLoading ? 'Checking' : hasError || !health ? 'Unavailable' : isRunning ? 'Running' : 'Stopped'}
+        </Badge>
+        <span className={`text-[11px] ${syncStatusClass(health?.last_sync_status)}`}>
+          {health ? `Sync: ${health.last_sync_status}` : 'Sync: unavailable'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function syncServiceDetail(
+  health: SyncServiceHealth | null | undefined,
+  isLoading: boolean,
+  hasError: boolean,
+) {
+  if (isLoading) return 'Checking service heartbeat...'
+  if (hasError) return 'Could not load service status'
+  if (!health) return 'No service heartbeat has been recorded'
+  if (!health.last_sync_at) return 'No completed sync yet'
+
+  return `Last sync ${formatDistanceToNow(new Date(health.last_sync_at), { addSuffix: true })}`
+}
+
+function syncStatusClass(status?: SyncServiceStatus) {
+  if (status === 'success') return 'text-emerald-600'
+  if (status === 'failed') return 'text-red-600'
+  if (status === 'running') return 'text-amber-600'
+  return 'text-muted-foreground'
 }
 
 function SummaryCard({

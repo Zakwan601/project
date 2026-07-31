@@ -1,6 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '@/services/dashboard'
 
+export function useSyncServiceHealth() {
+  return useQuery({
+    queryKey: ['sync_service_health', 'zkbio-sync-service'],
+    queryFn: () => dashboardService.getSyncServiceHealth(),
+    refetchInterval: 60_000,
+  })
+}
+
 export function useDashboardStats() {
   return useQuery({
     queryKey: ['dashboard_stats'],

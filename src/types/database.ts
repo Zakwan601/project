@@ -163,6 +163,8 @@ export interface AttendanceRecord {
   biometric_verified: boolean
   remarks: string | null
   marked_at: string
+  check_in_at: string | null
+  check_out_at: string | null
   created_at: string
 }
 
@@ -238,6 +240,20 @@ export interface DashboardStats {
   presentToday: number
   absentToday: number
   lateToday: number
+}
+
+export type SyncServiceStatus = 'never' | 'running' | 'success' | 'failed'
+
+export interface SyncServiceHealth {
+  service_key: string
+  process_started_at: string
+  last_heartbeat_at: string
+  last_sync_started_at: string | null
+  last_sync_at: string | null
+  last_sync_status: SyncServiceStatus
+  last_error: string | null
+  updated_at: string
+  is_running: boolean
 }
 
 // Holiday types

@@ -243,7 +243,7 @@ export function StudentDashboard() {
           <PunchHistoryCard
             admissionNumber={student.admission_number}
             title="My Punches"
-            description="All of your biometric punches, newest first"
+            description="Daily arrival and departure times, newest first"
           />
         </motion.div>
       )}
