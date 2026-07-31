@@ -132,8 +132,8 @@ export const attendanceService = {
   },
 
   async syncDailyAttendance(date: string) {
-    const { data, error } = await db.rpc('sync_daily_attendance', {
-      p_date: date,
+    const { data, error } = await supabase.functions.invoke('sync-attendance', {
+      body: { date },
     })
     if (error) throw error
     return data as {

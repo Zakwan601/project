@@ -149,4 +149,13 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Keep native date-picker indicators legible against each theme. */
+  input:is([type="date"], [type="month"], [type="datetime-local"], [type="time"]) {
+    color-scheme: light;
+  }
+
+  .dark input:is([type="date"], [type="month"], [type="datetime-local"], [type="time"]) {
+    color-scheme: dark;
+  }
 }

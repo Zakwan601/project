@@ -90,11 +90,9 @@ export function DashboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Cpu className="h-5 w-5" />
-            Machine Status
+            Hardware Status
           </CardTitle>
-          <CardDescription>
-            Live biometric machine and desktop sync service status, refreshed every minute
-          </CardDescription>
+
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

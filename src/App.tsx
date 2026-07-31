@@ -16,7 +16,6 @@ import { ProfilePage } from '@/features/profile/ProfilePage'
 import { RecentPunchesPage } from '@/features/punches/RecentPunchesPage'
 import { StudentReportsPage } from '@/features/reports/StudentReportsPage'
 import { ComplaintsPage } from '@/features/reports/ComplaintsPage'
-import { AttendanceAutoSync } from '@/components/attendance/AttendanceAutoSync'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
 const queryClient = new QueryClient({
@@ -79,7 +78,6 @@ function App() {
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </BrowserRouter>
-          <AttendanceAutoSync />
           <Toaster richColors position="top-right" />
         </AuthProvider>
       </QueryClientProvider>

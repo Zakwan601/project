@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
+import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
@@ -86,9 +87,7 @@ export function StudentDashboard() {
         <h2 className="relative mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
           Good {getGreeting()}, {profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
-        <p className="relative mt-1 text-sm text-muted-foreground">
-          Here&apos;s a look at your attendance this week.
-        </p>
+        <DesktopSyncLastSync className="relative mt-3" label="Attendance last updated" />
         {stats?.className && (
           <div className="relative mt-4 inline-flex items-center gap-3 rounded-xl border bg-background/60 px-4 py-2.5 backdrop-blur">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">

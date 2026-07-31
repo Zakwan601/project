@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
+import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -112,6 +113,7 @@ function StaffDailyAttendance() {
           </div>
         ) : undefined}
       />
+      <DesktopSyncLastSync className="-mt-3 mb-5" />
 
       <Card className="mb-5">
         <CardContent className="grid gap-4 p-4 sm:grid-cols-2">
@@ -418,8 +420,9 @@ function StudentDailyAttendance() {
     <div>
       <PageHeader
         title="My Attendance"
-        description="One attendance result per school day"
+        description="Weekends and Holidays are excluded."
       />
+      <DesktopSyncLastSync className="-mt-3 mb-5" label="Attendance last updated" />
       <div className="mb-5 max-w-xs space-y-2">
         <Label htmlFor="student-month">Month</Label>
         <Input
