@@ -12,7 +12,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
@@ -158,54 +157,6 @@ function useDailyReport(startDate: string, endDate: string) {
   })
 }
 
-interface SubjectReportRow {
-  subject: string
-  present: number
-  absent: number
-  late: number
-  excused: number
-  total: number
-  percentage: number
-}
-
-function useSubjectAttendanceReport(classId: string, startDate: string, endDate: string) {
-  return useQuery<SubjectReportRow[]>({
-    queryKey: ['subject_report', classId, startDate, endDate],
-    queryFn: async () => {
-      if (!classId) return []
-
-      const { data, error } = await db
-        .from('attendance_records')
-        .select('status, attendance_sessions!inner(id, subject_id, notes, subjects(id, name, code))')
-        .eq('attendance_sessions.class_id', classId)
-        .gte('attendance_sessions.date', startDate)
-        .lte('attendance_sessions.date', endDate)
-
-      if (error) throw error
-
-      const bySubject: Record<string, SubjectReportRow> = {}
-      ;(data ?? []).forEach((r: { status: string; attendance_sessions: { notes: string | null; subjects: { name: string } | null } }) => {
-        const session = r.attendance_sessions
-        if (!session) return
-        const subjectName = session.subjects?.name ?? session.notes ?? 'General'
-        if (!bySubject[subjectName]) {
-          bySubject[subjectName] = { subject: subjectName, present: 0, absent: 0, late: 0, excused: 0, total: 0, percentage: 0 }
-        }
-        const entry = bySubject[subjectName]
-        const status = r.status as AttendanceStatus
-        entry[status]++
-        entry.total++
-      })
-
-      return Object.values(bySubject).map(row => ({
-        ...row,
-        percentage: row.total > 0 ? Math.round(((row.present + row.late) / row.total) * 100) : 0,
-      })).sort((a, b) => b.percentage - a.percentage)
-    },
-    enabled: !!classId && !!startDate && !!endDate,
-  })
-}
-
 export function ReportsPage() {
   const { data: classes } = useClasses()
   const [selectedClass, setSelectedClass] = useState('')
@@ -213,7 +164,6 @@ export function ReportsPage() {
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
 
   const { data: studentReport, isLoading: studentLoading, error: studentError } = useClassAttendanceReport(selectedClass, startDate, endDate)
-  const { data: subjectReport } = useSubjectAttendanceReport(selectedClass, startDate, endDate)
   const selectedClassName = classes?.find(c => c.id === selectedClass)?.name ?? 'selected class'
   const { data: dailyData, isLoading: dailyLoading } = useDailyReport(
     format(subDays(new Date(), 14), 'yyyy-MM-dd'),
@@ -378,42 +328,6 @@ export function ReportsPage() {
         </CardContent>
       </Card>
 
-      {/* Subject-wise Report */}
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="text-base">Subject-wise Attendance</CardTitle>
-          <CardDescription>Present percentage per subject for {selectedClassName}</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {subjectReport && subjectReport.length > 0 ? (
-            <div className="space-y-4">
-              {subjectReport.map(row => (
-                <div key={row.subject} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{row.subject}</span>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="text-emerald-600">{row.present}P</span>
-                      <span className="text-amber-600">{row.late}L</span>
-                      <span className="text-red-600">{row.absent}A</span>
-                      <Badge variant={row.percentage >= 75 ? 'default' : 'destructive'} className="text-xs">
-                        {row.percentage}%
-                      </Badge>
-                    </div>
-                  </div>
-                  <Progress
-                    value={row.percentage}
-                    className="h-2"
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              {selectedClass ? 'No subject-wise data for selected period' : 'Select a class to view report'}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

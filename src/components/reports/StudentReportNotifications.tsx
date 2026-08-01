@@ -1,16 +1,22 @@
+import { useState } from 'react'
 import { Bell, Check, CheckCircle2, MessageSquareWarning } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { useAdminStudentReports, useMarkStudentReportRead, useSolveStudentReport } from '@/hooks/useStudentReports'
+import { useAdminStudentReports, useAdminUnreadComplaintCount, useMarkStudentReportRead, useSolveStudentReport } from '@/hooks/useStudentReports'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { PaginationFooter } from '@/components/shared/PaginationFooter'
 
 export function StudentReportNotifications() {
-  const { data: reports = [], isLoading, error } = useAdminStudentReports()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const { data: reportPage, isLoading, isFetching, error } = useAdminStudentReports({ page, pageSize })
+  const { data: unreadCount = 0 } = useAdminUnreadComplaintCount(true, false)
+  const reports = reportPage?.rows ?? []
+  const totalReports = reportPage?.total ?? 0
   const markRead = useMarkStudentReportRead()
   const solveReport = useSolveStudentReport()
-  const unreadCount = reports.filter(report => !report.admin_read_at).length
 
   return (
     <Card>
@@ -91,6 +97,19 @@ export function StudentReportNotifications() {
           </ScrollArea>
         )}
       </CardContent>
+      {!isLoading && !error && totalReports > 0 && (
+        <PaginationFooter
+          page={page}
+          pageSize={pageSize}
+          total={totalReports}
+          isFetching={isFetching}
+          onPageChange={setPage}
+          onPageSizeChange={value => {
+            setPageSize(value)
+            setPage(1)
+          }}
+        />
+      )}
     </Card>
   )
 }

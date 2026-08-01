@@ -13,7 +13,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { useAdminStudentReports } from '@/hooks/useStudentReports'
+import { useAdminUnreadComplaintCount } from '@/hooks/useStudentReports'
 
 interface NavItem {
   title: string
@@ -49,11 +49,7 @@ export function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { isMobile, setOpenMobile } = useSidebar()
-  const { data: complaints = [] } = useAdminStudentReports({
-    enabled: role === 'admin',
-    subscribe: role === 'admin',
-  })
-  const unreadComplaints = complaints.filter(complaint => !complaint.admin_read_at).length
+  const { data: unreadComplaints = 0 } = useAdminUnreadComplaintCount(role === 'admin')
 
   const filteredNav = navItems.filter(item => role && item.roles.includes(role))
   const filteredBottom = bottomNavItems.filter(item => role && item.roles.includes(role))

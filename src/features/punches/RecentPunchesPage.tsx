@@ -31,7 +31,7 @@ export function RecentPunchesPage() {
         admissionNumber={isStudent ? student?.admission_number : undefined}
         title={isStudent ? 'My Daily Punch History' : 'Daily Punch History'}
         description=""
-        variant={isStudent ? 'list' : 'table'}
+        variant="table"
       />
     </div>
   )

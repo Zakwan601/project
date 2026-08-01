@@ -76,7 +76,7 @@ export function DashboardPage() {
         </p>
       </motion.div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <SummaryCard icon={Users} label="Students" value={stats?.totalStudents ?? 0} />
         <SummaryCard icon={GraduationCap} label="Classes" value={stats?.totalClasses ?? 0} />
         <SummaryCard

@@ -6,10 +6,11 @@ import { studentReportsService } from '@/services/studentReports'
 
 export const STUDENT_REPORTS_KEY = 'student-reports'
 
-export function useMyStudentReports() {
+export function useMyStudentReports(page: number, pageSize: number) {
   return useQuery({
-    queryKey: [STUDENT_REPORTS_KEY, 'mine'],
-    queryFn: () => studentReportsService.getMine(),
+    queryKey: [STUDENT_REPORTS_KEY, 'mine', { page, pageSize }],
+    queryFn: () => studentReportsService.getMinePage(page, pageSize),
+    placeholderData: previousData => previousData,
   })
 }
 
@@ -29,12 +30,24 @@ export function useSubmitStudentReport() {
 }
 
 export function useAdminStudentReports({
+  page,
+  pageSize,
   enabled = true,
-  subscribe = false,
 }: {
+  page: number
+  pageSize: number
   enabled?: boolean
-  subscribe?: boolean
-} = {}) {
+}) {
+  return useQuery({
+    queryKey: [STUDENT_REPORTS_KEY, 'admin', { page, pageSize }],
+    queryFn: () => studentReportsService.getAdminPage(page, pageSize),
+    enabled,
+    placeholderData: previousData => previousData,
+    refetchInterval: 30_000,
+  })
+}
+
+export function useAdminUnreadComplaintCount(enabled = true, subscribe = true) {
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -56,8 +69,8 @@ export function useAdminStudentReports({
   }, [enabled, queryClient, subscribe])
 
   return useQuery({
-    queryKey: [STUDENT_REPORTS_KEY, 'admin'],
-    queryFn: () => studentReportsService.getAdminRecent(),
+    queryKey: [STUDENT_REPORTS_KEY, 'admin', 'unread-count'],
+    queryFn: studentReportsService.getAdminUnreadCount,
     enabled,
     refetchInterval: 30_000,
   })

@@ -13,6 +13,7 @@ import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
+import { formatDatabaseWallClock } from '@/lib/dateTime'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { Button } from '@/components/ui/button'
@@ -350,10 +351,10 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {record?.check_in_at ? databaseTimestamp(record.check_in_at) : '—'}
+                      {formatDatabaseWallClock(record?.check_in_at ?? null)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {record?.check_out_at ? databaseTimestamp(record.check_out_at) : '—'}
+                      {formatDatabaseWallClock(record?.check_out_at ?? null)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={record?.biometric_verified ? 'default' : 'secondary'}>
@@ -454,10 +455,10 @@ function StudentDailyAttendance() {
                   </Badge>
                 </TableCell>
                 <TableCell className="font-mono text-xs">
-                  {record.check_in_at ? databaseTimestamp(record.check_in_at) : '—'}
+                  {formatDatabaseWallClock(record.check_in_at)}
                 </TableCell>
                 <TableCell className="font-mono text-xs">
-                  {record.check_out_at ? databaseTimestamp(record.check_out_at) : '—'}
+                  {formatDatabaseWallClock(record.check_out_at)}
                 </TableCell>
                 <TableCell>
                   {record.biometric_verified ? 'Biometric' : 'No punch'}
@@ -520,17 +521,4 @@ function isWeekend(value: string) {
   const [year, month, day] = value.split('-').map(Number)
   const dayOfWeek = new Date(year, month - 1, day).getDay()
   return dayOfWeek === 5 || dayOfWeek === 6
-}
-
-function databaseTimestamp(value: string | null) {
-  if (!value) return '—'
-  const match = value.match(
-    /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)$/,
-  )
-  if (!match) return value
-  const [, date, time, fraction = '', rawOffset] = match
-  const offset = rawOffset === 'Z' || rawOffset === '+00:00' || rawOffset === '+0000'
-    ? '+00'
-    : rawOffset
-  return `${date} ${time}${fraction}${offset}`
 }

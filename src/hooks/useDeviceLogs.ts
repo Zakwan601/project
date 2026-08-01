@@ -20,20 +20,32 @@ export function useDashboardPunches(admissionNumber?: string, enabled = true) {
   })
 }
 
-export function useAdminDailyPunches({
+export function useDailyPunchesPage({
+  admissionNumber,
   date,
   page,
   pageSize,
   enabled = true,
 }: {
+  admissionNumber?: string
   date?: string
   page: number
   pageSize: number
   enabled?: boolean
 }) {
   return useQuery({
-    queryKey: [DEVICE_LOGS_KEY, 'admin-daily', { date: date || 'all', page, pageSize }],
-    queryFn: () => deviceLogsService.getAdminDailyPunches({ date, page, pageSize }),
+    queryKey: [DEVICE_LOGS_KEY, 'daily-page', {
+      admissionNumber: admissionNumber ?? 'all',
+      date: date || 'all',
+      page,
+      pageSize,
+    }],
+    queryFn: () => deviceLogsService.getDailyPunchesPage({
+      admissionNumber,
+      date,
+      page,
+      pageSize,
+    }),
     enabled,
     placeholderData: previousData => previousData,
     refetchInterval: 60_000,

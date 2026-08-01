@@ -1,14 +1,15 @@
 import { Fragment, useState } from 'react'
 import { CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound, X } from 'lucide-react'
-import { useAdminDailyPunches, useDashboardPunches } from '@/hooks/useDeviceLogs'
+import { useDailyPunchesPage, useDashboardPunches } from '@/hooks/useDeviceLogs'
 import type { DashboardPunch } from '@/types/database'
-import type { AdminDailyPunch } from '@/services/deviceLogs'
+import type { DailyPunchGroup } from '@/services/deviceLogs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { splitDatabaseWallClock } from '@/lib/dateTime'
 
 interface PunchHistoryCardProps {
   admissionNumber?: string
@@ -28,19 +29,20 @@ export function PunchHistoryCard({
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const punchQuery = useDashboardPunches(admissionNumber, !isTable)
-  const adminQuery = useAdminDailyPunches({
+  const tableQuery = useDailyPunchesPage({
+    admissionNumber,
     date: dateFilter,
     page,
     pageSize,
     enabled: isTable,
   })
   const dailyPunches = isTable
-    ? (adminQuery.data?.rows ?? []).map(adminPunchToDailyPunches)
+    ? (tableQuery.data?.rows ?? []).map(pagedPunchToDailyPunches)
     : groupDailyPunches(punchQuery.data ?? [])
-  const total = isTable ? (adminQuery.data?.total ?? 0) : dailyPunches.length
-  const isLoading = isTable ? adminQuery.isLoading : punchQuery.isLoading
-  const isFetching = isTable ? adminQuery.isFetching : punchQuery.isFetching
-  const error = isTable ? adminQuery.error : punchQuery.error
+  const total = isTable ? (tableQuery.data?.total ?? 0) : dailyPunches.length
+  const isLoading = isTable ? tableQuery.isLoading : punchQuery.isLoading
+  const isFetching = isTable ? tableQuery.isFetching : punchQuery.isFetching
+  const error = isTable ? tableQuery.error : punchQuery.error
 
   function changeDate(value: string) {
     setDateFilter(value)
@@ -299,7 +301,7 @@ interface DailyPunches {
   extraPunches: Array<Pick<DashboardPunch, 'id' | 'punched_at'>>
 }
 
-function adminPunchToDailyPunches(group: AdminDailyPunch): DailyPunches {
+function pagedPunchToDailyPunches(group: DailyPunchGroup): DailyPunches {
   return {
     key: group.key,
     studentBiometricId: group.studentBiometricId,
@@ -418,24 +420,16 @@ function groupDailyPunches(punches: DashboardPunch[]): DailyPunches[] {
 }
 
 function punchTime(value: string) {
-  const { date, time } = splitPunchTime(value)
-  const timestamp = new Date(`${date}T${time}Z`).getTime()
+  const { date, time24 } = splitPunchTime(value)
+  const timestamp = new Date(`${date}T${time24}Z`).getTime()
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
 function isOnTimeArrival(value: string) {
-  const { time } = splitPunchTime(value)
-  return /^\d{2}:\d{2}:\d{2}$/.test(time) && time <= '09:00:00'
+  const { time24 } = splitPunchTime(value)
+  return /^\d{2}:\d{2}:\d{2}$/.test(time24) && time24 <= '09:00:00'
 }
 
 function splitPunchTime(value: string) {
-  const match = value.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/)
-  if (match) return { date: match[1], time: match[2] }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return { date: '', time: value }
-  return {
-    date: date.toLocaleDateString(),
-    time: date.toLocaleTimeString([], { hour12: false }),
-  }
+  return splitDatabaseWallClock(value)
 }

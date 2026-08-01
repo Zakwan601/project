@@ -2,10 +2,8 @@ import { motion } from 'framer-motion'
 import { CheckCircle, UserX, Clock, TrendingUp, GraduationCap, Sparkles } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '@/contexts/AuthContext'
-import { useStudentDashboardStats, useStudentIdentity, useStudentSubjectAttendance, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
+import { useStudentDashboardStats, useStudentIdentity, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
 import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
@@ -56,7 +54,6 @@ export function StudentDashboard() {
   const { data: student, isLoading: idLoading } = useStudentIdentity()
   const studentId = student?.id
   const { data: stats, isLoading: statsLoading, error } = useStudentDashboardStats(studentId)
-  const { data: subjectStats } = useStudentSubjectAttendance(studentId)
   const { data: weekly } = useStudentWeeklyAttendance(studentId)
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -171,44 +168,6 @@ export function StudentDashboard() {
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* Subject-wise attendance */}
-      {subjectStats && subjectStats.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.25 }}
-        >
-          <Card>
-            <CardHeader className="border-b pb-3">
-              <CardTitle className="text-base">Subject-wise Attendance</CardTitle>
-              <CardDescription>Your attendance percentage per subject</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              {subjectStats.map(s => (
-                <div key={s.subject} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{s.subject}</span>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="text-emerald-600 dark:text-emerald-400">{s.present}P</span>
-                      <span className="text-amber-600 dark:text-amber-400">{s.late}L</span>
-                      <span className="text-red-600 dark:text-red-400">{s.absent}A</span>
-                      <Badge variant={s.percentage >= 75 ? 'default' : 'destructive'} className="text-xs">
-                        {s.percentage}%
-                      </Badge>
-                    </div>
-                  </div>
-                  <Progress
-                    value={s.percentage}
-                    className="h-2"
-                    indicatorClassName={s.percentage >= 75 ? 'bg-emerald-500' : s.percentage >= 50 ? 'bg-amber-500' : 'bg-red-500'}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
 
     </div>
   )

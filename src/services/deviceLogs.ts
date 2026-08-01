@@ -5,7 +5,7 @@ import type { DashboardPunch, DeviceLog, DeviceLogWithDevice, Student } from '@/
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 
-export interface AdminDailyPunch {
+export interface DailyPunchGroup {
   key: string
   studentBiometricId: string
   date: string
@@ -13,8 +13,8 @@ export interface AdminDailyPunch {
   punches: Array<{ id: string; punched_at: string }>
 }
 
-export interface AdminDailyPunchPage {
-  rows: AdminDailyPunch[]
+export interface DailyPunchPage {
+  rows: DailyPunchGroup[]
   total: number
 }
 
@@ -105,19 +105,22 @@ export const deviceLogsService = {
     }))
   },
 
-  async getAdminDailyPunches({
+  async getDailyPunchesPage({
+    admissionNumber,
     date,
     page,
     pageSize,
   }: {
+    admissionNumber?: string
     date?: string
     page: number
     pageSize: number
-  }): Promise<AdminDailyPunchPage> {
+  }): Promise<DailyPunchPage> {
     const { data, error } = await db.rpc('get_daily_punches_page', {
       p_date: date || null,
       p_page: page,
       p_page_size: pageSize,
+      p_student_biometric_id: admissionNumber || null,
     })
 
     if (error) throw error

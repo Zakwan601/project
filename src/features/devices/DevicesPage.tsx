@@ -2,19 +2,20 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Activity,
+  ChevronDown,
   Clock3,
   Cpu,
   Database,
   Fingerprint,
   MapPin,
   RefreshCw,
-  ScanFace,
   Trash2,
   Users,
   Wifi,
   WifiOff,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { formatTimeWithPeriod } from '@/lib/dateTime'
 import { useDevices, useDeleteDevice, useUpdateDevice } from '@/hooks/useDevices'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -158,64 +159,82 @@ function DeviceCard({
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-5 p-5">
-          <section>
-            <SectionTitle icon={<Cpu />} title="Identification" />
-            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <Detail label="Database ID" value={device.id} mono />
-              <Detail label="Serial (sn)" value={device.sn} mono />
-              <Detail label="Device serial" value={device.device_serial} mono />
-              <Detail label="Name" value={device.name} />
-              <Detail label="Alias" value={device.alias} />
-              <Detail label="Model" value={device.model} />
-            </div>
-          </section>
+        <CardContent className="space-y-4 p-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <QuickDetail
+              icon={<Wifi />}
+              label="Connection"
+              value={connectionValue(device.ip_address, device.port)}
+              mono
+            />
+            <QuickDetail icon={<MapPin />} label="Location" value={device.location || device.area} />
+            <QuickDetail icon={<Activity />} label="Last activity" value={dateValue(device.last_activity)} />
+            <QuickDetail icon={<Clock3 />} label="Last sync" value={dateValue(device.last_sync_at)} />
+          </div>
 
-          <section>
-            <SectionTitle icon={<Wifi />} title="Connection and software" />
-            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <Detail label="IP address" value={device.ip_address} mono />
-              <Detail label="Port" value={stringValue(device.port)} mono />
-              <Detail label="Location" value={device.location} icon={<MapPin />} />
-              <Detail label="Area" value={device.area} />
-              <Detail label="Firmware version" value={device.firmware_version} />
-              <Detail label="Push version" value={device.push_version} />
-              <Detail label="Push time" value={device.push_time} />
-              <Detail label="Transfer interval" value={device.transfer_interval} />
-              <Detail label="Attendance status" value={device.attendance_status} />
-              <Detail label="Device state" value={device.device_state} />
-            </div>
-          </section>
+          <div className="grid grid-cols-3 gap-3">
+            <Metric icon={<Users />} label="Users" value={device.user_count} />
+            <Metric
+              icon={<Fingerprint />}
+              label="Biometrics"
+              value={device.fingerprint_count + device.face_count + device.palm_count}
+            />
+            <Metric icon={<Activity />} label="Transactions" value={device.transaction_count} />
+          </div>
 
-          <section>
-            <SectionTitle icon={<Database />} title="Stored records" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <Metric icon={<Users />} label="Users" value={device.user_count} />
-              <Metric icon={<Fingerprint />} label="Fingerprints" value={device.fingerprint_count} />
-              <Metric icon={<ScanFace />} label="Faces" value={device.face_count} />
-              <Metric icon={<Fingerprint />} label="Palms" value={device.palm_count} />
-              <Metric icon={<Activity />} label="Transactions" value={device.transaction_count} />
-            </div>
-          </section>
+          <details className="group rounded-lg border bg-muted/10">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-muted-foreground" />
+                Technical details
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid gap-3 border-t p-3 sm:grid-cols-2">
+              <TechnicalGroup icon={<Cpu />} title="Identity">
+                <Detail label="Database ID" value={device.id} mono />
+                <Detail label="Device serial" value={device.device_serial} mono />
+                <Detail label="Serial (sn)" value={device.sn} mono />
+                <Detail label="Name" value={device.name} />
+                <Detail label="Alias" value={device.alias} />
+                <Detail label="Model" value={device.model} />
+              </TechnicalGroup>
 
-          <section>
-            <SectionTitle icon={<Clock3 />} title="Timestamps" />
-            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <Detail label="Last activity" value={dateValue(device.last_activity)} />
-              <Detail label="Last sync" value={dateValue(device.last_sync_at)} />
-              <Detail label="Synced at" value={dateValue(device.synced_at)} />
-              <Detail label="Created at" value={dateValue(device.created_at)} />
-              <Detail label="Updated at" value={dateValue(device.updated_at)} />
-            </div>
-          </section>
+              <TechnicalGroup icon={<Wifi />} title="Software & delivery">
+                <Detail label="Firmware" value={device.firmware_version} />
+                <Detail label="Push version" value={device.push_version} />
+                <Detail
+                  label="Push time"
+                  value={device.push_time ? formatTimeWithPeriod(device.push_time) : null}
+                />
+                <Detail label="Transfer interval" value={device.transfer_interval} />
+                <Detail label="Attendance status" value={device.attendance_status} />
+                <Detail label="Device state" value={device.device_state} />
+              </TechnicalGroup>
 
-          <section>
-            <SectionTitle icon={<Activity />} title="Boolean status" />
-            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <Detail label="is_online" value={device.is_online ? 'true' : 'false'} mono />
-              <Detail label="is_active" value={device.is_active ? 'true' : 'false'} mono />
+              <TechnicalGroup icon={<Fingerprint />} title="Biometric storage">
+                <Detail label="Fingerprints" value={String(device.fingerprint_count)} />
+                <Detail label="Faces" value={String(device.face_count)} />
+                <Detail label="Palms" value={String(device.palm_count)} />
+                <Detail label="Area" value={device.area} />
+              </TechnicalGroup>
+
+              <TechnicalGroup icon={<Clock3 />} title="System timestamps">
+                <Detail label="Synced at" value={dateValue(device.synced_at)} />
+                <Detail label="Created at" value={dateValue(device.created_at)} />
+                <Detail label="Updated at" value={dateValue(device.updated_at)} />
+              </TechnicalGroup>
+
+              <details className="rounded-md border bg-background sm:col-span-2">
+                <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+                  Raw device payload
+                </summary>
+                <pre className="max-h-72 overflow-auto border-t p-3 text-[11px] leading-relaxed">
+                  {device.raw_data ? JSON.stringify(device.raw_data, null, 2) : 'null'}
+                </pre>
+              </details>
             </div>
-          </section>
+          </details>
 
           <div className="flex gap-2 border-t pt-4">
             <Button
@@ -239,26 +258,53 @@ function DeviceCard({
             </Button>
           </div>
 
-          <details className="rounded-md border bg-muted/20 text-xs">
-            <summary className="cursor-pointer px-3 py-2 font-medium text-muted-foreground">
-              Raw data
-            </summary>
-            <pre className="max-h-72 overflow-auto border-t p-3 text-[11px] leading-relaxed">
-              {device.raw_data ? JSON.stringify(device.raw_data, null, 2) : 'null'}
-            </pre>
-          </details>
         </CardContent>
       </Card>
     </motion.div>
   )
 }
 
-function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
+function TechnicalGroup({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
+}) {
   return (
-    <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground [&_svg]:h-3.5 [&_svg]:w-3.5">
-      {icon}
-      {title}
-    </h3>
+    <section className="rounded-md border bg-background p-3">
+      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold text-foreground [&_svg]:h-3.5 [&_svg]:w-3.5 [&_svg]:text-muted-foreground">
+        {icon}
+        {title}
+      </h3>
+      <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">{children}</div>
+    </section>
+  )
+}
+
+function QuickDetail({
+  icon,
+  label,
+  value,
+  mono = false,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string | null | undefined
+  mono?: boolean
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-lg border bg-background px-3 py-2.5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:h-4 [&_svg]:w-4">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className={`truncate text-xs font-medium ${mono ? 'font-mono' : ''}`}>{display(value)}</p>
+      </div>
+    </div>
   )
 }
 
@@ -306,12 +352,13 @@ function display(value: string | null | undefined) {
   return value === null || value === undefined || value === '' ? '—' : value
 }
 
-function stringValue(value: number | null) {
-  return value === null ? null : String(value)
+function connectionValue(ipAddress: string | null, port: number | null) {
+  if (!ipAddress) return null
+  return port === null ? ipAddress : `${ipAddress}:${port}`
 }
 
 function dateValue(value: string | null) {
   if (!value) return null
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : format(date, 'MMM d, yyyy, HH:mm:ss')
+  return Number.isNaN(date.getTime()) ? value : format(date, 'MMM d, yyyy, h:mm:ss a')
 }

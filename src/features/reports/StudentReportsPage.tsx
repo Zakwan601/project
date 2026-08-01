@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { PaginationFooter } from '@/components/shared/PaginationFooter'
 import type { StudentReportCategory, StudentReportStatus } from '@/types/database'
 
 const categories: Array<{ value: StudentReportCategory; label: string }> = [
@@ -30,8 +31,12 @@ export function StudentReportsPage() {
   const [category, setCategory] = useState<StudentReportCategory>('attendance')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const submitReport = useSubmitStudentReport()
-  const { data: reports = [], isLoading, error } = useMyStudentReports()
+  const { data: reportPage, isLoading, isFetching, error } = useMyStudentReports(page, pageSize)
+  const reports = reportPage?.rows ?? []
+  const totalReports = reportPage?.total ?? 0
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -151,6 +156,19 @@ export function StudentReportsPage() {
             </div>
           )}
         </CardContent>
+        {!isLoading && !error && totalReports > 0 && (
+          <PaginationFooter
+            page={page}
+            pageSize={pageSize}
+            total={totalReports}
+            isFetching={isFetching}
+            onPageChange={setPage}
+            onPageSizeChange={value => {
+              setPageSize(value)
+              setPage(1)
+            }}
+          />
+        )}
       </Card>
     </div>
   )
