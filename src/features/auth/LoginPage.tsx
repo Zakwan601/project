@@ -52,7 +52,7 @@ export function LoginPage() {
               <GraduationCap className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-xl font-bold tracking-tight">EduAttend</p>
+              <p className="text-xl font-bold tracking-tight">Axentra@Zuanshi</p>
               <p className="text-xs text-muted-foreground">School Attendance System</p>
             </div>
           </div>

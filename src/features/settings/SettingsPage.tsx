@@ -175,7 +175,7 @@ export function SettingsPage() {
         <CardContent className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">System</span>
-            <span className="font-medium">EduAttend v1.0</span>
+            <span className="font-medium">Axentra@Zuanshi v1.0</span>
           </div>
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">Database</span>

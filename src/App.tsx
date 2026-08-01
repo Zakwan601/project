@@ -29,7 +29,7 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="eduattend-theme">
+    <ThemeProvider defaultTheme="system" storageKey="Axentra@Zuanshi-theme">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>

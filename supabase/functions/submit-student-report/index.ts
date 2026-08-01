@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            username: "EduAttend Reports",
+            username: "Axentra@Zuanshi Reports",
             allowed_mentions: { parse: [] },
             embeds: [{
               title: `New student report: ${subject}`,

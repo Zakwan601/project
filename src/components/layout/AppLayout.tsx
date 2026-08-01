@@ -38,7 +38,7 @@ export function AppLayout() {
 
   const pageTitle = Object.entries(pageLabels).find(([key]) =>
     location.pathname.startsWith(key)
-  )?.[1] ?? 'EduAttend'
+  )?.[1] ?? 'Axentra@Zuanshi'
 
   return (
     <SidebarProvider>
