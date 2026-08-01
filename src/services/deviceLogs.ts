@@ -5,6 +5,19 @@ import type { DashboardPunch, DeviceLog, DeviceLogWithDevice, Student } from '@/
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 
+export interface AdminDailyPunch {
+  key: string
+  studentBiometricId: string
+  date: string
+  student: DashboardPunch['student']
+  punches: Array<{ id: string; punched_at: string }>
+}
+
+export interface AdminDailyPunchPage {
+  rows: AdminDailyPunch[]
+  total: number
+}
+
 export const deviceLogsService = {
   async getByAdmissionNumber(admissionNumber: string) {
     const { data, error } = await db
@@ -90,5 +103,55 @@ export const deviceLogsService = {
       ...log,
       student: studentsByAdmission.get(log.student_biometric_id) ?? null,
     }))
+  },
+
+  async getAdminDailyPunches({
+    date,
+    page,
+    pageSize,
+  }: {
+    date?: string
+    page: number
+    pageSize: number
+  }): Promise<AdminDailyPunchPage> {
+    const { data, error } = await db.rpc('get_daily_punches_page', {
+      p_date: date || null,
+      p_page: page,
+      p_page_size: pageSize,
+    })
+
+    if (error) throw error
+
+    const result = (data ?? []) as Array<{
+      student_biometric_id: string
+      punch_date: string
+      punch_ids: string[]
+      punch_times: string[]
+      first_name: string | null
+      last_name: string | null
+      photo_url: string | null
+      total_count: number | string
+    }>
+
+    return {
+      total: result.length > 0 ? Number(result[0].total_count) : 0,
+      rows: result.map(row => ({
+        key: `${row.student_biometric_id}:${row.punch_date}`,
+        studentBiometricId: row.student_biometric_id,
+        date: row.punch_date,
+        student: row.first_name != null && row.last_name != null
+          ? {
+              admission_number: row.student_biometric_id,
+              first_name: row.first_name,
+              last_name: row.last_name,
+              photo_url: row.photo_url,
+            }
+          : null,
+        punches: row.punch_times.map((punched_at, index) => ({
+          id: row.punch_ids[index] ?? `${row.student_biometric_id}:${punched_at}:${index}`,
+          punched_at,
+        })),
+      })),
+    }
   },
 }

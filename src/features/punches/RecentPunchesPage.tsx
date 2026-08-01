@@ -30,7 +30,8 @@ export function RecentPunchesPage() {
       <PunchHistoryCard
         admissionNumber={isStudent ? student?.admission_number : undefined}
         title={isStudent ? 'My Daily Punch History' : 'Daily Punch History'}
-        description="One row per student and day, showing arrival and departure"
+        description=""
+        variant={isStudent ? 'list' : 'table'}
       />
     </div>
   )
