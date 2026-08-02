@@ -16,6 +16,7 @@ import { ProfilePage } from '@/features/profile/ProfilePage'
 import { RecentPunchesPage } from '@/features/punches/RecentPunchesPage'
 import { StudentReportsPage } from '@/features/reports/StudentReportsPage'
 import { ComplaintsPage } from '@/features/reports/ComplaintsPage'
+import { SmsMessagesPage } from '@/features/sms/SmsMessagesPage'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
 const queryClient = new QueryClient({
@@ -57,6 +58,14 @@ function App() {
                   element={(
                     <ProtectedRoute roles={['admin']}>
                       <ComplaintsPage />
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/sms-messages"
+                  element={(
+                    <ProtectedRoute roles={['admin']}>
+                      <SmsMessagesPage />
                     </ProtectedRoute>
                   )}
                 />

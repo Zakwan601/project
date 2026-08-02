@@ -56,6 +56,11 @@ export interface Database {
         Insert: Omit<StudentReport, 'id' | 'status' | 'admin_read_at' | 'discord_delivered' | 'created_at' | 'updated_at'>
         Update: Partial<Pick<StudentReport, 'status' | 'admin_read_at'>>
       }
+      sms_messages: {
+        Row: SmsMessage
+        Insert: Omit<SmsMessage, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<SmsMessage, 'id' | 'created_at'>>
+      }
     }
     Enums: {
       user_role: UserRole
@@ -279,6 +284,32 @@ export interface StudentReport {
 
 export interface StudentReportWithStudent extends StudentReport {
   students: Pick<Student, 'first_name' | 'last_name' | 'admission_number'>
+}
+
+export type SmsMessageStatus = 'queued' | 'processing' | 'submitted' | 'delivered' | 'failed'
+
+export interface SmsMessage {
+  id: string
+  user_id: string | null
+  recipient: string
+  sender_id: string
+  message: string
+  message_type: string
+  scheduled_at: string | null
+  provider_message_id: string | null
+  status: SmsMessageStatus
+  provider_status_code: number | null
+  provider_status_text: string | null
+  submitted_at: string | null
+  delivered_at: string | null
+  failed_at: string | null
+  send_response: Record<string, unknown> | null
+  latest_dlr: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+  source: string | null
+  attendance_record_id: string | null
+  student_id: string | null
 }
 
 // Holiday types
