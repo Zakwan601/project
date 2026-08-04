@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { formatDistanceToNow } from 'date-fns'
 import { MessageSquareWarning, Send } from 'lucide-react'
+import { formatDisplayDate } from '@/lib/dateTime'
 import { PageHeader, ErrorState } from '@/components/shared/PageHeader'
 import { useMyStudentReports, useSubmitStudentReport } from '@/hooks/useStudentReports'
 import { Button } from '@/components/ui/button'
@@ -149,7 +149,7 @@ export function StudentReportsPage() {
                   </div>
                   <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground sm:mt-3">{report.message}</p>
                   <p className="mt-2 text-xs text-muted-foreground sm:mt-3">
-                    Sent {formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}
+                    Sent {formatDisplayDate(report.created_at)}
                   </p>
                 </div>
               ))}

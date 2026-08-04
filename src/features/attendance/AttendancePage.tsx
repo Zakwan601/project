@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarOff, CheckCircle, Pencil, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
+import { CalendarDays, CalendarOff, CheckCircle, Pencil, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -14,7 +14,7 @@ import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
-import { formatDatabaseWallClock } from '@/lib/dateTime'
+import { formatDatabaseWallClock, formatDisplayDate } from '@/lib/dateTime'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { DateFilter } from '@/components/shared/DateFilter'
@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Calendar } from '@/components/ui/calendar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -602,8 +603,12 @@ interface CorrectionTarget {
 function StudentDailyAttendance() {
   const { user } = useAuth()
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
   const monthStart = `${month}-01`
   const monthEnd = format(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0), 'yyyy-MM-dd')
+  const { data: calendarHolidays = [] } = useHolidays(monthStart, monthEnd)
+
+  useEffect(() => setSelectedCalendarDate(null), [month])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['student-daily-attendance', user?.id, month],
@@ -643,6 +648,16 @@ function StudentDailyAttendance() {
     if (dateOrder !== 0) return dateOrder
     return b.marked_at.localeCompare(a.marked_at)
   })
+  const recordsByDate = new Map(
+    sortedRecords.map(record => [record.attendance_sessions.date, record]),
+  )
+  const holidaysByDate = new Map(calendarHolidays.map(holiday => [holiday.date, holiday]))
+  const selectedRecord = selectedCalendarDate ? recordsByDate.get(selectedCalendarDate) ?? null : null
+  const selectedHoliday = selectedCalendarDate ? holidaysByDate.get(selectedCalendarDate) ?? null : null
+  const calendarMonth = databaseDateToDate(monthStart)
+  const statusDates = (status: AttendanceStatus) => data.records
+    .filter(record => record.status === status)
+    .map(record => databaseDateToDate(record.attendance_sessions.date))
 
   return (
     <div>
@@ -658,7 +673,92 @@ function StudentDailyAttendance() {
         className="mb-3 max-w-xs sm:mb-5"
       />
 
-      <Card>
+      <div className="mb-3 grid min-w-0 gap-3 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] sm:mb-5">
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="h-4 w-4" /> Attendance Calendar
+            </CardTitle>
+            <CardDescription>Select a day to view its attendance details.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Calendar
+              mode="single"
+              month={calendarMonth}
+              selected={selectedCalendarDate ? databaseDateToDate(selectedCalendarDate) : undefined}
+              onSelect={date => setSelectedCalendarDate(date ? format(date, 'yyyy-MM-dd') : null)}
+              onMonthChange={date => setMonth(format(date, 'yyyy-MM'))}
+              showOutsideDays={false}
+              modifiers={{
+                present: statusDates('present'),
+                absent: statusDates('absent'),
+                late: statusDates('late'),
+                excused: statusDates('excused'),
+                vacation: calendarHolidays.map(holiday => databaseDateToDate(holiday.date)),
+                weekend: { dayOfWeek: [5, 6] },
+              }}
+              modifiersClassNames={{
+                present: '[&>button]:bg-emerald-500/15 [&>button]:text-emerald-800 dark:[&>button]:text-emerald-300',
+                absent: '[&>button]:bg-red-500/15 [&>button]:text-red-800 dark:[&>button]:text-red-300',
+                late: '[&>button]:bg-amber-500/20 [&>button]:text-amber-800 dark:[&>button]:text-amber-300',
+                excused: '[&>button]:bg-blue-500/15 [&>button]:text-blue-800 dark:[&>button]:text-blue-300',
+                vacation: '[&>button]:bg-violet-500/15 [&>button]:text-violet-800 dark:[&>button]:text-violet-300',
+                weekend: '[&>button]:opacity-45',
+              }}
+              className="w-full p-0 [--cell-size:2.25rem] sm:[--cell-size:2.5rem]"
+              classNames={{ root: 'w-full', month: 'w-full' }}
+            />
+            <AttendanceCalendarLegend />
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle className="text-base">Day Details</CardTitle>
+            <CardDescription>
+              {selectedCalendarDate ? databaseDate(selectedCalendarDate) : 'Select a date from the calendar'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!selectedCalendarDate ? (
+              <p className="py-5 text-sm text-muted-foreground">Choose a colored day to see arrival and departure information.</p>
+            ) : selectedHoliday ? (
+              <div className="space-y-3">
+                <Badge className="bg-violet-500/15 text-violet-800 dark:text-violet-300">Vacation</Badge>
+                <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+                  <p className="font-semibold">{selectedHoliday.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {selectedHoliday.description || 'This day is marked as a school vacation.'}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">Attendance is not required or counted on this date.</p>
+              </div>
+            ) : selectedRecord ? (
+              <div className="space-y-3">
+                <Badge className={statusStyles[selectedRecord.status]}>
+                  {selectedRecord.status.charAt(0).toUpperCase() + selectedRecord.status.slice(1)}
+                </Badge>
+                <div className="grid grid-cols-2 gap-2">
+                  <CalendarDetail label="Arrival" value={formatDatabaseWallClock(selectedRecord.check_in_at)} />
+                  <CalendarDetail label="Departure" value={formatDatabaseWallClock(selectedRecord.check_out_at)} />
+                  <CalendarDetail label="Verification" value={selectedRecord.biometric_verified ? 'Biometric' : 'No punch'} />
+                  <CalendarDetail label="Marked at" value={formatDatabaseWallClock(selectedRecord.marked_at)} />
+                </div>
+              </div>
+            ) : (
+              <p className="py-5 text-sm text-muted-foreground">
+                No attendance record for this day. It may be a weekend, holiday, or not yet synchronized.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="overflow-x-auto">
+        <CardHeader>
+          <CardTitle className="text-base">Daily Attendance History</CardTitle>
+          <CardDescription>{sortedRecords.length} recorded day{sortedRecords.length === 1 ? '' : 's'} this month</CardDescription>
+        </CardHeader>
         <Table>
           <TableHeader>
             <TableRow>
@@ -709,6 +809,35 @@ interface StudentDailyAttendanceRecord {
   attendance_sessions: { date: string }
 }
 
+function AttendanceCalendarLegend() {
+  const items: Array<{ label: string; color: string }> = [
+    { label: 'Present', color: 'bg-emerald-500' },
+    { label: 'Absent', color: 'bg-red-500' },
+    { label: 'Late', color: 'bg-amber-500' },
+    { label: 'Excused', color: 'bg-blue-500' },
+    { label: 'Vacation', color: 'bg-violet-500' },
+  ]
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 border-t pt-3">
+      {items.map(item => (
+        <span key={item.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className={`h-2.5 w-2.5 rounded-sm ${item.color}`} />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function CalendarDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate font-mono text-xs font-medium">{value}</p>
+    </div>
+  )
+}
+
 function Summary({
   icon: Icon,
   label,
@@ -746,8 +875,12 @@ function MobileAttendanceDetail({ label, value }: { label: string; value: string
 }
 
 function databaseDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number)
-  return format(new Date(year, month - 1, day), 'EEEE, MMMM d, yyyy')
+  return formatDisplayDate(value)
+}
+
+function databaseDateToDate(value: string) {
+  const [year, month, day = 1] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
 }
 
 function isWeekend(value: string) {

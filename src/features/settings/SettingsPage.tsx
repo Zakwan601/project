@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { format } from 'date-fns'
+import { formatDisplayDate } from '@/lib/dateTime'
 import type { AcademicYear } from '@/types/database'
 
 const yearSchema = z.object({
@@ -115,8 +115,8 @@ export function SettingsPage() {
                   {years.map((year: AcademicYear) => (
                     <TableRow key={year.id}>
                       <TableCell className="font-medium">{year.name}</TableCell>
-                      <TableCell>{format(new Date(year.start_date), 'MMM d, yyyy')}</TableCell>
-                      <TableCell>{format(new Date(year.end_date), 'MMM d, yyyy')}</TableCell>
+                      <TableCell>{formatDisplayDate(year.start_date)}</TableCell>
+                      <TableCell>{formatDisplayDate(year.end_date)}</TableCell>
                       <TableCell>
                         <Badge variant={year.is_current ? 'default' : 'secondary'}>
                           {year.is_current ? 'Current' : 'Past'}

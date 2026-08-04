@@ -1,7 +1,8 @@
 import { Clock3 } from 'lucide-react'
-import { format } from 'date-fns'
 import { useSyncServiceHealth } from '@/hooks/useDashboard'
 import { cn } from '@/lib/utils'
+import { formatDisplayDateTime } from '@/lib/dateTime'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export function DesktopSyncLastSync({
   className,
@@ -17,9 +18,11 @@ export function DesktopSyncLastSync({
     <div className={cn('flex items-center gap-2 text-xs text-muted-foreground', className)}>
       <Clock3 className="h-3.5 w-3.5 shrink-0" />
       <span>{label}:</span>
-      {lastSyncAt ? (
+      {isLoading ? (
+        <Skeleton className="h-4 w-36" />
+      ) : lastSyncAt ? (
         <time dateTime={lastSyncAt} className="font-medium text-foreground">
-          {format(new Date(lastSyncAt), 'MMM d, yyyy, h:mm:ss a')}
+          {formatDisplayDateTime(lastSyncAt)}
         </time>
       ) : (
         <span className="font-medium text-foreground">

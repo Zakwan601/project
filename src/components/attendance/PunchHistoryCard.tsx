@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { splitDatabaseWallClock } from '@/lib/dateTime'
+import { formatDisplayDate, splitDatabaseWallClock } from '@/lib/dateTime'
 import { DateFilter } from '@/components/shared/DateFilter'
 
 interface PunchHistoryCardProps {
@@ -220,7 +220,7 @@ function AdminPunchTableRow({ day }: { day: DailyPunches }) {
   return (
     <Fragment>
       <TableRow className="hover:bg-muted/40">
-        <TableCell className="whitespace-nowrap font-medium">{arrival.date}</TableCell>
+        <TableCell className="whitespace-nowrap font-medium">{formatDisplayDate(arrival.date)}</TableCell>
         <TableCell>
           <div className="flex min-w-44 items-center gap-2.5">
             <Avatar className="h-8 w-8 border">
@@ -343,7 +343,7 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
         </div>
 
         <div className="min-w-32 text-right">
-          <p className="mb-1 text-[11px] text-muted-foreground">{arrival.date}</p>
+          <p className="mb-1 text-[11px] text-muted-foreground">{formatDisplayDate(arrival.date)}</p>
           <p className="flex items-center justify-end gap-1.5 font-mono text-sm">
             <LogIn className="h-3.5 w-3.5 text-emerald-600" />
             <span className="text-[11px] text-muted-foreground">Arrival</span>

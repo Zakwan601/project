@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { format } from 'date-fns'
 import { MessageSquareText, RefreshCw } from 'lucide-react'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { DateFilter } from '@/components/shared/DateFilter'
 import { PaginationFooter } from '@/components/shared/PaginationFooter'
@@ -187,8 +187,7 @@ function providerStatus(message: SmsMessage) {
 
 function dateValue(value: string | null) {
   if (!value) return '—'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : format(date, 'MMM d, yyyy, h:mm:ss a')
+  return formatDisplayDateTime(value)
 }
 
 function MessageState({ message, error = false }: { message: string; error?: boolean }) {

@@ -14,8 +14,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react'
-import { format } from 'date-fns'
-import { formatTimeWithPeriod } from '@/lib/dateTime'
+import { formatDisplayDateTime, formatTimeWithPeriod } from '@/lib/dateTime'
 import { useDevices, useDeleteDevice, useUpdateDevice } from '@/hooks/useDevices'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -359,6 +358,5 @@ function connectionValue(ipAddress: string | null, port: number | null) {
 
 function dateValue(value: string | null) {
   if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : format(date, 'MMM d, yyyy, h:mm:ss a')
+  return formatDisplayDateTime(value)
 }

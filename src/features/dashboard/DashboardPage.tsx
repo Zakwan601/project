@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { StudentDashboard } from '@/features/dashboard/StudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { LoadingState, ErrorState } from '@/components/shared/PageHeader'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { SyncServiceHealth, SyncServiceStatus } from '@/types/database'
 import {
   ChartContainer,
@@ -18,6 +18,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart'
 import type { ChartConfig } from '@/components/ui/chart'
+import { formatDisplayDate } from '@/lib/dateTime'
 
 const chartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
@@ -31,16 +32,13 @@ export function DashboardPage() {
   if (profile?.role === 'student') return <StudentDashboard />
 
   const { data: stats, isLoading, error } = useDashboardStats()
-  const { data: weekly } = useWeeklyAttendance()
+  const { data: weekly, isLoading: weeklyLoading, error: weeklyError } = useWeeklyAttendance()
   const { data: devices, isLoading: devicesLoading } = useDevices()
   const {
     data: syncService,
     isLoading: syncServiceLoading,
     error: syncServiceError,
   } = useSyncServiceHealth()
-
-  if (isLoading) return <LoadingState message="Loading dashboard..." />
-  if (error) return <ErrorState message={(error as Error).message} />
 
   const weeklyChartData = weekly?.map(day => ({
     date: format(new Date(day.date), 'EEE'),
@@ -66,7 +64,7 @@ export function DashboardPage() {
         className="rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-card p-4 sm:p-8"
       >
         <p className="text-xs font-medium text-muted-foreground">
-          {format(new Date(), 'EEEE, MMMM d, yyyy')}
+          {formatDisplayDate(new Date())}
         </p>
         <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
           Good {getGreeting()}, {profile?.full_name?.split(' ')[0] ?? 'there'}
@@ -77,12 +75,13 @@ export function DashboardPage() {
       </motion.div>
 
       <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
-        <SummaryCard icon={Users} label="Students" value={stats?.totalStudents ?? 0} />
-        <SummaryCard icon={GraduationCap} label="Classes" value={stats?.totalClasses ?? 0} />
+        <SummaryCard icon={Users} label="Students" value={error ? '—' : stats?.totalStudents ?? 0} loading={isLoading} />
+        <SummaryCard icon={GraduationCap} label="Classes" value={error ? '—' : stats?.totalClasses ?? 0} loading={isLoading} />
         <SummaryCard
           icon={CheckCircle}
           label="Attendance rate"
-          value={`${stats?.todayAttendanceRate ?? 0}%`}
+          value={error ? '—' : `${stats?.todayAttendanceRate ?? 0}%`}
+          loading={isLoading}
         />
       </div>
 
@@ -103,9 +102,10 @@ export function DashboardPage() {
             />
 
             {devicesLoading ? (
-              <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-                Checking machine status...
-              </div>
+              <>
+                <HardwareCardSkeleton />
+                <HardwareCardSkeleton />
+              </>
             ) : devices && devices.length > 0 ? (
               devices.map(device => (
                 <div
@@ -156,7 +156,11 @@ export function DashboardPage() {
             <CardDescription>One attendance result per student each day</CardDescription>
           </CardHeader>
           <CardContent>
-            {weeklyChartData.length > 0 ? (
+            {weeklyLoading ? (
+              <ChartSkeleton />
+            ) : weeklyError ? (
+              <SectionError message="Could not load weekly attendance." />
+            ) : weeklyChartData.length > 0 ? (
               <ChartContainer config={chartConfig} className="h-[200px] w-full aspect-auto sm:h-[260px]">
                 <BarChart accessibilityLayer data={weeklyChartData}>
                   <CartesianGrid vertical={false} />
@@ -182,7 +186,11 @@ export function DashboardPage() {
             <CardDescription>Daily biometric attendance</CardDescription>
           </CardHeader>
           <CardContent>
-            {todayTotal > 0 ? (
+            {isLoading ? (
+              <ChartSkeleton compact />
+            ) : error ? (
+              <SectionError message="Could not load today's attendance." />
+            ) : todayTotal > 0 ? (
               <div className="flex flex-col items-center gap-5 sm:flex-row">
                 <ChartContainer config={chartConfig} className="aspect-square h-[180px]">
                   <PieChart>
@@ -226,6 +234,8 @@ function SyncServiceStatusCard({
   isLoading: boolean
   hasError: boolean
 }) {
+  if (isLoading) return <HardwareCardSkeleton />
+
   const isRunning = health?.is_running === true
 
   return (
@@ -284,17 +294,21 @@ function SummaryCard({
   icon: Icon,
   label,
   value,
+  loading = false,
 }: {
   icon: React.ElementType
   label: string
   value: string | number
+  loading?: boolean
 }) {
   return (
     <Card>
       <CardContent className="flex items-center justify-between p-3 sm:p-5">
         <div>
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="mt-0.5 text-xl font-bold sm:mt-1 sm:text-2xl">{value}</p>
+          {loading
+            ? <Skeleton className="mt-1 h-7 w-16" />
+            : <p className="mt-0.5 text-xl font-bold sm:mt-1 sm:text-2xl">{value}</p>}
         </div>
         <div className="rounded-lg bg-primary/10 p-2 text-primary sm:rounded-xl sm:p-3">
           <Icon className="h-5 w-5" />
@@ -302,6 +316,35 @@ function SummaryCard({
       </CardContent>
     </Card>
   )
+}
+
+function HardwareCardSkeleton() {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 sm:p-4">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-10 w-10 rounded-lg" />
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      </div>
+      <Skeleton className="h-6 w-16 rounded-full" />
+    </div>
+  )
+}
+
+function ChartSkeleton({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`flex items-end gap-3 px-2 ${compact ? 'h-[180px]' : 'h-[200px] sm:h-[260px]'}`}>
+      {[55, 80, 45, 70, 62, 88, 50].map((height, index) => (
+        <Skeleton key={index} className="flex-1" style={{ height: `${height}%` }} />
+      ))}
+    </div>
+  )
+}
+
+function SectionError({ message }: { message: string }) {
+  return <p className="py-12 text-center text-sm text-destructive">{message}</p>
 }
 
 function Snapshot({

@@ -1,3 +1,5 @@
+import { format } from 'date-fns'
+
 const databaseTimestampPattern =
   /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/
 
@@ -31,7 +33,7 @@ export function splitDatabaseWallClock(value: string) {
   }
 
   return {
-    date: date.toLocaleDateString(),
+    date: format(date, 'yyyy-MM-dd'),
     time24: [date.getHours(), date.getMinutes(), date.getSeconds()]
       .map(part => String(part).padStart(2, '0'))
       .join(':'),
@@ -49,7 +51,27 @@ export function formatDatabaseWallClock(value: string | null) {
   if (!value) return '—'
   const parsed = splitDatabaseWallClock(value)
   if (!parsed.date) return parsed.time
-  return `${parsed.date} ${parsed.time}${parsed.offset ? ` ${parsed.offset}` : ''}`
+  return `${formatDisplayDate(parsed.date)} ${parsed.time}${parsed.offset ? ` ${parsed.offset}` : ''}`
+}
+
+export function formatDisplayDate(value: string | Date | null | undefined) {
+  if (!value) return '—'
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? '—' : format(value, 'dd-MM-yyyy')
+  }
+
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (dateOnly) return `${dateOnly[3]}-${dateOnly[2]}-${dateOnly[1]}`
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : format(date, 'dd-MM-yyyy')
+}
+
+export function formatDisplayDateTime(value: string | Date | null | undefined) {
+  if (!value) return '—'
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value) : format(date, 'dd-MM-yyyy, h:mm:ss a')
 }
 
 function normalizeOffset(offset: string | undefined) {

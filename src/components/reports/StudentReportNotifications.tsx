@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bell, Check, CheckCircle2, MessageSquareWarning } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
 import { useAdminStudentReports, useAdminUnreadComplaintCount, useMarkStudentReportRead, useSolveStudentReport } from '@/hooks/useStudentReports'
+import { formatDisplayDate } from '@/lib/dateTime'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -60,7 +60,7 @@ export function StudentReportNotifications() {
                           {!report.admin_read_at && <span className="h-2 w-2 rounded-full bg-primary" title="Unread" />}
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {studentName} · {report.students.admission_number} · {formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}
+                          {studentName} · {report.students.admission_number} · {formatDisplayDate(report.created_at)}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">

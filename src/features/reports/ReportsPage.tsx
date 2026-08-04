@@ -19,6 +19,7 @@ import type { ChartConfig } from '@/components/ui/chart'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import type { AttendanceStatus } from '@/types/database'
+import { formatDisplayDate } from '@/lib/dateTime'
 
 const chartConfig: ChartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
@@ -136,7 +137,7 @@ function useDailyReport(startDate: string, endDate: string) {
 
         const sessionIds = ((sessions ?? []) as Array<{ id: string }>).map(s => s.id)
         if (!sessionIds.length) {
-          results.push({ date: format(new Date(date), 'MMM d'), present: 0, absent: 0, late: 0 })
+          results.push({ date: formatDisplayDate(date), present: 0, absent: 0, late: 0 })
           continue
         }
 
@@ -146,7 +147,7 @@ function useDailyReport(startDate: string, endDate: string) {
           .in('session_id', sessionIds)
 
         results.push({
-          date: format(new Date(date), 'MMM d'),
+          date: formatDisplayDate(date),
           present: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'present').length,
           absent: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'absent').length,
           late: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'late').length,

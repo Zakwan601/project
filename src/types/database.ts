@@ -61,6 +61,11 @@ export interface Database {
         Insert: Omit<SmsMessage, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<SmsMessage, 'id' | 'created_at'>>
       }
+      announcements: {
+        Row: Announcement
+        Insert: Omit<Announcement, 'id' | 'is_active' | 'created_by' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Announcement, 'id' | 'created_at'>>
+      }
     }
     Enums: {
       user_role: UserRole
@@ -322,6 +327,17 @@ export interface Holiday {
   date: string
   name: string
   description: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Announcement {
+  id: string
+  title: string
+  message: string
+  expires_at: string | null
+  is_active: boolean
   created_by: string | null
   created_at: string
   updated_at: string
