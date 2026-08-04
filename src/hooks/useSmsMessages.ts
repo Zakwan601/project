@@ -8,16 +8,18 @@ export function useSmsMessages({
   page,
   pageSize,
   status,
-  date,
+  startDate,
+  endDate,
 }: {
   page: number
   pageSize: number
   status: SmsMessageStatus | 'all'
-  date: string
+  startDate: string
+  endDate: string
 }) {
   return useQuery({
-    queryKey: [SMS_MESSAGES_KEY, { page, pageSize, status, date }],
-    queryFn: () => smsMessagesService.getPage({ page, pageSize, status, date }),
+    queryKey: [SMS_MESSAGES_KEY, { page, pageSize, status, startDate, endDate }],
+    queryFn: () => smsMessagesService.getPage({ page, pageSize, status, startDate, endDate }),
     placeholderData: previousData => previousData,
     refetchInterval: 30_000,
   })

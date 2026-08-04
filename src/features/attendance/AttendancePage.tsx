@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarOff, CheckCircle, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
+import { CalendarOff, CheckCircle, Pencil, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import {
   useAttendanceRecords,
   useAttendanceSessions,
+  useCorrectAttendance,
   useMarkAttendanceVacation,
   useSyncDailyAttendance,
 } from '@/hooks/useAttendance'
@@ -16,11 +17,13 @@ import { supabase } from '@/lib/supabase'
 import { formatDatabaseWallClock } from '@/lib/dateTime'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
+import { DateFilter } from '@/components/shared/DateFilter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -120,15 +123,7 @@ function StaffDailyAttendance() {
 
       <Card className="mb-3 sm:mb-5">
         <CardContent className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-4">
-          <div className="min-w-0 space-y-1.5 sm:space-y-2">
-            <Label htmlFor="attendance-date" className="text-xs sm:text-sm">Date</Label>
-            <Input
-              id="attendance-date"
-              type="date"
-              value={selectedDate}
-              onChange={event => setSelectedDate(event.target.value)}
-            />
-          </div>
+          <DateFilter mode="date" value={selectedDate} onChange={setSelectedDate} />
           <div className="min-w-0 space-y-1.5 sm:space-y-2">
             <Label className="text-xs sm:text-sm">Class</Label>
             <Select value={selectedClassId} onValueChange={setSelectedClassId}>
@@ -219,7 +214,7 @@ function StaffDailyAttendance() {
             </CardContent>
           </Card>
 
-          {activeSession && <DailyAttendanceSheet session={activeSession} />}
+          {activeSession && <DailyAttendanceSheet session={activeSession} isAdmin={isAdmin} />}
         </div>
       )}
 
@@ -289,12 +284,18 @@ function StaffDailyAttendance() {
   )
 }
 
-function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetails }) {
+function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSessionWithDetails; isAdmin: boolean }) {
   const { data: records = [], isLoading, error } = useAttendanceRecords(session.id)
   const { data: students = [] } = useQuery({
     queryKey: ['students_by_class', session.class_id],
     queryFn: () => studentsService.getByClass(session.class_id),
   })
+  const correctAttendance = useCorrectAttendance()
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set())
+  const [correctionTargets, setCorrectionTargets] = useState<CorrectionTarget[]>([])
+  const [correctionStatus, setCorrectionStatus] = useState<AttendanceStatus>('present')
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false)
 
   const recordsByStudent = useMemo(
     () => new Map(records.map(record => [record.student_id, record])),
@@ -305,10 +306,39 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
     (recordsByStudent.get(student.id)?.status ?? 'absent') === 'absent'
   ).length
 
+  useEffect(() => setSelectedStudentIds(new Set()), [session.id])
+
+  const targetForStudent = (student: (typeof students)[number]): CorrectionTarget => ({
+    studentId: student.id,
+    name: `${student.first_name} ${student.last_name}`.trim(),
+    currentStatus: recordsByStudent.get(student.id)?.status ?? 'absent',
+  })
+
+  const openCorrection = (targets: CorrectionTarget[]) => {
+    if (targets.length === 0) return
+    setCorrectionTargets(targets)
+    setCorrectionStatus(targets.length === 1 ? targets[0].currentStatus : 'present')
+    setCorrectionReason('')
+    setCorrectionDialogOpen(true)
+  }
+
+  const toggleStudent = (studentId: string, checked: boolean) => {
+    setSelectedStudentIds(current => {
+      const next = new Set(current)
+      if (checked) next.add(studentId)
+      else next.delete(studentId)
+      return next
+    })
+  }
+
+  const allSelected = students.length > 0 && selectedStudentIds.size === students.length
+  const someSelected = selectedStudentIds.size > 0 && !allSelected
+
   if (isLoading) return <LoadingState />
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
+    <>
     <Card className="min-w-0 overflow-hidden">
       <CardHeader className="border-b px-3 py-3 sm:px-6 sm:py-6">
         <CardTitle className="text-lg sm:text-xl">{session.classes.name}</CardTitle>
@@ -323,6 +353,31 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
           <Summary icon={UserX} label="Absent" value={absentCount} tone="absent" />
         </div>
 
+        {isAdmin && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
+              <Checkbox
+                checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                onCheckedChange={checked => setSelectedStudentIds(
+                  checked === true ? new Set(students.map(student => student.id)) : new Set(),
+                )}
+              />
+              {selectedStudentIds.size > 0 ? `${selectedStudentIds.size} selected` : 'Select all students'}
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={selectedStudentIds.size === 0}
+              onClick={() => openCorrection(
+                students.filter(student => selectedStudentIds.has(student.id)).map(targetForStudent),
+              )}
+            >
+              <Pencil /> Correct selected
+            </Button>
+          </div>
+        )}
+
         <div className="space-y-2 md:hidden">
           {students.map(student => {
             const record = recordsByStudent.get(student.id)
@@ -330,18 +385,41 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
             return (
               <article key={student.id} className="rounded-lg border bg-card p-2.5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                      {student.first_name} {student.last_name}
-                    </p>
-                    <p className="truncate font-mono text-[10px] text-muted-foreground">
-                      {student.admission_number}
-                      {student.roll_number !== null ? ` · Roll ${student.roll_number}` : ''}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-2">
+                    {isAdmin && (
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={selectedStudentIds.has(student.id)}
+                        onCheckedChange={checked => toggleStudent(student.id, checked === true)}
+                        aria-label={`Select ${student.first_name} ${student.last_name}`}
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {student.first_name} {student.last_name}
+                      </p>
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">
+                        {student.admission_number}
+                        {student.roll_number !== null ? ` · Roll ${student.roll_number}` : ''}
+                      </p>
+                    </div>
                   </div>
-                  <Badge className={`shrink-0 ${statusStyles[status]}`}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Badge className={statusStyles[status]}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </Badge>
+                    {isAdmin && (
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={() => openCorrection([targetForStudent(student)])}
+                        aria-label={`Correct attendance for ${student.first_name} ${student.last_name}`}
+                      >
+                        <Pencil />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-2 grid grid-cols-[1fr_1fr_auto] items-end gap-2 border-t pt-2">
                   <MobileAttendanceDetail
@@ -359,6 +437,11 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
                     {record?.biometric_verified ? 'Biometric' : 'No punch'}
                   </Badge>
                 </div>
+                {record?.manually_corrected && (
+                  <p className="mt-1.5 truncate text-[10px] text-blue-600 dark:text-blue-400" title={record.correction_reason ?? undefined}>
+                    Corrected manually{record.correction_reason ? `: ${record.correction_reason}` : ''}
+                  </p>
+                )}
               </article>
             )
           })}
@@ -368,6 +451,7 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
           <Table>
             <TableHeader>
               <TableRow>
+                {isAdmin && <TableHead className="w-10"><span className="sr-only">Select</span></TableHead>}
                 <TableHead>Roll</TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Admission No.</TableHead>
@@ -375,6 +459,7 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
                 <TableHead>Arrival</TableHead>
                 <TableHead>Departure</TableHead>
                 <TableHead>Verification</TableHead>
+                {isAdmin && <TableHead className="w-12 text-right">Edit</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -383,6 +468,15 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
                 const status = record?.status ?? 'absent'
                 return (
                   <TableRow key={student.id}>
+                    {isAdmin && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedStudentIds.has(student.id)}
+                          onCheckedChange={checked => toggleStudent(student.id, checked === true)}
+                          aria-label={`Select ${student.first_name} ${student.last_name}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>{student.roll_number ?? '—'}</TableCell>
                     <TableCell className="font-medium">
                       {student.first_name} {student.last_name}
@@ -400,10 +494,28 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
                       {formatDatabaseWallClock(record?.check_out_at ?? null)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={record?.biometric_verified ? 'default' : 'secondary'}>
-                        {record?.biometric_verified ? 'Biometric' : 'No punch'}
-                      </Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={record?.biometric_verified ? 'default' : 'secondary'}>
+                          {record?.biometric_verified ? 'Biometric' : 'No punch'}
+                        </Badge>
+                        {record?.manually_corrected && (
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400" title={record.correction_reason ?? undefined}>Corrected</span>
+                        )}
+                      </div>
                     </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          onClick={() => openCorrection([targetForStudent(student)])}
+                          aria-label={`Correct attendance for ${student.first_name} ${student.last_name}`}
+                        >
+                          <Pencil />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 )
               })}
@@ -412,7 +524,79 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
         </div>
       </CardContent>
     </Card>
+    <Dialog open={correctionDialogOpen} onOpenChange={setCorrectionDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{correctionTargets.length === 1 ? 'Correct Attendance' : 'Bulk Attendance Correction'}</DialogTitle>
+          <DialogDescription>
+            {correctionTargets.length === 1
+              ? `Update attendance for ${correctionTargets[0]?.name}.`
+              : `Apply one status to ${correctionTargets.length} selected students.`}
+            {' '}This change will be recorded in the audit log.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={correctionStatus} onValueChange={value => setCorrectionStatus(value as AttendanceStatus)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="present">Present</SelectItem>
+                <SelectItem value="absent">Absent</SelectItem>
+                <SelectItem value="late">Late</SelectItem>
+                <SelectItem value="excused">Excused</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="correction-reason">Reason</Label>
+            <Textarea
+              id="correction-reason"
+              value={correctionReason}
+              onChange={event => setCorrectionReason(event.target.value)}
+              placeholder="Explain why this attendance is being corrected"
+              rows={3}
+              minLength={5}
+              maxLength={500}
+              required
+            />
+            <p className="text-xs text-muted-foreground">Required, minimum 5 characters</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setCorrectionDialogOpen(false)} disabled={correctAttendance.isPending}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={correctionReason.trim().length < 5 || correctAttendance.isPending}
+            onClick={() => correctAttendance.mutate(
+              {
+                sessionId: session.id,
+                corrections: correctionTargets.map(target => ({ student_id: target.studentId, status: correctionStatus })),
+                reason: correctionReason.trim(),
+              },
+              {
+                onSuccess: () => {
+                  setCorrectionDialogOpen(false)
+                  setSelectedStudentIds(new Set())
+                },
+              },
+            )}
+          >
+            {correctAttendance.isPending ? 'Saving…' : `Correct ${correctionTargets.length === 1 ? 'attendance' : `${correctionTargets.length} records`}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
+}
+
+interface CorrectionTarget {
+  studentId: string
+  name: string
+  currentStatus: AttendanceStatus
 }
 
 function StudentDailyAttendance() {
@@ -467,15 +651,12 @@ function StudentDailyAttendance() {
         description="Weekends and Holidays are excluded."
       />
       <DesktopSyncLastSync className="-mt-2 mb-3 sm:-mt-3 sm:mb-5" label="Attendance last updated" />
-      <div className="mb-3 max-w-xs space-y-1.5 sm:mb-5 sm:space-y-2">
-        <Label htmlFor="student-month">Month</Label>
-        <Input
-          id="student-month"
-          type="month"
-          value={month}
-          onChange={event => setMonth(event.target.value)}
-        />
-      </div>
+      <DateFilter
+        mode="month"
+        value={month}
+        onChange={setMonth}
+        className="mb-3 max-w-xs sm:mb-5"
+      />
 
       <Card>
         <Table>

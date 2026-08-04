@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound, X } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound } from 'lucide-react'
 import { useDailyPunchesPage, useDashboardPunches } from '@/hooks/useDeviceLogs'
 import type { DashboardPunch } from '@/types/database'
 import type { DailyPunchGroup } from '@/services/deviceLogs'
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { splitDatabaseWallClock } from '@/lib/dateTime'
+import { DateFilter } from '@/components/shared/DateFilter'
 
 interface PunchHistoryCardProps {
   admissionNumber?: string
@@ -70,22 +71,13 @@ export function PunchHistoryCard({
         </div>
         {isTable && (
         <div className="mt-2 flex flex-wrap items-end justify-between gap-2 sm:mt-4 sm:gap-3">
-            <div className="flex items-end gap-2">
-              <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
-                Filter by date
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={event => changeDate(event.target.value)}
-                  className="h-9 rounded-md border bg-background px-3 text-sm text-foreground shadow-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-                />
-              </label>
-              {dateFilter && (
-                <Button variant="ghost" size="sm" onClick={() => changeDate('')}>
-                  <X /> Clear
-                </Button>
-              )}
-            </div>
+            <DateFilter
+              mode="date"
+              value={dateFilter}
+              onChange={changeDate}
+              label="Filter by date"
+              allowClear
+            />
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               Rows per page
               <select

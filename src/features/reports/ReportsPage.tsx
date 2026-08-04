@@ -8,6 +8,7 @@ const db = supabase as any
 
 import { useClasses } from '@/hooks/useClasses'
 import { PageHeader, LoadingState, ErrorState } from '@/components/shared/PageHeader'
+import { DateFilter } from '@/components/shared/DateFilter'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -16,7 +17,6 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import type { AttendanceStatus } from '@/types/database'
 
@@ -251,14 +251,16 @@ export function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Start Date</Label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-36" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">End Date</Label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-36" />
-            </div>
+            <DateFilter
+              mode="range"
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(start, end) => {
+                setStartDate(start)
+                setEndDate(end)
+              }}
+              className="col-span-2 sm:w-72"
+            />
             <div className="flex items-end">
               <Button
                 type="button"

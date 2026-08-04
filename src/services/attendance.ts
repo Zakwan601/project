@@ -101,6 +101,20 @@ export const attendanceService = {
     return data as AttendanceRecord[]
   },
 
+  async correctRecords(input: {
+    sessionId: string
+    corrections: Array<{ student_id: string; status: AttendanceStatus }>
+    reason: string
+  }) {
+    const { data, error } = await db.rpc('correct_attendance_records', {
+      p_session_id: input.sessionId,
+      p_corrections: input.corrections,
+      p_reason: input.reason,
+    })
+    if (error) throw error
+    return Number(data ?? 0)
+  },
+
   async getDailyStats(date: string) {
     const { data } = await db
       .from('attendance_records')

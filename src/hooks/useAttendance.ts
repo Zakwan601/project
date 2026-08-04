@@ -66,6 +66,23 @@ export function useBulkMarkAttendance() {
   })
 }
 
+export function useCorrectAttendance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: attendanceService.correctRecords,
+    onSuccess: (count, variables) => {
+      qc.invalidateQueries({ queryKey: [RECORDS_KEY, variables.sessionId] })
+      qc.invalidateQueries({ queryKey: [SESSIONS_KEY] })
+      qc.invalidateQueries({ queryKey: ['daily_stats'] })
+      qc.invalidateQueries({ queryKey: ['student_dashboard_stats'] })
+      qc.invalidateQueries({ queryKey: ['student_weekly_attendance'] })
+      qc.invalidateQueries({ queryKey: ['student-daily-attendance'] })
+      toast.success(`${count} attendance record${count === 1 ? '' : 's'} corrected`)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 export function useFinalizeSession() {
   const qc = useQueryClient()
   return useMutation({

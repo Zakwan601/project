@@ -175,6 +175,10 @@ export interface AttendanceRecord {
   marked_at: string
   check_in_at: string | null
   check_out_at: string | null
+  manually_corrected: boolean
+  corrected_by: string | null
+  corrected_at: string | null
+  correction_reason: string | null
   created_at: string
 }
 
