@@ -62,7 +62,7 @@ export function DevicesPage() {
           description="Devices will appear here after they are added to the database."
         />
       ) : (
-        <div className="grid gap-5 xl:grid-cols-2">
+        <div className="grid gap-3 sm:gap-5 xl:grid-cols-2">
           {devices?.map((device, index) => (
             <DeviceCard
               key={device.id}
@@ -159,7 +159,7 @@ function DeviceCard({
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4 p-5">
+        <CardContent className="space-y-3 p-3 sm:space-y-4 sm:p-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <QuickDetail
               icon={<Wifi />}

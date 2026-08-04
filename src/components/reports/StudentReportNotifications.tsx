@@ -48,7 +48,7 @@ export function StudentReportNotifications() {
               {reports.map(report => {
                 const studentName = `${report.students.first_name} ${report.students.last_name}`.trim()
                 return (
-                  <div key={report.id} className={`p-4 sm:p-5 ${!report.admin_read_at ? 'bg-primary/5' : ''}`}>
+                  <div key={report.id} className={`p-3 sm:p-5 ${!report.admin_read_at ? 'bg-primary/5' : ''}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -89,7 +89,7 @@ export function StudentReportNotifications() {
                         )}
                       </div>
                     </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{report.message}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground sm:mt-3">{report.message}</p>
                   </div>
                 )
               })}

@@ -21,9 +21,9 @@ export function PaginationFooter({
   const last = Math.min(page * pageSize, total)
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 sm:gap-3 sm:px-4 sm:py-3">
       <p className="text-xs text-muted-foreground">Showing {first}-{last} of {total}</p>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           Rows
           <select

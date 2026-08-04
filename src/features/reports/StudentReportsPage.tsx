@@ -53,7 +53,7 @@ export function StudentReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <PageHeader
         title="Report an Issue"
         description="Send a report to the school administration."
@@ -68,8 +68,8 @@ export function StudentReportsPage() {
           <CardDescription>Administrators will receive this report in their dashboard and Discord.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="report-category">Category</Label>
                 <Select value={category} onValueChange={value => setCategory(value as StudentReportCategory)}>
@@ -103,7 +103,7 @@ export function StudentReportsPage() {
                 onChange={event => setMessage(event.target.value)}
                 minLength={10}
                 maxLength={2000}
-                rows={6}
+                rows={4}
                 placeholder="Describe what happened and include any useful details."
                 required
               />
@@ -137,7 +137,7 @@ export function StudentReportsPage() {
           ) : (
             <div className="divide-y rounded-lg border">
               {reports.map(report => (
-                <div key={report.id} className="p-4">
+                <div key={report.id} className="p-3 sm:p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="font-medium">{report.subject}</p>
@@ -147,8 +147,8 @@ export function StudentReportsPage() {
                       {report.status === 'resolved' ? 'solved' : report.status}
                     </Badge>
                   </div>
-                  <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{report.message}</p>
-                  <p className="mt-3 text-xs text-muted-foreground">
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground sm:mt-3">{report.message}</p>
+                  <p className="mt-2 text-xs text-muted-foreground sm:mt-3">
                     Sent {formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}
                   </p>
                 </div>

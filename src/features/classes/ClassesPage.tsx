@@ -122,7 +122,7 @@ export function ClassesPage() {
         }
       />
 
-      <div className="mb-4 relative max-w-sm">
+      <div className="relative mb-3 max-w-sm sm:mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Search classes..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
@@ -130,15 +130,15 @@ export function ClassesPage() {
       {filtered.length === 0 ? (
         <EmptyState title="No classes found" description="Add your first class" />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {filtered.map((cls, i) => {
             const count = getStudentCount(cls.id)
             const occupancy = cls.capacity > 0 ? Math.round((count / cls.capacity) * 100) : 0
             return (
               <motion.div key={cls.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <Card className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-3">
+                  <CardContent className="p-3 sm:p-5">
+                    <div className="mb-2 flex items-start justify-between sm:mb-3">
                       <div className="flex items-center gap-2">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                           <BookOpen className="h-5 w-5" />

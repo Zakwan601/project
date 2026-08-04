@@ -134,14 +134,14 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-2xl space-y-3 sm:space-y-6">
       <PageHeader title="Profile" description="Manage your personal information and security" />
 
       {/* Profile Info */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Avatar className="h-12 w-12 sm:h-16 sm:w-16">
               <AvatarFallback className="text-xl bg-muted">{initials}</AvatarFallback>
             </Avatar>
             <div>
@@ -154,14 +154,14 @@ export function ProfilePage() {
           </div>
         </CardHeader>
         <Separator />
-        <CardContent className="pt-6">
-          <form onSubmit={handleProfile(saveProfile)} className="space-y-4">
+        <CardContent className="pt-3 sm:pt-6">
+          <form onSubmit={handleProfile(saveProfile)} className="space-y-3 sm:space-y-4">
             <div className="space-y-2">
               <Label>Full Name</Label>
               <Input {...regProfile('full_name')} aria-invalid={!!profileErrors.full_name} />
               {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
               <div className="space-y-2">
                 <Label>Phone</Label>
                 <Input {...regProfile('phone')} />
@@ -190,7 +190,7 @@ export function ProfilePage() {
           <CardDescription>Update your account password</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handlePwd(changePassword)} className="space-y-4">
+          <form onSubmit={handlePwd(changePassword)} className="space-y-3 sm:space-y-4">
             <div className="space-y-2">
               <Label>Current Password</Label>
               <div className="relative">

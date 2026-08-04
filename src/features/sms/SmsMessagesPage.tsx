@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
-import { MessageSquareText, RefreshCw } from 'lucide-react'
+import { CalendarDays, MessageSquareText, RefreshCw, X } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PaginationFooter } from '@/components/shared/PaginationFooter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useSmsMessages } from '@/hooks/useSmsMessages'
@@ -24,7 +25,8 @@ export function SmsMessagesPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [status, setStatus] = useState<SmsMessageStatus | 'all'>('all')
-  const { data, isLoading, isFetching, error, refetch } = useSmsMessages({ page, pageSize, status })
+  const [date, setDate] = useState('')
+  const { data, isLoading, isFetching, error, refetch } = useSmsMessages({ page, pageSize, status, date })
 
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize))
@@ -49,22 +51,51 @@ export function SmsMessagesPage() {
           <p className="text-sm text-muted-foreground">
             {data ? `${data.total.toLocaleString()} message${data.total === 1 ? '' : 's'}` : 'SMS history'}
           </p>
-          <Select
-            value={status}
-            onValueChange={value => {
-              setStatus(value as SmsMessageStatus | 'all')
-              setPage(1)
-            }}
-          >
-            <SelectTrigger className="w-44" aria-label="Filter by SMS status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="date"
+                value={date}
+                onChange={event => {
+                  setDate(event.target.value)
+                  setPage(1)
+                }}
+                className="w-44 pl-9 pr-8"
+                aria-label="Filter SMS messages by date"
+              />
+              {date && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDate('')
+                    setPage(1)
+                  }}
+                  className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear date filter"
+                  title="Clear date filter"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Select
+              value={status}
+              onValueChange={value => {
+                setStatus(value as SmsMessageStatus | 'all')
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="w-44" aria-label="Filter by SMS status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <CardContent className="p-0">
@@ -73,7 +104,7 @@ export function SmsMessagesPage() {
           ) : error ? (
             <MessageState message={(error as Error).message} error />
           ) : !data?.rows.length ? (
-            <MessageState message={status === 'all' ? 'No SMS messages have been sent yet.' : `No ${status} SMS messages found.`} />
+            <MessageState message={emptyMessage(status, date)} />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -181,4 +212,12 @@ function MessageState({ message, error = false }: { message: string; error?: boo
       <p>{message}</p>
     </div>
   )
+}
+
+function emptyMessage(status: SmsMessageStatus | 'all', date: string) {
+  const selectedDate = date ? format(new Date(`${date}T00:00:00`), 'MMM d, yyyy') : ''
+  if (date && status !== 'all') return `No ${status} SMS messages found on ${selectedDate}.`
+  if (date) return `No SMS messages found on ${selectedDate}.`
+  if (status !== 'all') return `No ${status} SMS messages found.`
+  return 'No SMS messages have been sent yet.'
 }

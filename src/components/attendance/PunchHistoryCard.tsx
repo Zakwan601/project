@@ -69,7 +69,7 @@ export function PunchHistoryCard({
           )}
         </div>
         {isTable && (
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-2 sm:mt-4 sm:gap-3">
             <div className="flex items-end gap-2">
               <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
                 Filter by date
@@ -182,7 +182,7 @@ function AdminPunchTable({
           </TableBody>
         </Table>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 sm:gap-3 sm:px-4 sm:py-3">
         <p className="text-xs text-muted-foreground">
           Showing {firstRecord}-{lastRecord} of {total}
         </p>

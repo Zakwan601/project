@@ -11,10 +11,12 @@ export const smsMessagesService = {
     page,
     pageSize,
     status,
+    date,
   }: {
     page: number
     pageSize: number
     status: SmsMessageStatus | 'all'
+    date: string
   }): Promise<SmsMessagePage> {
     const from = (page - 1) * pageSize
     let query = supabase
@@ -24,6 +26,14 @@ export const smsMessagesService = {
       .range(from, from + pageSize - 1)
 
     if (status !== 'all') query = query.eq('status', status)
+    if (date) {
+      const start = new Date(`${date}T00:00:00`)
+      const end = new Date(start)
+      end.setDate(end.getDate() + 1)
+      query = query
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
+    }
 
     const { data, error, count } = await query
     if (error) throw error

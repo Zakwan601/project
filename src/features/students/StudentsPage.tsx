@@ -119,7 +119,7 @@ export function StudentsPage() {
       />
 
       <Card>
-        <div className="p-4 border-b">
+        <div className="border-b p-3 sm:p-4">
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input

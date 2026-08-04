@@ -85,7 +85,7 @@ export function SettingsPage() {
   if (isLoading) return <LoadingState />
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-3xl space-y-3 sm:space-y-6">
       <PageHeader title="Settings" description="Manage system configuration and academic years" />
 
       <Card>
@@ -139,13 +139,13 @@ export function SettingsPage() {
                   ))}
                 </TableBody>
               </Table>
-              <Separator className="my-6" />
+              <Separator className="my-3 sm:my-6" />
             </>
           )}
 
-          <form onSubmit={handleSubmit(d => createYear.mutate(d))} className="space-y-4">
+          <form onSubmit={handleSubmit(d => createYear.mutate(d))} className="space-y-3 sm:space-y-4">
             <h4 className="text-sm font-medium">Add New Academic Year</h4>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="space-y-2">
                 <Label>Name</Label>
                 <Input {...register('name')} placeholder="2025-2026" aria-invalid={!!errors.name} />

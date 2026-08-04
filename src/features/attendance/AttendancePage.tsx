@@ -92,11 +92,12 @@ function StaffDailyAttendance() {
         title="Daily Attendance"
         description="One biometric attendance result per student, per day"
         action={isAdmin ? (
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
             {!isNonSchoolDay && (
               <Button
                 size="sm"
                 variant="outline"
+                className="min-w-0 flex-1 sm:flex-none"
                 onClick={() => setVacationDialogOpen(true)}
               >
                 <CalendarOff className="mr-1.5 h-4 w-4" />
@@ -105,6 +106,7 @@ function StaffDailyAttendance() {
             )}
             <Button
               size="sm"
+              className="min-w-0 flex-1 sm:flex-none"
               onClick={() => syncAttendance.mutate(selectedDate)}
               disabled={syncAttendance.isPending || isNonSchoolDay}
             >
@@ -114,12 +116,12 @@ function StaffDailyAttendance() {
           </div>
         ) : undefined}
       />
-      <DesktopSyncLastSync className="-mt-3 mb-5" />
+      <DesktopSyncLastSync className="-mt-2 mb-3 sm:-mt-3 sm:mb-5" />
 
-      <Card className="mb-5">
-        <CardContent className="grid gap-4 p-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="attendance-date">Date</Label>
+      <Card className="mb-3 sm:mb-5">
+        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-4">
+          <div className="min-w-0 space-y-1.5 sm:space-y-2">
+            <Label htmlFor="attendance-date" className="text-xs sm:text-sm">Date</Label>
             <Input
               id="attendance-date"
               type="date"
@@ -127,8 +129,8 @@ function StaffDailyAttendance() {
               onChange={event => setSelectedDate(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label>Class</Label>
+          <div className="min-w-0 space-y-1.5 sm:space-y-2">
+            <Label className="text-xs sm:text-sm">Class</Label>
             <Select value={selectedClassId} onValueChange={setSelectedClassId}>
               <SelectTrigger><SelectValue placeholder="All classes" /></SelectTrigger>
               <SelectContent>
@@ -145,7 +147,7 @@ function StaffDailyAttendance() {
       </Card>
 
       {isNonSchoolDay && (
-        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 sm:flex-row sm:items-center">
+        <div className="mb-3 flex flex-col gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 sm:mb-5 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <div className="rounded-lg bg-blue-500/10 p-2 text-blue-600 dark:text-blue-400">
               <CalendarOff className="h-5 w-5" />
@@ -190,26 +192,26 @@ function StaffDailyAttendance() {
             : 'An administrator has not synchronized this date yet.'}
         />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
-          <Card className="h-fit">
-            <CardHeader>
+        <div className="grid min-w-0 gap-3 sm:gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <Card className="min-w-0 h-fit">
+            <CardHeader className="px-3 py-3 sm:px-6 sm:pb-3 sm:pt-6">
               <CardTitle className="text-base">Classes</CardTitle>
-              <CardDescription>{sessions.length} daily attendance sheet{sessions.length === 1 ? '' : 's'}</CardDescription>
+              <CardDescription className="hidden sm:block">{sessions.length} daily attendance sheet{sessions.length === 1 ? '' : 's'}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="flex gap-2 overflow-x-auto px-3 pb-3 lg:block lg:space-y-2 lg:overflow-visible lg:px-6 lg:pb-6">
               {sessions.map(session => (
                 <button
                   key={session.id}
                   type="button"
                   onClick={() => setActiveSessionId(session.id)}
-                  className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                  className={`min-w-36 shrink-0 rounded-lg border px-3 py-2 text-left transition-colors sm:min-w-44 sm:p-3 lg:w-full lg:min-w-0 ${
                     activeSessionId === session.id
                       ? 'border-primary bg-primary/5'
                       : 'hover:bg-muted/50'
                   }`}
                 >
-                  <p className="font-medium">{session.classes.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="truncate text-sm font-medium sm:text-base">{session.classes.name}</p>
+                  <p className="truncate text-[11px] text-muted-foreground sm:mt-0.5 sm:text-xs">
                     Grade {session.classes.grade}-{session.classes.section}
                   </p>
                 </button>
@@ -307,21 +309,62 @@ function DailyAttendanceSheet({ session }: { session: AttendanceSessionWithDetai
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle>{session.classes.name}</CardTitle>
-        <CardDescription>
+    <Card className="min-w-0 overflow-hidden">
+      <CardHeader className="border-b px-3 py-3 sm:px-6 sm:py-6">
+        <CardTitle className="text-lg sm:text-xl">{session.classes.name}</CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
           {databaseDate(session.date)} · Daily biometric attendance
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 p-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+      <CardContent className="space-y-3 p-2 sm:space-y-4 sm:p-5">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
           <Summary icon={Users} label="Students" value={students.length} />
           <Summary icon={CheckCircle} label="Present" value={presentCount} tone="present" />
           <Summary icon={UserX} label="Absent" value={absentCount} tone="absent" />
         </div>
 
-        <div className="overflow-x-auto rounded-md border">
+        <div className="space-y-2 md:hidden">
+          {students.map(student => {
+            const record = recordsByStudent.get(student.id)
+            const status = record?.status ?? 'absent'
+            return (
+              <article key={student.id} className="rounded-lg border bg-card p-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {student.first_name} {student.last_name}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-muted-foreground">
+                      {student.admission_number}
+                      {student.roll_number !== null ? ` · Roll ${student.roll_number}` : ''}
+                    </p>
+                  </div>
+                  <Badge className={`shrink-0 ${statusStyles[status]}`}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Badge>
+                </div>
+                <div className="mt-2 grid grid-cols-[1fr_1fr_auto] items-end gap-2 border-t pt-2">
+                  <MobileAttendanceDetail
+                    label="Arrival"
+                    value={formatDatabaseWallClock(record?.check_in_at ?? null)}
+                  />
+                  <MobileAttendanceDetail
+                    label="Departure"
+                    value={formatDatabaseWallClock(record?.check_out_at ?? null)}
+                  />
+                  <Badge
+                    variant={record?.biometric_verified ? 'default' : 'secondary'}
+                    className="mb-0.5 whitespace-nowrap px-1.5 text-[10px]"
+                  >
+                    {record?.biometric_verified ? 'Biometric' : 'No punch'}
+                  </Badge>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+
+        <div className="hidden overflow-x-auto rounded-md border md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -423,8 +466,8 @@ function StudentDailyAttendance() {
         title="My Attendance"
         description="Weekends and Holidays are excluded."
       />
-      <DesktopSyncLastSync className="-mt-3 mb-5" label="Attendance last updated" />
-      <div className="mb-5 max-w-xs space-y-2">
+      <DesktopSyncLastSync className="-mt-2 mb-3 sm:-mt-3 sm:mb-5" label="Attendance last updated" />
+      <div className="mb-3 max-w-xs space-y-1.5 sm:mb-5 sm:space-y-2">
         <Label htmlFor="student-month">Month</Label>
         <Input
           id="student-month"
@@ -502,12 +545,21 @@ function Summary({
       ? 'text-red-600 bg-red-500/10'
       : 'text-primary bg-primary/10'
   return (
-    <div className="flex items-center gap-3 rounded-lg border p-3">
-      <div className={`rounded-lg p-2 ${color}`}><Icon className="h-4 w-4" /></div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-xl font-semibold">{value}</p>
+    <div className="flex min-w-0 items-center gap-1.5 rounded-lg border p-2 sm:gap-3 sm:p-3">
+      <div className={`hidden rounded-lg p-2 sm:block ${color}`}><Icon className="h-4 w-4" /></div>
+      <div className="min-w-0">
+        <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{label}</p>
+        <p className="text-base font-semibold sm:text-xl">{value}</p>
       </div>
+    </div>
+  )
+}
+
+function MobileAttendanceDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="truncate font-mono text-[11px] font-medium">{value}</p>
     </div>
   )
 }

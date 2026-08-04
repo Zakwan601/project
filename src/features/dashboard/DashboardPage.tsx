@@ -59,11 +59,11 @@ export function DashboardPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-card p-6 sm:p-8"
+        className="rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-card p-4 sm:p-8"
       >
         <p className="text-xs font-medium text-muted-foreground">
           {format(new Date(), 'EEEE, MMMM d, yyyy')}
@@ -76,7 +76,7 @@ export function DashboardPage() {
         </p>
       </motion.div>
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
         <SummaryCard icon={Users} label="Students" value={stats?.totalStudents ?? 0} />
         <SummaryCard icon={GraduationCap} label="Classes" value={stats?.totalClasses ?? 0} />
         <SummaryCard
@@ -110,7 +110,7 @@ export function DashboardPage() {
               devices.map(device => (
                 <div
                   key={device.id}
-                  className="flex items-center justify-between gap-4 rounded-xl border bg-muted/20 p-4"
+                className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 sm:gap-4 sm:p-4"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className={`rounded-lg p-2.5 ${
@@ -149,7 +149,7 @@ export function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Weekly Attendance</CardTitle>
@@ -157,7 +157,7 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             {weeklyChartData.length > 0 ? (
-              <ChartContainer config={chartConfig} className="h-[260px] w-full aspect-auto">
+              <ChartContainer config={chartConfig} className="h-[200px] w-full aspect-auto sm:h-[260px]">
                 <BarChart accessibilityLayer data={weeklyChartData}>
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
@@ -229,7 +229,7 @@ function SyncServiceStatusCard({
   const isRunning = health?.is_running === true
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/20 p-4">
+    <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 sm:gap-4 sm:p-4">
       <div className="flex min-w-0 items-center gap-3">
         <div className={`rounded-lg p-2.5 ${
           isRunning
@@ -291,12 +291,12 @@ function SummaryCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex items-center justify-between p-5">
+      <CardContent className="flex items-center justify-between p-3 sm:p-5">
         <div>
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="mt-1 text-2xl font-bold">{value}</p>
+          <p className="mt-0.5 text-xl font-bold sm:mt-1 sm:text-2xl">{value}</p>
         </div>
-        <div className="rounded-xl bg-primary/10 p-3 text-primary">
+        <div className="rounded-lg bg-primary/10 p-2 text-primary sm:rounded-xl sm:p-3">
           <Icon className="h-5 w-5" />
         </div>
       </CardContent>

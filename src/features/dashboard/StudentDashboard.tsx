@@ -32,11 +32,11 @@ function StatCard({ title, value, description, icon: Icon, delay = 0, colorClass
     >
       <Card className="group relative overflow-hidden py-0 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
         <div className={`absolute inset-x-0 top-0 h-1 ${accentClass}`} />
-        <CardContent className="p-6">
+        <CardContent className="p-3 sm:p-6">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">{title}</p>
-              <p className="text-3xl font-bold tracking-tight">{value}</p>
+              <p className="text-2xl font-bold tracking-tight sm:text-3xl">{value}</p>
               {description && <p className="text-xs text-muted-foreground">{description}</p>}
             </div>
             <div className={`flex h-6 w-6 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110 ${colorClass}`}>
@@ -68,12 +68,12 @@ export function StudentDashboard() {
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-card p-6 sm:p-8"
+        className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-card p-4 sm:p-8"
       >
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/5 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-purple-500/5 blur-3xl" />
@@ -84,9 +84,9 @@ export function StudentDashboard() {
         <h2 className="relative mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
           Good {getGreeting()}, {profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
-        <DesktopSyncLastSync className="relative mt-3" label="Attendance last updated" />
+        <DesktopSyncLastSync className="relative mt-2 sm:mt-3" label="Attendance last updated" />
         {stats?.className && (
-          <div className="relative mt-4 inline-flex items-center gap-3 rounded-xl border bg-background/60 px-4 py-2.5 backdrop-blur">
+          <div className="relative mt-2 inline-flex items-center gap-2 rounded-lg border bg-background/60 px-3 py-2 backdrop-blur sm:mt-4 sm:gap-3 sm:rounded-xl sm:px-4 sm:py-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
               <GraduationCap className="h-4.5 w-4.5" />
             </div>
@@ -101,7 +101,7 @@ export function StudentDashboard() {
       </motion.div>
 
       {/* Personal attendance stats */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
         <StatCard
           title="Attendance"
           value={`${stats?.attendanceRate ?? 0}%`}
@@ -149,7 +149,7 @@ export function StudentDashboard() {
           </CardHeader>
           <CardContent>
             {weeklyChartData.length > 0 && weeklyChartData.some(d => d.present + d.absent + d.late > 0) ? (
-              <ChartContainer config={chartConfig} className="h-[220px] w-full sm:h-[260px] aspect-auto">
+              <ChartContainer config={chartConfig} className="h-[180px] w-full aspect-auto sm:h-[260px]">
                 <BarChart accessibilityLayer data={weeklyChartData}>
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />

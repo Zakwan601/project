@@ -199,7 +199,7 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <PageHeader
         title="Reports"
         description="Attendance analytics and insights"
@@ -214,7 +214,7 @@ export function ReportsPage() {
           {dailyLoading ? (
             <LoadingState />
           ) : (
-            <ChartContainer config={chartConfig} className="h-[240px] w-full sm:h-[280px] aspect-auto">
+            <ChartContainer config={chartConfig} className="h-[190px] w-full aspect-auto sm:h-[280px]">
               <BarChart accessibilityLayer data={dailyData}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 11 }} />
@@ -237,8 +237,8 @@ export function ReportsPage() {
           <CardDescription>Individual student attendance summary by class and date range</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="space-y-1.5 min-w-[200px]">
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:mb-4 sm:flex sm:flex-wrap sm:gap-4">
+            <div className="col-span-2 min-w-0 space-y-1.5 sm:min-w-[200px]">
               <Label className="text-xs">Class</Label>
               <Select value={selectedClass} onValueChange={setSelectedClass}>
                 <SelectTrigger>
