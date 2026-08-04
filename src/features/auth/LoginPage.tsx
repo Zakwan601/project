@@ -1,16 +1,16 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
+import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { Eye, EyeOff, GraduationCap, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { ADMIN_CREDENTIALS } from '@/lib/admin'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -18,11 +18,15 @@ const loginSchema = z.object({
 })
 type LoginForm = z.infer<typeof loginSchema>
 
+const hcaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY as string | undefined
+
 export function LoginPage() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const captchaRef = useRef<HCaptcha>(null)
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -30,9 +34,24 @@ export function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setError('')
-    const { error } = await signIn(data.email, data.password)
-    if (error) {
-      setError(error.message)
+    if (!hcaptchaSiteKey) {
+      setError('Security verification is not configured. Contact the administrator.')
+      return
+    }
+    if (!captchaToken) {
+      setError('Complete the security verification before signing in.')
+      return
+    }
+
+    const { error: signInError } = await signIn(data.email, data.password, captchaToken)
+    captchaRef.current?.resetCaptcha()
+    setCaptchaToken(null)
+
+    if (signInError) {
+      const status = 'status' in signInError ? Number(signInError.status) : 0
+      setError(status === 429
+        ? 'Too many attempts. Wait a few minutes and try again.'
+        : 'Unable to sign in. Check your credentials and try again.')
     } else {
       navigate('/dashboard')
     }
@@ -76,6 +95,7 @@ export function LoginPage() {
                   id="email"
                   type="email"
                   placeholder="you@school.edu"
+                  autoComplete="email"
                   {...register('email')}
                   aria-invalid={!!errors.email}
                 />
@@ -88,6 +108,7 @@ export function LoginPage() {
                     id="password"
                     type={showPwd ? 'text' : 'password'}
                     placeholder="••••••••"
+                    autoComplete="current-password"
                     {...register('password')}
                     aria-invalid={!!errors.password}
                   />
@@ -97,28 +118,44 @@ export function LoginPage() {
                     size="icon-sm"
                     className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                     onClick={() => setShowPwd(v => !v)}
+                    aria-label={showPwd ? 'Hide password' : 'Show password'}
                   >
                     {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
                 {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
               </div>
+              {hcaptchaSiteKey ? (
+                <div className="flex justify-center rounded-md border bg-background p-2">
+                  <HCaptcha
+                    ref={captchaRef}
+                    sitekey={hcaptchaSiteKey}
+                    size="compact"
+                    onVerify={token => {
+                      setCaptchaToken(token)
+                      setError('')
+                    }}
+                    onExpire={() => setCaptchaToken(null)}
+                    onError={() => {
+                      setCaptchaToken(null)
+                      setError('Security verification could not load. Refresh the page and try again.')
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  Security verification is not configured. Add the hCaptcha site key before deploying.
+                </div>
+              )}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button type="submit" className="w-full" disabled={isSubmitting || !captchaToken || !hcaptchaSiteKey}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign In
               </Button>
               <p className="text-xs text-muted-foreground text-center">
                 Contact your administrator for account credentials.
               </p>
-              {ADMIN_CREDENTIALS.email && ADMIN_CREDENTIALS.password && (
-                <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground border border-border">
-                  <p className="font-semibold text-foreground mb-1">Admin Login</p>
-                  <p>Email: {ADMIN_CREDENTIALS.email}</p>
-                  <p>Password: {ADMIN_CREDENTIALS.password}</p>
-                </div>
-              )}
             </CardFooter>
           </form>
         </Card>
