@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { AlertCircle, Check, Circle, Clock3, Eye, EyeOff, Loader2, Save, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
 import { isProfileComplete, isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
 
 const profileSchema = z.object({
   full_name: z.string().trim().min(2, 'Required'),
@@ -58,6 +59,9 @@ export function ProfilePage() {
   const [changingPwd, setChangingPwd] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({ old: false, new: false, confirm: false })
   const phoneManagedByAdmin = role === 'student'
+  const { data: enrollmentHistory = [], isLoading: historyLoading } = useStudentEnrollmentHistory(
+    role === 'student' ? student?.id : undefined,
+  )
 
   const {
     register: regProfile,
@@ -267,6 +271,43 @@ export function ProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      {role === 'student' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Academic History</CardTitle>
+            <CardDescription>Your class assignments by academic year</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {historyLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
+              </div>
+            ) : enrollmentHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No academic history is available yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {enrollmentHistory.map(enrollment => (
+                  <div key={enrollment.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {enrollment.classes.name} ({enrollment.classes.grade}-{enrollment.classes.section})
+                      </p>
+                      <p className="text-xs text-muted-foreground">{enrollment.academic_years.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDisplayDate(enrollment.started_on)} – {enrollment.ended_on ? formatDisplayDate(enrollment.ended_on) : 'Current'}
+                      </p>
+                    </div>
+                    <Badge variant={enrollment.ended_on ? 'secondary' : 'default'} className="capitalize">
+                      {enrollment.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Change Password */}
       <Card>

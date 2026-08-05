@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatDisplayDate } from '@/lib/dateTime'
 import type { AcademicYear } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
+import { format } from 'date-fns'
 
 const yearSchema = z.object({
   name: z.string().min(1, 'Required'),
@@ -43,6 +44,7 @@ function useAcademicYears() {
 export function SettingsPage() {
   const { data: years, isLoading } = useAcademicYears()
   const qc = useQueryClient()
+  const today = format(new Date(), 'yyyy-MM-dd')
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<YearForm>({
     resolver: zodResolver(yearSchema),
@@ -50,10 +52,14 @@ export function SettingsPage() {
 
   const createYear = useMutation({
     mutationFn: async (data: YearForm) => {
-      await db.from('academic_years').update({ is_current: false }).gte('id', '')
       const { data: year, error } = await db
         .from('academic_years')
-        .insert({ name: data.name, start_date: data.start_date, end_date: data.end_date, is_current: true })
+        .insert({
+          name: data.name,
+          start_date: data.start_date,
+          end_date: data.end_date,
+          is_current: (years?.length ?? 0) === 0,
+        })
         .select()
         .single()
       if (error) throw error
@@ -69,11 +75,9 @@ export function SettingsPage() {
 
   const setCurrent = useMutation({
     mutationFn: async (id: string) => {
-      await db.from('academic_years').update({ is_current: false }).neq('id', id)
-      const { error } = await db
-        .from('academic_years')
-        .update({ is_current: true })
-        .eq('id', id)
+      const { error } = await db.rpc('set_current_academic_year', {
+        p_academic_year_id: id,
+      })
       if (error) throw error
     },
     onSuccess: () => {
@@ -113,14 +117,15 @@ export function SettingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {years.map((year: AcademicYear) => (
-                    <TableRow key={year.id}>
+                  {years.map((year: AcademicYear) => {
+                    const status = year.is_current ? 'Current' : year.start_date > today ? 'Upcoming' : 'Past'
+                    return <TableRow key={year.id}>
                       <TableCell className="font-medium">{year.name}</TableCell>
                       <TableCell>{formatDisplayDate(year.start_date)}</TableCell>
                       <TableCell>{formatDisplayDate(year.end_date)}</TableCell>
                       <TableCell>
                         <Badge variant={year.is_current ? 'default' : 'secondary'}>
-                          {year.is_current ? 'Current' : 'Past'}
+                          {status}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -137,7 +142,7 @@ export function SettingsPage() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  })}
                 </TableBody>
               </Table>
               <Separator className="my-3 sm:my-6" />

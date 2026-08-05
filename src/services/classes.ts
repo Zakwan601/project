@@ -8,7 +8,7 @@ export const classesService = {
   async getAll(academicYearId?: string) {
     let query = db
       .from('classes')
-      .select(`*, academic_years(id, name, is_current)`)
+      .select(`*, academic_years(*)`)
       .order('grade')
       .order('section')
 
@@ -22,7 +22,7 @@ export const classesService = {
   async getById(id: string) {
     const { data, error } = await db
       .from('classes')
-      .select(`*, academic_years(id, name)`)
+      .select(`*, academic_years(*)`)
       .eq('id', id)
       .maybeSingle()
     if (error) throw error

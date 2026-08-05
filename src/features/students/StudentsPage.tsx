@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, Clock3, KeyRound, Pencil, Search, Trash2, UserCircle, X } from 'lucide-react'
+import { Check, Clock3, GraduationCap, History, KeyRound, Pencil, Search, Trash2, UserCircle, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useStudents, useUpdateStudent, useDeleteStudent } from '@/hooks/useStudents'
+import { useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents, useStudentEnrollmentHistory } from '@/hooks/useStudents'
 import { useStudentPunches } from '@/hooks/useDeviceLogs'
 import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
@@ -21,9 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
 import type { Student, StudentWithClass } from '@/types/database'
-import { formatDatabaseWallClock } from '@/lib/dateTime'
+import { formatDatabaseWallClock, formatDisplayDate } from '@/lib/dateTime'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { isValidBangladeshMobile } from '@/lib/profile'
+import { Checkbox } from '@/components/ui/checkbox'
 
 const studentSchema = z.object({
   first_name: z.string().min(1, 'Required'),
@@ -49,6 +50,7 @@ export function StudentsPage() {
   const { data: classes } = useClasses()
   const updateStudent = useUpdateStudent()
   const deleteStudent = useDeleteStudent()
+  const promoteStudents = usePromoteStudents()
   const { session, role } = useAuth()
 
   const [search, setSearch] = useState('')
@@ -58,6 +60,11 @@ export function StudentsPage() {
   const [accountStudent, setAccountStudent] = useState<StudentWithClass | null>(null)
   const [punchStudent, setPunchStudent] = useState<StudentWithClass | null>(null)
   const [creatingAccount, setCreatingAccount] = useState(false)
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
+  const [promotionOpen, setPromotionOpen] = useState(false)
+  const [targetClassId, setTargetClassId] = useState('')
+  const [promotionDate, setPromotionDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [historyStudent, setHistoryStudent] = useState<StudentWithClass | null>(null)
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<StudentForm>({
     resolver: zodResolver(studentSchema),
@@ -70,6 +77,33 @@ export function StudentsPage() {
   const filtered = students?.filter(s =>
     `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase())
   ) ?? []
+  const allFilteredSelected = filtered.length > 0 && filtered.every(student => selectedStudentIds.includes(student.id))
+
+  const toggleStudent = (studentId: string, checked: boolean) => {
+    setSelectedStudentIds(current => checked
+      ? [...new Set([...current, studentId])]
+      : current.filter(id => id !== studentId))
+  }
+
+  const submitPromotion = async () => {
+    if (!targetClassId || selectedStudentIds.length === 0) return
+    await promoteStudents.mutateAsync({
+      studentIds: selectedStudentIds,
+      targetClassId,
+      effectiveDate: promotionDate,
+    })
+    setPromotionOpen(false)
+    setSelectedStudentIds([])
+    setTargetClassId('')
+  }
+
+  const selectPromotionTarget = (classId: string) => {
+    setTargetClassId(classId)
+    const targetClass = classes?.find(cls => cls.id === classId)
+    if (targetClass?.academic_years?.start_date) {
+      setPromotionDate(targetClass.academic_years.start_date)
+    }
+  }
 
   const openEdit = (s: StudentWithClass) => {
     setEditing(s)
@@ -124,6 +158,12 @@ export function StudentsPage() {
       <PageHeader
         title="Students"
         description={`${students?.length ?? 0} students enrolled`}
+        action={role === 'admin' && selectedStudentIds.length > 0 ? (
+          <Button size="sm" onClick={() => setPromotionOpen(true)}>
+            <GraduationCap className="mr-1.5 h-4 w-4" />
+            Promote ({selectedStudentIds.length})
+          </Button>
+        ) : undefined}
       />
 
       <Card>
@@ -145,6 +185,15 @@ export function StudentsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                {role === 'admin' && <TableHead className="w-10">
+                  <Checkbox
+                    checked={allFilteredSelected}
+                    onCheckedChange={checked => setSelectedStudentIds(
+                      checked ? filtered.map(student => student.id) : [],
+                    )}
+                    aria-label="Select all visible students"
+                  />
+                </TableHead>}
                 <TableHead>Name</TableHead>
                 <TableHead>Admission No.</TableHead>
                 <TableHead>Class</TableHead>
@@ -163,6 +212,13 @@ export function StudentsPage() {
                   transition={{ delay: i * 0.02 }}
                   className="border-b transition-colors hover:bg-muted/50"
                 >
+                  {role === 'admin' && <TableCell>
+                    <Checkbox
+                      checked={selectedStudentIds.includes(student.id)}
+                      onCheckedChange={checked => toggleStudent(student.id, checked === true)}
+                      aria-label={`Select ${student.first_name} ${student.last_name}`}
+                    />
+                  </TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <UserCircle className="h-8 w-8 text-muted-foreground shrink-0" />
@@ -190,6 +246,16 @@ export function StudentsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {role === 'admin' && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setHistoryStudent(student)}
+                          title="Academic history"
+                        >
+                          <History className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {role === 'admin' && (
                         <Button
                           variant="ghost"
@@ -227,6 +293,53 @@ export function StudentsPage() {
           </Table>
         )}
       </Card>
+
+      <Dialog open={promotionOpen} onOpenChange={setPromotionOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Promote students</DialogTitle>
+            <DialogDescription>
+              Move {selectedStudentIds.length} selected student{selectedStudentIds.length === 1 ? '' : 's'} to a class in the next academic year. Their current assignments will be archived automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Target class</Label>
+              <Select value={targetClassId} onValueChange={selectPromotionTarget}>
+                <SelectTrigger><SelectValue placeholder="Select next class" /></SelectTrigger>
+                <SelectContent>
+                  {classes?.filter(cls => cls.is_active && cls.academic_year_id).map(cls => (
+                    <SelectItem key={cls.id} value={cls.id}>
+                      {cls.name} ({cls.grade}-{cls.section}) · {cls.academic_years?.name ?? 'Academic year'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Effective date</Label>
+              <DatePickerInput
+                value={promotionDate}
+                onChange={setPromotionDate}
+                min={classes?.find(cls => cls.id === targetClassId)?.academic_years?.start_date}
+                max={classes?.find(cls => cls.id === targetClassId)?.academic_years?.end_date}
+                disabled={!targetClassId}
+              />
+              <p className="text-xs text-muted-foreground">The date must fall within the target class's academic year.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPromotionOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              disabled={!targetClassId || !promotionDate || promoteStudents.isPending}
+              onClick={submitPromotion}
+            >
+              {promoteStudents.isPending ? 'Promoting...' : 'Confirm promotion'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -374,7 +487,50 @@ export function StudentsPage() {
         student={punchStudent}
         onClose={() => setPunchStudent(null)}
       />
+      <EnrollmentHistoryDialog student={historyStudent} onClose={() => setHistoryStudent(null)} />
     </div>
+  )
+}
+
+function EnrollmentHistoryDialog({ student, onClose }: {
+  student: StudentWithClass | null
+  onClose: () => void
+}) {
+  const { data: history = [], isLoading, error } = useStudentEnrollmentHistory(student?.id)
+
+  return (
+    <Dialog open={student !== null} onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Academic history</DialogTitle>
+          <DialogDescription>{student?.first_name} {student?.last_name}</DialogDescription>
+        </DialogHeader>
+        {isLoading ? <LoadingState message="Loading academic history..." /> : error ? (
+          <ErrorState message={(error as Error).message} />
+        ) : history.length === 0 ? (
+          <EmptyState title="No academic history" description="The current assignment will appear after the enrollment migration is applied." />
+        ) : (
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {history.map(enrollment => (
+              <div key={enrollment.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <p className="text-sm font-medium">
+                    {enrollment.classes.name} ({enrollment.classes.grade}-{enrollment.classes.section})
+                  </p>
+                  <p className="text-xs text-muted-foreground">{enrollment.academic_years.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatDisplayDate(enrollment.started_on)} – {enrollment.ended_on ? formatDisplayDate(enrollment.ended_on) : 'Current'}
+                  </p>
+                </div>
+                <Badge variant={enrollment.ended_on ? 'secondary' : 'default'} className="capitalize">
+                  {enrollment.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

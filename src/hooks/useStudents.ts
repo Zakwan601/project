@@ -56,3 +56,29 @@ export function useDeleteStudent() {
     onError: (e: Error) => toast.error(e.message),
   })
 }
+
+export function usePromoteStudents() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ studentIds, targetClassId, effectiveDate }: {
+      studentIds: string[]
+      targetClassId: string
+      effectiveDate: string
+    }) => studentsService.promote(studentIds, targetClassId, effectiveDate),
+    onSuccess: count => {
+      qc.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      qc.invalidateQueries({ queryKey: ['classes'] })
+      qc.invalidateQueries({ queryKey: ['student-enrollment-history'] })
+      toast.success(`${count} student${count === 1 ? '' : 's'} promoted`)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useStudentEnrollmentHistory(studentId?: string) {
+  return useQuery({
+    queryKey: ['student-enrollment-history', studentId],
+    queryFn: () => studentsService.getEnrollmentHistory(studentId!),
+    enabled: Boolean(studentId),
+  })
+}

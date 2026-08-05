@@ -335,7 +335,11 @@ function DailyAttendanceSheet({
   const { data: records = [], isLoading, error } = useAttendanceRecords(session.id)
   const { data: students = [] } = useQuery({
     queryKey: ['students_by_class', session.class_id],
-    queryFn: () => studentsService.getByClass(session.class_id),
+    queryFn: async () => {
+      const students = await studentsService.getByClassForPeriod(session.class_id, session.date)
+      const today = format(new Date(), 'yyyy-MM-dd')
+      return session.date >= today ? students.filter(student => student.is_active) : students
+    },
   })
   const correctAttendance = useCorrectAttendance()
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set())

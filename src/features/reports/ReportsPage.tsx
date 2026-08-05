@@ -71,10 +71,11 @@ function useClassAttendanceReport(classId: string, startDate: string, endDate: s
 
       if (rErr) throw rErr
 
-      const { data: studentsData, error: stErr } = await db
-        .from('students')
-        .select('id, first_name, last_name, admission_number, roll_number')
-        .eq('class_id', classId)
+      const { data: studentsData, error: stErr } = await db.rpc('get_class_students_for_period', {
+        p_class_id: classId,
+        p_start_date: startDate,
+        p_end_date: endDate,
+      })
 
       if (stErr) throw stErr
 

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { Student, StudentWithClass } from '@/types/database'
+import type { Student, StudentEnrollmentWithDetails, StudentWithClass } from '@/types/database'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
@@ -63,5 +63,35 @@ export const studentsService = {
       .order('roll_number')
     if (error) throw error
     return data as Student[]
+  },
+
+  async getByClassForPeriod(classId: string, startDate: string, endDate = startDate) {
+    const { data, error } = await db.rpc('get_class_students_for_period', {
+      p_class_id: classId,
+      p_start_date: startDate,
+      p_end_date: endDate,
+    })
+    if (error) throw error
+    return data as Student[]
+  },
+
+  async promote(studentIds: string[], targetClassId: string, effectiveDate: string) {
+    const { data, error } = await db.rpc('promote_students', {
+      p_student_ids: studentIds,
+      p_target_class_id: targetClassId,
+      p_effective_date: effectiveDate,
+    })
+    if (error) throw error
+    return Number(data ?? 0)
+  },
+
+  async getEnrollmentHistory(studentId: string) {
+    const { data, error } = await db
+      .from('student_enrollments')
+      .select('*, classes(id, name, grade, section), academic_years(*)')
+      .eq('student_id', studentId)
+      .order('started_on', { ascending: false })
+    if (error) throw error
+    return data as StudentEnrollmentWithDetails[]
   },
 }

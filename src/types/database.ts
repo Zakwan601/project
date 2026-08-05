@@ -26,6 +26,11 @@ export interface Database {
         Insert: Omit<Student, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Student, 'id' | 'created_at'>>
       }
+      student_enrollments: {
+        Row: StudentEnrollment
+        Insert: Omit<StudentEnrollment, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<StudentEnrollment, 'id' | 'student_id' | 'created_at'>>
+      }
       subjects: {
         Row: Subject
         Insert: Omit<Subject, 'id' | 'created_at'>
@@ -139,6 +144,27 @@ export interface Student {
 
 export interface StudentWithClass extends Student {
   classes: Class | null
+}
+
+export type EnrollmentStatus = 'active' | 'promoted' | 'transferred' | 'withdrawn'
+
+export interface StudentEnrollment {
+  id: string
+  student_id: string
+  academic_year_id: string
+  class_id: string
+  roll_number: number | null
+  started_on: string
+  ended_on: string | null
+  status: EnrollmentStatus
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface StudentEnrollmentWithDetails extends StudentEnrollment {
+  classes: Pick<Class, 'id' | 'name' | 'grade' | 'section'>
+  academic_years: AcademicYear
 }
 
 export interface Subject {

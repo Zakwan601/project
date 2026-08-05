@@ -18,9 +18,11 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { AcademicYear, Class, ClassWithDetails } from '@/types/database'
 
 const classSchema = z.object({
+  academic_year_id: z.string().min(1, 'Academic year is required'),
   name: z.string().min(1, 'Required'),
   grade: z.string().min(1, 'Required'),
   section: z.string().min(1, 'Required'),
@@ -57,7 +59,7 @@ export function ClassesPage() {
   const [editing, setEditing] = useState<ClassWithDetails | null>(null)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ClassForm, any, ClassForm>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<ClassForm, any, ClassForm>({
     resolver: zodResolver(classSchema) as any,
     defaultValues: { section: 'A', capacity: 40 },
   })
@@ -71,13 +73,14 @@ export function ClassesPage() {
 
   const openCreate = () => {
     setEditing(null)
-    reset({ section: 'A', capacity: 40 })
+    reset({ academic_year_id: currentYearId ?? '', section: 'A', capacity: 40 })
     setDialogOpen(true)
   }
 
   const openEdit = (c: ClassWithDetails) => {
     setEditing(c)
     reset({
+      academic_year_id: c.academic_year_id ?? '',
       name: c.name,
       grade: c.grade,
       section: c.section,
@@ -96,7 +99,7 @@ export function ClassesPage() {
       section: data.section,
       capacity: data.capacity,
       room: data.room || null,
-      academic_year_id: currentYearId,
+      academic_year_id: data.academic_year_id,
       is_active: true,
     }
     if (editing) {
@@ -179,6 +182,9 @@ export function ClassesPage() {
                       <Badge variant={cls.is_active ? 'default' : 'secondary'} className="text-xs">
                         {cls.is_active ? 'Active' : 'Inactive'}
                       </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {cls.academic_years?.name ?? 'No academic year'}
+                      </Badge>
                     </div>
                   </CardContent>
                 </Card>
@@ -196,6 +202,27 @@ export function ClassesPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="grid grid-cols-2 gap-4 py-4">
+              <div className="space-y-2 col-span-2">
+                <Label>Academic Year *</Label>
+                <Select
+                  value={watch('academic_year_id')}
+                  onValueChange={value => setValue('academic_year_id', value, { shouldValidate: true })}
+                  disabled={Boolean(editing)}
+                >
+                  <SelectTrigger aria-invalid={!!errors.academic_year_id}>
+                    <SelectValue placeholder="Select academic year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {academicYears?.map(year => (
+                      <SelectItem key={year.id} value={year.id}>
+                        {year.name}{year.is_current ? ' (Current)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.academic_year_id && <p className="text-xs text-destructive">{errors.academic_year_id.message}</p>}
+                {editing && <p className="text-xs text-muted-foreground">Academic year cannot be changed after a class is created.</p>}
+              </div>
               <div className="space-y-2 col-span-2">
                 <Label>Class Name *</Label>
                 <Input {...register('name')} placeholder="e.g. Class 10-A" aria-invalid={!!errors.name} />
