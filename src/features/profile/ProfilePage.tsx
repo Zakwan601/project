@@ -73,7 +73,9 @@ export function ProfilePage() {
     resolver: zodResolver(profileSchema),
     mode: 'onChange',
     defaultValues: {
-      full_name: profile?.full_name ?? '',
+      full_name: role === 'student' && student
+        ? `${student.first_name} ${student.last_name}`.trim()
+        : profile?.full_name ?? '',
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
       address: role === 'student' ? student?.address ?? '' : profile?.address ?? '',
     },
@@ -81,7 +83,9 @@ export function ProfilePage() {
 
   useEffect(() => {
     resetProfile({
-      full_name: profile?.full_name ?? '',
+      full_name: role === 'student' && student
+        ? `${student.first_name} ${student.last_name}`.trim()
+        : profile?.full_name ?? '',
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
       address: role === 'student' ? student?.address ?? '' : profile?.address ?? '',
     })
@@ -161,8 +165,12 @@ export function ProfilePage() {
     }
   }
 
-  const initials = profile?.full_name
-    ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const displayName = role === 'student' && student
+    ? `${student.first_name} ${student.last_name}`.trim()
+    : profile?.full_name ?? ''
+
+  const initials = displayName
+    ? displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     : '?'
 
   const roleColors: Record<string, string> = {
@@ -196,7 +204,7 @@ export function ProfilePage() {
               <AvatarFallback className="text-xl bg-muted">{initials}</AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle>{profile?.full_name}</CardTitle>
+              <CardTitle>{displayName}</CardTitle>
               <CardDescription>{user?.email}</CardDescription>
               <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -218,8 +226,14 @@ export function ProfilePage() {
           <form onSubmit={handleProfile(saveProfile)} className="space-y-3 sm:space-y-4">
             <div className="space-y-2">
               <Label>Full Name</Label>
-              <Input {...regProfile('full_name')} aria-invalid={!!profileErrors.full_name} />
+              <Input
+                {...regProfile('full_name')}
+                readOnly={role === 'student'}
+                className={role === 'student' ? 'bg-muted' : undefined}
+                aria-invalid={!!profileErrors.full_name}
+              />
               {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
+              {role === 'student' && <p className="text-xs text-muted-foreground">This name is maintained in the admin panel.</p>}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
@@ -264,10 +278,10 @@ export function ProfilePage() {
               {profileErrors.address && <p className="text-xs text-destructive">{profileErrors.address.message}</p>}
               {phoneManagedByAdmin && <p className="text-xs text-muted-foreground">This address is maintained in the admin panel.</p>}
             </div>
-            <Button type="submit" disabled={saving}>
+            {role === 'admin' && <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save Changes
-            </Button>
+            </Button>}
           </form>
         </CardContent>
       </Card>

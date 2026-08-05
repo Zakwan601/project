@@ -5,7 +5,7 @@ import { Check, Clock3, GraduationCap, History, KeyRound, Pencil, Search, Trash2
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents, useStudentEnrollmentHistory } from '@/hooks/useStudents'
+import { STUDENTS_KEY, useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents, useStudentEnrollmentHistory } from '@/hooks/useStudents'
 import { useStudentPunches } from '@/hooks/useDeviceLogs'
 import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
@@ -25,6 +25,12 @@ import { formatDatabaseWallClock, formatDisplayDate } from '@/lib/dateTime'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { isValidBangladeshMobile } from '@/lib/profile'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
+
+// Database types are maintained manually in this project.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any
 
 const studentSchema = z.object({
   first_name: z.string().min(1, 'Required'),
@@ -272,7 +278,7 @@ export function StudentsPage() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => setAccountStudent(student)}
-                          title="Create login account"
+                          title="Set up or link login account"
                           className="text-blue-600 hover:text-blue-700"
                         >
                           <KeyRound className="h-3.5 w-3.5" />
@@ -468,9 +474,9 @@ export function StudentsPage() {
       <Dialog open={!!accountStudent} onOpenChange={() => setAccountStudent(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Login Account</DialogTitle>
+            <DialogTitle>Set Up Student Login</DialogTitle>
             <DialogDescription>
-              Create a login account for {accountStudent?.first_name} {accountStudent?.last_name}. The student will be able to log in with these credentials.
+              Link an existing login by email, or enter a password to create a new account for {accountStudent?.first_name} {accountStudent?.last_name}.
             </DialogDescription>
           </DialogHeader>
           <StudentAccountForm
@@ -679,14 +685,35 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const queryClient = useQueryClient()
 
   if (!student) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) return
+    if (!email) return
     setCreating(true)
     try {
+      const { error: linkError } = await db.rpc('link_student_account_by_email', {
+        p_student_id: student.id,
+        p_email: email.trim(),
+      })
+
+      if (!linkError) {
+        await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+        toast.success('Existing student login linked successfully')
+        onClose()
+        return
+      }
+
+      if (!linkError.message.includes('No existing student login was found')) {
+        throw linkError
+      }
+
+      if (!password) {
+        throw new Error('No existing login was found. Enter a password to create a new account.')
+      }
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
         method: 'POST',
         headers: {
@@ -706,6 +733,7 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Failed to create account')
 
+      await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
       toast.success('Student account created successfully')
       onClose()
     } catch (e) {
@@ -729,21 +757,20 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
           />
         </div>
         <div className="space-y-2">
-          <Label>Password *</Label>
+          <Label>Password <span className="text-muted-foreground">(new accounts only)</span></Label>
           <Input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="Min 6 characters"
             minLength={6}
-            required
           />
         </div>
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
         <Button type="submit" disabled={creating}>
-          {creating ? 'Creating...' : 'Create Account'}
+          {creating ? 'Checking...' : 'Link or Create Account'}
         </Button>
       </DialogFooter>
     </form>

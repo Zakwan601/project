@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name, role },
+      user_metadata: { full_name, role, student_id: extra?.student_id ?? null },
     });
 
     if (createErr) {
@@ -91,14 +91,18 @@ Deno.serve(async (req: Request) => {
 
     // Link the student record to the new auth user.
     if (extra?.student_id) {
-      const { error: linkErr } = await adminClient
+      const { data: linkedStudent, error: linkErr } = await adminClient
         .from("students")
         .update({ profile_id: newUserId })
-        .eq("id", extra.student_id);
+        .eq("id", extra.student_id)
+        .select("id")
+        .maybeSingle();
 
-      if (linkErr) {
+      if (linkErr || !linkedStudent) {
         await adminClient.auth.admin.deleteUser(newUserId);
-        return jsonResponse(400, { error: `Failed to link student: ${linkErr.message}` });
+        return jsonResponse(400, {
+          error: `Failed to link student: ${linkErr?.message ?? "student record not found"}`,
+        });
       }
     }
 

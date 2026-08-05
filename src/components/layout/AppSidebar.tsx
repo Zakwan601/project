@@ -63,8 +63,11 @@ export function AppSidebar() {
     role && item.roles.includes(role) && (profileComplete || item.href === '/profile')
   )
 
-  const initials = profile?.full_name
-    ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const accountName = role === 'student' && student
+    ? `${student.first_name} ${student.last_name}`.trim()
+    : profile?.full_name ?? 'User'
+  const initials = accountName
+    ? accountName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     : '?'
 
   const handleSignOut = async () => {
@@ -143,7 +146,7 @@ export function AppSidebar() {
             <AvatarFallback className="text-xs bg-muted">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-medium truncate">{profile?.full_name ?? 'User'}</span>
+            <span className="text-sm font-medium truncate">{accountName}</span>
             {role && (
               <Badge variant="secondary" className={`text-xs w-fit mt-0.5 capitalize ${roleColors[role]}`}>
                 {role}

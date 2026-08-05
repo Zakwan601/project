@@ -55,7 +55,7 @@ function StatCard({ title, value, description, icon: Icon, delay = 0, colorClass
 }
 
 export function StudentDashboard() {
-  const { profile } = useAuth()
+  const { profile, student: linkedStudent } = useAuth()
   const { data: student, isLoading: idLoading, error: identityError } = useStudentIdentity()
   const studentId = student?.id
   const { data: stats, isLoading: statsLoading, error } = useStudentDashboardStats(studentId)
@@ -85,7 +85,7 @@ export function StudentDashboard() {
           {formatDisplayDate(new Date())}
         </div>
         <h2 className="relative mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-          Good {getGreeting()}, {profile?.full_name?.split(' ')[0] ?? 'there'}
+          Good {getGreeting()}, {linkedStudent?.first_name ?? profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
         <DesktopSyncLastSync className="relative mt-2 sm:mt-3" label="Attendance last updated" />
         {dashboardLoading ? (
