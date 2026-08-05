@@ -18,6 +18,7 @@ import { StudentReportsPage } from '@/features/reports/StudentReportsPage'
 import { ComplaintsPage } from '@/features/reports/ComplaintsPage'
 import { SmsMessagesPage } from '@/features/sms/SmsMessagesPage'
 import { AnnouncementsPage } from '@/features/announcements/AnnouncementsPage'
+import { DepartureAnomaliesPage } from '@/features/departure-anomalies/DepartureAnomaliesPage'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
 const queryClient = new QueryClient({
@@ -75,6 +76,14 @@ function App() {
                   element={(
                     <ProtectedRoute roles={['admin']}>
                       <AnnouncementsPage />
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/departure-anomalies"
+                  element={(
+                    <ProtectedRoute roles={['admin']}>
+                      <DepartureAnomaliesPage />
                     </ProtectedRoute>
                   )}
                 />

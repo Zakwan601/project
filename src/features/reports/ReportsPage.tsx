@@ -174,7 +174,7 @@ export function ReportsPage() {
   const exportStudentReport = () => {
     if (!studentReport?.length) return
 
-    const headers = ['Roll', 'Student', 'Admission No.', 'Present', 'Absent', 'Late', 'Excused', 'Total Days', 'Attendance %']
+    const headers = ['Roll', 'Student', 'Admission No.', 'Present', 'Absent', 'Late', 'Approved Leave', 'Total Days', 'Attendance %']
     const rows = studentReport.map(row => [
       row.roll,
       row.name,
@@ -292,7 +292,7 @@ export function ReportsPage() {
                     <TableHead className="text-center">Present</TableHead>
                     <TableHead className="text-center">Absent</TableHead>
                     <TableHead className="text-center">Late</TableHead>
-                    <TableHead className="text-center">Excused</TableHead>
+                    <TableHead className="text-center">Approved Leave</TableHead>
                     <TableHead className="text-center">Total Days</TableHead>
                     <TableHead className="text-center">%</TableHead>
                   </TableRow>

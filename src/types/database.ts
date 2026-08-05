@@ -259,6 +259,7 @@ export interface DashboardStats {
   presentToday: number
   absentToday: number
   lateToday: number
+  excusedToday: number
 }
 
 export type SyncServiceStatus = 'never' | 'running' | 'success' | 'failed'

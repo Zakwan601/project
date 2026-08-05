@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CalendarOff, CheckCircle, Pencil, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
+import { CalendarCheck, CalendarDays, CalendarOff, CheckCircle, Pencil, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import {
   useAttendanceRecords,
   useAttendanceSessions,
@@ -37,6 +38,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { AttendanceSessionWithDetails, AttendanceStatus } from '@/types/database'
+import { attendanceStatusLabel } from '@/lib/attendance'
 
 // Handwritten database types do not include all nested relationship selections.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,8 +59,12 @@ export function AttendancePage() {
 function StaffDailyAttendance() {
   const { role } = useAuth()
   const isAdmin = role === 'admin'
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [selectedClassId, setSelectedClassId] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedStatus = searchParams.get('status')
+  const initialStatus = isAttendanceStatus(requestedStatus) ? requestedStatus : 'all'
+  const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || format(new Date(), 'yyyy-MM-dd'))
+  const [selectedClassId, setSelectedClassId] = useState(searchParams.get('class_id') || 'all')
+  const [statusFilter, setStatusFilter] = useState<AttendanceStatus | 'all'>(initialStatus)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [vacationDialogOpen, setVacationDialogOpen] = useState(false)
   const [vacationName, setVacationName] = useState('')
@@ -74,6 +80,15 @@ function StaffDailyAttendance() {
   const selectedHoliday = holidays[0] ?? null
   const selectedDateIsWeekend = isWeekend(selectedDate)
   const isNonSchoolDay = selectedDateIsWeekend || Boolean(selectedHoliday)
+
+  const updateUrlFilter = (key: string, value: string) => {
+    setSearchParams(current => {
+      const next = new URLSearchParams(current)
+      if (!value || value === 'all') next.delete(key)
+      else next.set(key, value)
+      return next
+    }, { replace: true })
+  }
 
   useEffect(() => {
     if (sessions.length === 0) {
@@ -123,11 +138,17 @@ function StaffDailyAttendance() {
       <DesktopSyncLastSync className="-mt-2 mb-3 sm:-mt-3 sm:mb-5" />
 
       <Card className="mb-3 sm:mb-5">
-        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-4">
-          <DateFilter mode="date" value={selectedDate} onChange={setSelectedDate} />
+        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-4 lg:grid-cols-3">
+          <DateFilter mode="date" value={selectedDate} onChange={value => {
+            setSelectedDate(value)
+            updateUrlFilter('date', value)
+          }} />
           <div className="min-w-0 space-y-1.5 sm:space-y-2">
             <Label className="text-xs sm:text-sm">Class</Label>
-            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+            <Select value={selectedClassId} onValueChange={value => {
+              setSelectedClassId(value)
+              updateUrlFilter('class_id', value)
+            }}>
               <SelectTrigger><SelectValue placeholder="All classes" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
@@ -136,6 +157,23 @@ function StaffDailyAttendance() {
                     {classItem.name} — Grade {classItem.grade} {classItem.section}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2 min-w-0 space-y-1.5 sm:space-y-2 lg:col-span-1">
+            <Label className="text-xs sm:text-sm">Status</Label>
+            <Select value={statusFilter} onValueChange={value => {
+              const status = value as AttendanceStatus | 'all'
+              setStatusFilter(status)
+              updateUrlFilter('status', status)
+            }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="present">Present</SelectItem>
+                <SelectItem value="absent">Absent</SelectItem>
+                <SelectItem value="late">Late</SelectItem>
+                <SelectItem value="excused">Approved leave</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -215,7 +253,7 @@ function StaffDailyAttendance() {
             </CardContent>
           </Card>
 
-          {activeSession && <DailyAttendanceSheet session={activeSession} isAdmin={isAdmin} />}
+          {activeSession && <DailyAttendanceSheet session={activeSession} isAdmin={isAdmin} statusFilter={statusFilter} />}
         </div>
       )}
 
@@ -285,7 +323,15 @@ function StaffDailyAttendance() {
   )
 }
 
-function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSessionWithDetails; isAdmin: boolean }) {
+function DailyAttendanceSheet({
+  session,
+  isAdmin,
+  statusFilter,
+}: {
+  session: AttendanceSessionWithDetails
+  isAdmin: boolean
+  statusFilter: AttendanceStatus | 'all'
+}) {
   const { data: records = [], isLoading, error } = useAttendanceRecords(session.id)
   const { data: students = [] } = useQuery({
     queryKey: ['students_by_class', session.class_id],
@@ -306,8 +352,16 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
   const absentCount = students.filter(student =>
     (recordsByStudent.get(student.id)?.status ?? 'absent') === 'absent'
   ).length
+  const approvedLeaveCount = students.filter(student =>
+    recordsByStudent.get(student.id)?.status === 'excused'
+  ).length
+  const filteredStudents = statusFilter === 'all'
+    ? students
+    : students.filter(student =>
+      (recordsByStudent.get(student.id)?.status ?? 'absent') === statusFilter
+    )
 
-  useEffect(() => setSelectedStudentIds(new Set()), [session.id])
+  useEffect(() => setSelectedStudentIds(new Set()), [session.id, statusFilter])
 
   const targetForStudent = (student: (typeof students)[number]): CorrectionTarget => ({
     studentId: student.id,
@@ -315,10 +369,10 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
     currentStatus: recordsByStudent.get(student.id)?.status ?? 'absent',
   })
 
-  const openCorrection = (targets: CorrectionTarget[]) => {
+  const openCorrection = (targets: CorrectionTarget[], initialStatus?: AttendanceStatus) => {
     if (targets.length === 0) return
     setCorrectionTargets(targets)
-    setCorrectionStatus(targets.length === 1 ? targets[0].currentStatus : 'present')
+    setCorrectionStatus(initialStatus ?? (targets.length === 1 ? targets[0].currentStatus : 'present'))
     setCorrectionReason('')
     setCorrectionDialogOpen(true)
   }
@@ -332,7 +386,7 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
     })
   }
 
-  const allSelected = students.length > 0 && selectedStudentIds.size === students.length
+  const allSelected = filteredStudents.length > 0 && selectedStudentIds.size === filteredStudents.length
   const someSelected = selectedStudentIds.size > 0 && !allSelected
 
   if (isLoading) return <LoadingState />
@@ -348,10 +402,11 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 p-2 sm:space-y-4 sm:p-5">
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-3">
           <Summary icon={Users} label="Students" value={students.length} />
           <Summary icon={CheckCircle} label="Present" value={presentCount} tone="present" />
           <Summary icon={UserX} label="Absent" value={absentCount} tone="absent" />
+          <Summary icon={CalendarDays} label="Approved leave" value={approvedLeaveCount} />
         </div>
 
         {isAdmin && (
@@ -360,27 +415,47 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
               <Checkbox
                 checked={allSelected ? true : someSelected ? 'indeterminate' : false}
                 onCheckedChange={checked => setSelectedStudentIds(
-                  checked === true ? new Set(students.map(student => student.id)) : new Set(),
+                  checked === true ? new Set(filteredStudents.map(student => student.id)) : new Set(),
                 )}
               />
               {selectedStudentIds.size > 0 ? `${selectedStudentIds.size} selected` : 'Select all students'}
             </label>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={selectedStudentIds.size === 0}
-              onClick={() => openCorrection(
-                students.filter(student => selectedStudentIds.has(student.id)).map(targetForStudent),
-              )}
-            >
-              <Pencil /> Correct selected
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={selectedStudentIds.size === 0}
+                onClick={() => openCorrection(
+                  filteredStudents.filter(student => selectedStudentIds.has(student.id)).map(targetForStudent),
+                  'excused',
+                )}
+              >
+                <CalendarCheck /> Approve leave
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={selectedStudentIds.size === 0}
+                onClick={() => openCorrection(
+                  filteredStudents.filter(student => selectedStudentIds.has(student.id)).map(targetForStudent),
+                )}
+              >
+                <Pencil /> Correct selected
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {filteredStudents.length === 0 && (
+          <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+            No students match the selected status.
           </div>
         )}
 
         <div className="space-y-2 md:hidden">
-          {students.map(student => {
+          {filteredStudents.map(student => {
             const record = recordsByStudent.get(student.id)
             const status = record?.status ?? 'absent'
             return (
@@ -407,7 +482,7 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Badge className={statusStyles[status]}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      {attendanceStatusLabel(status)}
                     </Badge>
                     {isAdmin && (
                       <Button
@@ -464,7 +539,7 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
               </TableRow>
             </TableHeader>
             <TableBody>
-              {students.map(student => {
+              {filteredStudents.map(student => {
                 const record = recordsByStudent.get(student.id)
                 const status = record?.status ?? 'absent'
                 return (
@@ -485,7 +560,7 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
                     <TableCell className="font-mono text-xs">{student.admission_number}</TableCell>
                     <TableCell>
                       <Badge className={statusStyles[status]}>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                        {attendanceStatusLabel(status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
@@ -545,7 +620,7 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
                 <SelectItem value="present">Present</SelectItem>
                 <SelectItem value="absent">Absent</SelectItem>
                 <SelectItem value="late">Late</SelectItem>
-                <SelectItem value="excused">Excused</SelectItem>
+                <SelectItem value="excused">Approved leave</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -555,7 +630,9 @@ function DailyAttendanceSheet({ session, isAdmin }: { session: AttendanceSession
               id="correction-reason"
               value={correctionReason}
               onChange={event => setCorrectionReason(event.target.value)}
-              placeholder="Explain why this attendance is being corrected"
+              placeholder={correctionStatus === 'excused'
+                ? 'Enter the approved leave reason'
+                : 'Explain why this attendance is being corrected'}
               rows={3}
               minLength={5}
               maxLength={500}
@@ -736,7 +813,7 @@ function StudentDailyAttendance() {
             ) : selectedRecord ? (
               <div className="space-y-3">
                 <Badge className={statusStyles[selectedRecord.status]}>
-                  {selectedRecord.status.charAt(0).toUpperCase() + selectedRecord.status.slice(1)}
+                  {attendanceStatusLabel(selectedRecord.status)}
                 </Badge>
                 <div className="grid grid-cols-2 gap-2">
                   <CalendarDetail label="Arrival" value={formatDatabaseWallClock(selectedRecord.check_in_at)} />
@@ -775,7 +852,7 @@ function StudentDailyAttendance() {
                 <TableCell>{databaseDate(record.attendance_sessions.date)}</TableCell>
                 <TableCell>
                   <Badge className={statusStyles[record.status]}>
-                    {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                    {attendanceStatusLabel(record.status)}
                   </Badge>
                 </TableCell>
                 <TableCell className="font-mono text-xs">
@@ -814,7 +891,7 @@ function AttendanceCalendarLegend() {
     { label: 'Present', color: 'bg-emerald-500' },
     { label: 'Absent', color: 'bg-red-500' },
     { label: 'Late', color: 'bg-amber-500' },
-    { label: 'Excused', color: 'bg-blue-500' },
+    { label: 'Approved leave', color: 'bg-blue-500' },
     { label: 'Vacation', color: 'bg-violet-500' },
   ]
   return (
@@ -881,6 +958,10 @@ function databaseDate(value: string) {
 function databaseDateToDate(value: string) {
   const [year, month, day = 1] = value.split('-').map(Number)
   return new Date(year, month - 1, day)
+}
+
+function isAttendanceStatus(value: string | null): value is AttendanceStatus {
+  return value === 'present' || value === 'absent' || value === 'late' || value === 'excused'
 }
 
 function isWeekend(value: string) {

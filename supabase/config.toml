@@ -2,3 +2,6 @@ project_id = "attendance-project"
 
 [functions.sync-attendance]
 verify_jwt = false
+
+[functions.analyze-departure-anomalies]
+verify_jwt = false

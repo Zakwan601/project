@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { format } from 'date-fns'
 import { motion } from 'framer-motion'
 import { Clock3, KeyRound, Pencil, Search, Trash2, UserCircle } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -21,6 +22,7 @@ import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
 import type { Student, StudentWithClass } from '@/types/database'
 import { formatDatabaseWallClock } from '@/lib/dateTime'
+import { DatePickerInput } from '@/components/shared/DatePickerInput'
 
 const studentSchema = z.object({
   first_name: z.string().min(1, 'Required'),
@@ -272,7 +274,11 @@ export function StudentsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Date of Birth</Label>
-                <Input type="date" {...register('date_of_birth')} />
+                <DatePickerInput
+                  value={watch('date_of_birth') ?? ''}
+                  onChange={value => setValue('date_of_birth', value, { shouldDirty: true })}
+                  max={format(new Date(), 'yyyy-MM-dd')}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Biometric ID</Label>

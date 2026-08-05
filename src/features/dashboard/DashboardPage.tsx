@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { Activity, CheckCircle, Clock, Cpu, GraduationCap, Users, UserX, Wifi, WifiOff } from 'lucide-react'
+import { Activity, CalendarCheck, CheckCircle, Clock, Cpu, GraduationCap, Users, UserX, Wifi, WifiOff } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
+import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Label, Pie, PieChart, XAxis } from 'recharts'
 import { useDashboardStats, useSyncServiceHealth, useWeeklyAttendance } from '@/hooks/useDashboard'
 import { useDevices } from '@/hooks/useDevices'
@@ -24,6 +25,7 @@ const chartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
   absent: { label: 'Absent', color: 'var(--chart-5)' },
   late: { label: 'Late', color: 'var(--chart-4)' },
+  excused: { label: 'Approved leave', color: 'var(--chart-3)' },
 } satisfies ChartConfig
 
 export function DashboardPage() {
@@ -49,11 +51,14 @@ export function DashboardPage() {
   const presentToday = stats?.presentToday ?? 0
   const absentToday = stats?.absentToday ?? 0
   const lateToday = stats?.lateToday ?? 0
-  const todayTotal = presentToday + absentToday + lateToday
+  const excusedToday = stats?.excusedToday ?? 0
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const todayTotal = presentToday + absentToday + lateToday + excusedToday
   const todayPieData = [
     { status: 'present', count: presentToday, fill: 'var(--color-present)' },
     { status: 'absent', count: absentToday, fill: 'var(--color-absent)' },
     { status: 'late', count: lateToday, fill: 'var(--color-late)' },
+    { status: 'excused', count: excusedToday, fill: 'var(--color-excused)' },
   ]
 
   return (
@@ -75,13 +80,21 @@ export function DashboardPage() {
       </motion.div>
 
       <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
-        <SummaryCard icon={Users} label="Students" value={error ? '—' : stats?.totalStudents ?? 0} loading={isLoading} />
-        <SummaryCard icon={GraduationCap} label="Classes" value={error ? '—' : stats?.totalClasses ?? 0} loading={isLoading} />
+        <SummaryCard icon={Users} label="Students" value={error ? '—' : stats?.totalStudents ?? 0} loading={isLoading} to="/students" />
+        <SummaryCard icon={GraduationCap} label="Classes" value={error ? '—' : stats?.totalClasses ?? 0} loading={isLoading} to="/classes" />
         <SummaryCard
           icon={CheckCircle}
           label="Attendance rate"
           value={error ? '—' : `${stats?.todayAttendanceRate ?? 0}%`}
           loading={isLoading}
+          to={`/attendance?date=${today}`}
+        />
+        <SummaryCard
+          icon={CalendarCheck}
+          label="Approved leave"
+          value={error ? '—' : excusedToday}
+          loading={isLoading}
+          to={`/attendance?date=${today}&status=excused`}
         />
       </div>
 
@@ -207,9 +220,10 @@ export function DashboardPage() {
                   </PieChart>
                 </ChartContainer>
                 <div className="w-full space-y-3">
-                  <Snapshot icon={CheckCircle} label="Present" value={presentToday} className="text-emerald-600" />
-                  <Snapshot icon={UserX} label="Absent" value={absentToday} className="text-red-600" />
-                  <Snapshot icon={Clock} label="Late" value={lateToday} className="text-amber-600" />
+                  <Snapshot icon={CheckCircle} label="Present" value={presentToday} className="text-emerald-600" to={`/attendance?date=${today}&status=present`} />
+                  <Snapshot icon={UserX} label="Absent" value={absentToday} className="text-red-600" to={`/attendance?date=${today}&status=absent`} />
+                  <Snapshot icon={Clock} label="Late" value={lateToday} className="text-amber-600" to={`/attendance?date=${today}&status=late`} />
+                  <Snapshot icon={CalendarCheck} label="Approved leave" value={excusedToday} className="text-blue-600" to={`/attendance?date=${today}&status=excused`} />
                 </div>
               </div>
             ) : (
@@ -295,13 +309,15 @@ function SummaryCard({
   label,
   value,
   loading = false,
+  to,
 }: {
   icon: React.ElementType
   label: string
   value: string | number
   loading?: boolean
+  to: string
 }) {
-  return (
+  const card = (
     <Card>
       <CardContent className="flex items-center justify-between p-3 sm:p-5">
         <div>
@@ -315,6 +331,14 @@ function SummaryCard({
         </div>
       </CardContent>
     </Card>
+  )
+  return (
+    <Link
+      to={to}
+      className="block rounded-xl transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {card}
+    </Link>
   )
 }
 
@@ -352,18 +376,23 @@ function Snapshot({
   label,
   value,
   className,
+  to,
 }: {
   icon: React.ElementType
   label: string
   value: number
   className: string
+  to: string
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <Link
+      to={to}
+      className="flex items-center gap-3 rounded-md px-1 py-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <Icon className={`h-4 w-4 ${className}`} />
       <span className="flex-1 text-sm text-muted-foreground">{label}</span>
       <strong>{value}</strong>
-    </div>
+    </Link>
   )
 }
 

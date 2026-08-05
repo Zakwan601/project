@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { formatDisplayDate } from '@/lib/dateTime'
 import type { AcademicYear } from '@/types/database'
+import { DatePickerInput } from '@/components/shared/DatePickerInput'
 
 const yearSchema = z.object({
   name: z.string().min(1, 'Required'),
@@ -43,7 +44,7 @@ export function SettingsPage() {
   const { data: years, isLoading } = useAcademicYears()
   const qc = useQueryClient()
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<YearForm>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<YearForm>({
     resolver: zodResolver(yearSchema),
   })
 
@@ -153,11 +154,22 @@ export function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Start Date</Label>
-                <Input type="date" {...register('start_date')} />
+                <DatePickerInput
+                  value={watch('start_date') ?? ''}
+                  onChange={value => setValue('start_date', value, { shouldDirty: true, shouldValidate: true })}
+                  required
+                />
+                {errors.start_date && <p className="text-xs text-destructive">{errors.start_date.message}</p>}
               </div>
               <div className="space-y-2">
                 <Label>End Date</Label>
-                <Input type="date" {...register('end_date')} />
+                <DatePickerInput
+                  value={watch('end_date') ?? ''}
+                  onChange={value => setValue('end_date', value, { shouldDirty: true, shouldValidate: true })}
+                  min={watch('start_date')}
+                  required
+                />
+                {errors.end_date && <p className="text-xs text-destructive">{errors.end_date.message}</p>}
               </div>
             </div>
             <Button type="submit" size="sm" disabled={isSubmitting || createYear.isPending}>

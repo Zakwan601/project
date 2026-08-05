@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { DatePickerInput } from '@/components/shared/DatePickerInput'
 
 type DateFilterProps = {
   mode: 'date'
@@ -98,7 +99,7 @@ function DateInput({ label, value, onChange }: { label: string; value: string; o
   return (
     <div className="min-w-0 space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input type="date" value={value} onChange={event => onChange(event.target.value)} />
+      <DatePickerInput value={value} onChange={onChange} />
     </div>
   )
 }

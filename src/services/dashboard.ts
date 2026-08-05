@@ -39,6 +39,7 @@ export const dashboardService = {
     let presentToday = 0
     let absentToday = 0
     let lateToday = 0
+    let excusedToday = 0
 
     if (sessionIds.length > 0) {
       const { data: records } = await db
@@ -50,6 +51,7 @@ export const dashboardService = {
       presentToday = recs.filter(r => r.status === 'present').length
       absentToday = recs.filter(r => r.status === 'absent').length
       lateToday = recs.filter(r => r.status === 'late').length
+      excusedToday = recs.filter(r => r.status === 'excused').length
     }
 
     const totalToday = presentToday + absentToday + lateToday
@@ -62,6 +64,7 @@ export const dashboardService = {
       presentToday,
       absentToday,
       lateToday,
+      excusedToday,
     }
   },
 

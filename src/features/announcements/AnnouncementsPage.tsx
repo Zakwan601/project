@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDisplayDate } from '@/lib/dateTime'
+import { DatePickerInput } from '@/components/shared/DatePickerInput'
 
 export function AnnouncementsPage() {
   const [title, setTitle] = useState('')
@@ -58,12 +59,11 @@ export function AnnouncementsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="announcement-expiry">Expiry (optional)</Label>
-                <Input
+                <DatePickerInput
                   id="announcement-expiry"
-                  type="date"
                   min={format(new Date(), 'yyyy-MM-dd')}
                   value={expiresAt}
-                  onChange={event => setExpiresAt(event.target.value)}
+                  onChange={setExpiresAt}
                 />
               </div>
             </div>
