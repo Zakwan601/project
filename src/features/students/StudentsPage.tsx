@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Clock3, KeyRound, Pencil, Search, Trash2, UserCircle } from 'lucide-react'
+import { Check, Clock3, KeyRound, Pencil, Search, Trash2, UserCircle, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import type { Student, StudentWithClass } from '@/types/database'
 import { formatDatabaseWallClock } from '@/lib/dateTime'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
+import { isValidBangladeshMobile } from '@/lib/profile'
 
 const studentSchema = z.object({
   first_name: z.string().min(1, 'Required'),
@@ -33,7 +34,10 @@ const studentSchema = z.object({
   gender: z.string().optional(),
   date_of_birth: z.string().optional(),
   guardian_name: z.string().optional(),
-  guardian_phone: z.string().optional(),
+  guardian_phone: z.string().optional().refine(
+    value => !value?.trim() || isValidBangladeshMobile(value),
+    'Enter a valid Bangladesh mobile number',
+  ),
   guardian_email: z.string().email().optional().or(z.literal('')),
   address: z.string().optional(),
   biometric_id: z.string().optional(),
@@ -57,9 +61,11 @@ export function StudentsPage() {
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<StudentForm>({
     resolver: zodResolver(studentSchema),
+    mode: 'onChange',
   })
 
   const classId = watch('class_id')
+  const guardianPhone = watch('guardian_phone')
 
   const filtered = students?.filter(s =>
     `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase())
@@ -94,7 +100,7 @@ export function StudentsPage() {
       gender: data.gender || null,
       date_of_birth: data.date_of_birth || null,
       guardian_name: data.guardian_name || null,
-      guardian_phone: data.guardian_phone || null,
+      guardian_phone: data.guardian_phone?.trim() || null,
       guardian_email: data.guardian_email || null,
       address: data.address || null,
       biometric_id: data.biometric_id || null,
@@ -290,7 +296,19 @@ export function StudentsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Guardian Phone</Label>
-                <Input {...register('guardian_phone')} />
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="01XXXXXXXXX"
+                  {...register('guardian_phone')}
+                  aria-invalid={!!errors.guardian_phone}
+                />
+                {guardianPhone && (
+                  <p className={`flex items-center gap-1.5 text-xs ${errors.guardian_phone ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`} aria-live="polite">
+                    {errors.guardian_phone ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                    {errors.guardian_phone?.message ?? 'Valid Bangladesh mobile number'}
+                  </p>
+                )}
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>Guardian Email</Label>

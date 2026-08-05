@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Spinner } from '@/components/ui/spinner'
 import { useLocation } from 'react-router-dom'
+import { isProfileComplete } from '@/lib/profile'
 
 const pageLabels: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -24,7 +25,7 @@ const pageLabels: Record<string, string> = {
 }
 
 export function AppLayout() {
-  const { session, loading } = useAuth()
+  const { session, profile, student, loading } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -36,6 +37,10 @@ export function AppLayout() {
   }
 
   if (!session) return <Navigate to="/login" replace />
+
+  if (!isProfileComplete(profile, student) && location.pathname !== '/profile') {
+    return <Navigate to="/profile" replace />
+  }
 
   const pageTitle = Object.entries(pageLabels).find(([key]) =>
     location.pathname.startsWith(key)

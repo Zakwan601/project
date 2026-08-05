@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Check, Circle, Eye, EyeOff, Loader2, Save, X } from 'lucide-react'
+import { AlertCircle, Check, Circle, Clock3, Eye, EyeOff, Loader2, Save, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import { formatDisplayDateTime } from '@/lib/dateTime'
+import { isProfileComplete, isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 import { toast } from 'sonner'
@@ -18,9 +20,12 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
 const profileSchema = z.object({
-  full_name: z.string().min(2, 'Required'),
-  phone: z.string().optional(),
-  address: z.string().optional(),
+  full_name: z.string().trim().min(2, 'Required'),
+  phone: z.string()
+    .trim()
+    .min(1, "Parent's phone is required")
+    .refine(isValidBangladeshMobile, 'Enter a valid Bangladesh mobile number'),
+  address: z.string().trim().min(1, 'Address is required'),
 })
 type ProfileForm = z.infer<typeof profileSchema>
 
@@ -48,19 +53,35 @@ const passwordRequirements = [
 ]
 
 export function ProfilePage() {
-  const { profile, user, refreshProfile, role } = useAuth()
+  const { profile, student, user, refreshProfile, role } = useAuth()
   const [saving, setSaving] = useState(false)
   const [changingPwd, setChangingPwd] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({ old: false, new: false, confirm: false })
+  const phoneManagedByAdmin = role === 'student'
 
-  const { register: regProfile, handleSubmit: handleProfile, formState: { errors: profileErrors } } = useForm<ProfileForm>({
+  const {
+    register: regProfile,
+    handleSubmit: handleProfile,
+    reset: resetProfile,
+    watch: watchProfile,
+    formState: { errors: profileErrors },
+  } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
+    mode: 'onChange',
     defaultValues: {
       full_name: profile?.full_name ?? '',
-      phone: profile?.phone ?? '',
-      address: profile?.address ?? '',
+      phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
+      address: role === 'student' ? student?.address ?? '' : profile?.address ?? '',
     },
   })
+
+  useEffect(() => {
+    resetProfile({
+      full_name: profile?.full_name ?? '',
+      phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
+      address: role === 'student' ? student?.address ?? '' : profile?.address ?? '',
+    })
+  }, [profile, resetProfile, role, student])
 
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { errors: pwdErrors } } = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
@@ -69,6 +90,8 @@ export function ProfilePage() {
 
   const newPassword = watchPwd('newPassword')
   const confirmPassword = watchPwd('confirmPassword')
+  const parentPhone = watchProfile('phone')
+  const parentPhoneIsValid = isValidBangladeshMobile(parentPhone)
   const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword
   const metRequirements = passwordRequirements.filter(requirement => requirement.test(newPassword)).length
   const passwordStrength = metRequirements <= 2
@@ -84,10 +107,20 @@ export function ProfilePage() {
   const saveProfile = async (data: ProfileForm) => {
     setSaving(true)
     try {
+      if (!profile) throw new Error('Your profile record could not be found. Please contact an administrator.')
+
+      const updates = role === 'student'
+        ? { full_name: data.full_name.trim() }
+        : {
+            full_name: data.full_name.trim(),
+            phone: normalizeBangladeshMobile(data.phone),
+            address: data.address.trim(),
+          }
+
       const { error } = await db
         .from('profiles')
-        .update({ full_name: data.full_name, phone: data.phone || null, address: data.address || null })
-        .eq('id', profile!.id)
+        .update(updates)
+        .eq('id', profile.id)
       if (error) throw error
       await refreshProfile()
       toast.success('Profile updated')
@@ -137,6 +170,20 @@ export function ProfilePage() {
     <div className="max-w-2xl space-y-3 sm:space-y-6">
       <PageHeader title="Profile" description="Manage your personal information and security" />
 
+      {!isProfileComplete(profile, student) && (
+        <div className="flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="alert">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">Wait for Admin to complete your profile</p>
+            <p className="text-xs opacity-80">
+              {role === 'student'
+                ? "Ask an administrator to add a valid guardian phone number and address to your student record."
+                : 'Add a valid Bangladesh mobile number and your address.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Profile Info */}
       <Card>
         <CardHeader>
@@ -147,6 +194,15 @@ export function ProfilePage() {
             <div>
               <CardTitle>{profile?.full_name}</CardTitle>
               <CardDescription>{user?.email}</CardDescription>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>
+                  Last sign in:{' '}
+                  {user?.last_sign_in_at
+                    ? formatDisplayDateTime(user.last_sign_in_at)
+                    : 'Not available'}
+                </span>
+              </p>
               {role && (
                 <Badge className={`mt-2 text-xs capitalize ${roleColors[role] ?? ''}`}>{role}</Badge>
               )}
@@ -161,10 +217,29 @@ export function ProfilePage() {
               <Input {...regProfile('full_name')} aria-invalid={!!profileErrors.full_name} />
               {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
-                <Label>Phone</Label>
-                <Input {...regProfile('phone')} />
+                <div className="flex items-center justify-between gap-2">
+                  <Label>{role === 'student' ? "Parent's Phone" : 'Phone'}</Label>
+                  {role === 'student' && <Badge variant="outline">Managed by admin</Badge>}
+                </div>
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="01XXXXXXXXX"
+                  readOnly={phoneManagedByAdmin}
+                  className={phoneManagedByAdmin ? 'bg-muted' : undefined}
+                  {...regProfile('phone')}
+                  aria-invalid={!!profileErrors.phone}
+                />
+                {profileErrors.phone && <p className="text-xs text-destructive">{profileErrors.phone.message}</p>}
+                {!phoneManagedByAdmin && parentPhone && !profileErrors.phone && parentPhoneIsValid && (
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                    <Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number
+                  </p>
+                )}
+                {phoneManagedByAdmin && <p className="text-xs text-muted-foreground">This is the guardian phone maintained in the admin panel.</p>}
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
@@ -172,8 +247,18 @@ export function ProfilePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Address</Label>
-              <Input {...regProfile('address')} />
+              <div className="flex items-center justify-between gap-2">
+                  <Label>Address</Label>
+                  {role === 'student' && <Badge variant="outline">Managed by admin</Badge>}
+                </div>
+              <Input
+                {...regProfile('address')}
+                readOnly={phoneManagedByAdmin}
+                className={phoneManagedByAdmin ? 'bg-muted' : undefined}
+                aria-invalid={!!profileErrors.address}
+              />
+              {profileErrors.address && <p className="text-xs text-destructive">{profileErrors.address.message}</p>}
+              {phoneManagedByAdmin && <p className="text-xs text-muted-foreground">This address is maintained in the admin panel.</p>}
             </div>
             <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useAdminUnreadComplaintCount } from '@/hooks/useStudentReports'
+import { isProfileComplete } from '@/lib/profile'
 
 interface NavItem {
   title: string
@@ -48,14 +49,19 @@ const roleColors: Record<UserRole, string> = {
 }
 
 export function AppSidebar() {
-  const { profile, role, signOut } = useAuth()
+  const { profile, student, role, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const { isMobile, setOpenMobile } = useSidebar()
-  const { data: unreadComplaints = 0 } = useAdminUnreadComplaintCount(role === 'admin')
+  const profileComplete = isProfileComplete(profile, student)
+  const { data: unreadComplaints = 0 } = useAdminUnreadComplaintCount(role === 'admin' && profileComplete)
 
-  const filteredNav = navItems.filter(item => role && item.roles.includes(role))
-  const filteredBottom = bottomNavItems.filter(item => role && item.roles.includes(role))
+  const filteredNav = profileComplete
+    ? navItems.filter(item => role && item.roles.includes(role))
+    : []
+  const filteredBottom = bottomNavItems.filter(item =>
+    role && item.roles.includes(role) && (profileComplete || item.href === '/profile')
+  )
 
   const initials = profile?.full_name
     ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()

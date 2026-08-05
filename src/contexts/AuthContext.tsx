@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { Profile, UserRole } from '@/types/database'
+import type { Profile, Student, UserRole } from '@/types/database'
 
 interface AuthContextValue {
   session: Session | null
   user: User | null
   profile: Profile | null
+  student: Student | null
   role: UserRole | null
   loading: boolean
   signIn: (email: string, password: string, captchaToken: string) => Promise<{ error: Error | null }>
@@ -21,15 +22,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [student, setStudent] = useState<Student | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-    setProfile(data)
+    const [{ data: profileData }, { data: studentData }] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+      supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
+    ])
+    setProfile(profileData)
+    setStudent(studentData)
   }
 
   const refreshProfile = async () => {
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await fetchProfile(session.user.id)
         } else {
           setProfile(null)
+          setStudent(null)
         }
         setLoading(false)
       })()
@@ -87,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      session, user, profile, role: profile?.role ?? null,
+      session, user, profile, student, role: profile?.role ?? null,
       loading, signIn, signUp, signOut, refreshProfile,
     }}>
       {children}
