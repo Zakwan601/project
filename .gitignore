@@ -15,6 +15,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Database backup artifacts and local operator configuration
+backups/
+backup.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

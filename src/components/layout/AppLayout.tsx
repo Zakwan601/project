@@ -8,6 +8,7 @@ import { ModeToggle } from '@/components/mode-toggle'
 import { Spinner } from '@/components/ui/spinner'
 import { useLocation } from 'react-router-dom'
 import { isProfileComplete } from '@/lib/profile'
+import { PwaControls } from '@/components/shared/PwaControls'
 
 const pageLabels: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -54,6 +55,7 @@ export function AppLayout() {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="h-4" />
           <h1 className="text-sm font-semibold flex-1">{pageTitle}</h1>
+          <PwaControls />
           <ModeToggle />
         </header>
         <motion.main
