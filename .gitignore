@@ -18,6 +18,7 @@ dist-ssr
 # Database backup artifacts and local operator configuration
 backups/
 backup.env
+supabase/.temp/
 
 # Editor directories and files
 .vscode/*

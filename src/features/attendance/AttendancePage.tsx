@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarCheck, CalendarDays, CalendarOff, CheckCircle, Pencil, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
+import { CalendarCheck, CalendarDays, CalendarOff, CheckCircle, Loader2, MessageSquareWarning, Pencil, RefreshCw, Send, Trash2, UserX, Users } from 'lucide-react'
 import { format } from 'date-fns'
+import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -11,6 +12,7 @@ import {
   useSyncDailyAttendance,
 } from '@/hooks/useAttendance'
 import { useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
+import { useAbsenceNotificationStatus, useSendAbsenceNotifications } from '@/hooks/useAbsenceNotifications'
 import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
@@ -37,6 +39,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import type { AttendanceSessionWithDetails, AttendanceStatus } from '@/types/database'
 import { attendanceStatusLabel } from '@/lib/attendance'
 
@@ -67,6 +79,9 @@ function StaffDailyAttendance() {
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | 'all'>(initialStatus)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [vacationDialogOpen, setVacationDialogOpen] = useState(false)
+  const [absenceNotificationDialogOpen, setAbsenceNotificationDialogOpen] = useState(false)
+  const [absenceSendElapsedSeconds, setAbsenceSendElapsedSeconds] = useState(0)
+  const [now, setNow] = useState(() => new Date())
   const [vacationName, setVacationName] = useState('')
   const [vacationDescription, setVacationDescription] = useState('')
 
@@ -80,6 +95,35 @@ function StaffDailyAttendance() {
   const selectedHoliday = holidays[0] ?? null
   const selectedDateIsWeekend = isWeekend(selectedDate)
   const isNonSchoolDay = selectedDateIsWeekend || Boolean(selectedHoliday)
+  const afterNotificationTime = canManuallySendAbsenceNotifications(selectedDate, now)
+  const absenceNotificationStatus = useAbsenceNotificationStatus(
+    selectedDate,
+    isAdmin && afterNotificationTime && !isNonSchoolDay && sessions.length > 0,
+  )
+  const sendAbsenceNotifications = useSendAbsenceNotifications()
+  const absenceNotificationAvailable = afterNotificationTime
+    && !absenceNotificationStatus.isLoading
+    && !absenceNotificationStatus.isError
+    && !absenceNotificationStatus.data?.hasSentMessage
+    && !absenceNotificationStatus.data?.hasMessageInProgress
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!sendAbsenceNotifications.isPending) {
+      setAbsenceSendElapsedSeconds(0)
+      return
+    }
+
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      setAbsenceSendElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1_000)
+    return () => window.clearInterval(timer)
+  }, [sendAbsenceNotifications.isPending])
 
   const updateUrlFilter = (key: string, value: string) => {
     setSearchParams(current => {
@@ -112,6 +156,21 @@ function StaffDailyAttendance() {
         description="One biometric attendance result per student, per day"
         action={isAdmin ? (
           <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
+            {absenceNotificationAvailable && !isNonSchoolDay && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-w-0 flex-1 sm:flex-none"
+                onClick={() => {
+                  sendAbsenceNotifications.reset()
+                  setAbsenceNotificationDialogOpen(true)
+                }}
+                disabled={sendAbsenceNotifications.isPending || sessions.length === 0}
+              >
+                <MessageSquareWarning className="mr-1.5 h-4 w-4" />
+                Send Absence SMS
+              </Button>
+            )}
             {!isNonSchoolDay && (
               <Button
                 size="sm"
@@ -319,8 +378,100 @@ function StaffDailyAttendance() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={absenceNotificationDialogOpen}
+        onOpenChange={open => {
+          if (!sendAbsenceNotifications.isPending) setAbsenceNotificationDialogOpen(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {sendAbsenceNotifications.isPending
+                ? 'Sending absence notifications'
+                : 'Send absence notifications?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {sendAbsenceNotifications.isPending
+                ? `Processing guardian SMS messages and the Discord report for ${formatDisplayDate(selectedDate)}.`
+                : `No sent absence SMS was found for ${formatDisplayDate(selectedDate)}. The function will send the missing guardian messages and post the attendance result to Discord.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {sendAbsenceNotifications.isPending && (
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-4" aria-live="polite">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Please keep this page open</p>
+                  <p className="text-xs text-muted-foreground">
+                    Running for {formatElapsedTime(absenceSendElapsedSeconds)}. Large batches may take a few minutes.
+                  </p>
+                </div>
+              </div>
+              <div
+                className="h-2 overflow-hidden rounded-full bg-primary/15"
+                role="progressbar"
+                aria-label="Sending absence notifications"
+                aria-valuetext="In progress"
+              >
+                <motion.div
+                  className="h-full w-1/3 rounded-full bg-primary"
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '300%' }}
+                  transition={{ duration: 1.4, ease: 'easeInOut', repeat: Infinity }}
+                />
+              </div>
+            </div>
+          )}
+          {sendAbsenceNotifications.isError && (
+            <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+              {sendAbsenceNotifications.error.message}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={sendAbsenceNotifications.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={event => {
+                event.preventDefault()
+                sendAbsenceNotifications.mutate(
+                  { date: selectedDate },
+                  { onSuccess: () => setAbsenceNotificationDialogOpen(false) },
+                )
+              }}
+              disabled={sendAbsenceNotifications.isPending}
+            >
+              {sendAbsenceNotifications.isPending
+                ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                : <Send className="mr-1.5 h-4 w-4" />}
+              {sendAbsenceNotifications.isPending ? 'Sending…' : 'Send notifications'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
+}
+
+function formatElapsedTime(seconds: number) {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes}m ${seconds % 60}s`
+}
+
+function canManuallySendAbsenceNotifications(selectedDate: string, now: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Dhaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now)
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? ''
+  const today = `${value('year')}-${value('month')}-${value('day')}`
+  const hour = Number(value('hour'))
+  return selectedDate < today || (selectedDate === today && hour >= 18)
 }
 
 function DailyAttendanceSheet({

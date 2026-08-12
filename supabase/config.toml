@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.analyze-departure-anomalies]
 verify_jwt = false
+
+[functions.absent-students]
+verify_jwt = false
