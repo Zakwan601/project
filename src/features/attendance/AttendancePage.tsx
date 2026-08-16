@@ -17,7 +17,7 @@ import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
-import { formatDatabaseWallClock, formatDisplayDate } from '@/lib/dateTime'
+import { formatBangladeshDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { DateFilter } from '@/components/shared/DateFilter'
@@ -655,11 +655,11 @@ function DailyAttendanceSheet({
                 <div className="mt-2 grid grid-cols-[1fr_1fr_auto] items-end gap-2 border-t pt-2">
                   <MobileAttendanceDetail
                     label="Arrival"
-                    value={formatDatabaseWallClock(record?.check_in_at ?? null)}
+                    value={formatBangladeshDateTime(record?.check_in_at ?? null)}
                   />
                   <MobileAttendanceDetail
                     label="Departure"
-                    value={formatDatabaseWallClock(record?.check_out_at ?? null)}
+                    value={formatBangladeshDateTime(record?.check_out_at ?? null)}
                   />
                   <Badge
                     variant={record?.biometric_verified ? 'default' : 'secondary'}
@@ -719,10 +719,10 @@ function DailyAttendanceSheet({
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {formatDatabaseWallClock(record?.check_in_at ?? null)}
+                      {formatBangladeshDateTime(record?.check_in_at ?? null)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {formatDatabaseWallClock(record?.check_out_at ?? null)}
+                      {formatBangladeshDateTime(record?.check_out_at ?? null)}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col items-start gap-1">
@@ -971,10 +971,10 @@ function StudentDailyAttendance() {
                   {attendanceStatusLabel(selectedRecord.status)}
                 </Badge>
                 <div className="grid grid-cols-2 gap-2">
-                  <CalendarDetail label="Arrival" value={formatDatabaseWallClock(selectedRecord.check_in_at)} />
-                  <CalendarDetail label="Departure" value={formatDatabaseWallClock(selectedRecord.check_out_at)} />
+                  <CalendarDetail label="Arrival" value={formatBangladeshDateTime(selectedRecord.check_in_at)} />
+                  <CalendarDetail label="Departure" value={formatBangladeshDateTime(selectedRecord.check_out_at)} />
                   <CalendarDetail label="Verification" value={selectedRecord.biometric_verified ? 'Biometric' : 'No punch'} />
-                  <CalendarDetail label="Marked at" value={formatDatabaseWallClock(selectedRecord.marked_at)} />
+                  <CalendarDetail label="Marked at" value={formatBangladeshDateTime(selectedRecord.marked_at)} />
                 </div>
               </div>
             ) : (
@@ -1011,10 +1011,10 @@ function StudentDailyAttendance() {
                   </Badge>
                 </TableCell>
                 <TableCell className="font-mono text-xs">
-                  {formatDatabaseWallClock(record.check_in_at)}
+                  {formatBangladeshDateTime(record.check_in_at)}
                 </TableCell>
                 <TableCell className="font-mono text-xs">
-                  {formatDatabaseWallClock(record.check_out_at)}
+                  {formatBangladeshDateTime(record.check_out_at)}
                 </TableCell>
                 <TableCell>
                   {record.biometric_verified ? 'Biometric' : 'No punch'}

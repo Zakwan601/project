@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
 import type { Student, StudentWithClass } from '@/types/database'
-import { formatDatabaseWallClock, formatDisplayDate } from '@/lib/dateTime'
+import { formatBangladeshDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { isValidBangladeshMobile } from '@/lib/profile'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -673,7 +673,7 @@ function PunchSummary({ label, value }: { label: string; value: string }) {
 }
 
 function formatDate(value: string | null) {
-  return formatDatabaseWallClock(value)
+  return formatBangladeshDateTime(value)
 }
 
 function StudentAccountForm({ student, session, creating, setCreating, onClose }: {

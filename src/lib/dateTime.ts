@@ -1,7 +1,30 @@
-import { format } from 'date-fns'
+export const BANGLADESH_TIME_ZONE = 'Asia/Dhaka'
 
-const databaseTimestampPattern =
-  /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/
+const bangladeshDateTimePartsFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: BANGLADESH_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
+
+const bangladeshTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: BANGLADESH_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+})
+
+const bangladeshDateFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: BANGLADESH_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
 
 export function formatTimeWithPeriod(value: string) {
   const match = value.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\.\d+)?$/)
@@ -16,67 +39,58 @@ export function formatTimeWithPeriod(value: string) {
   return `${displayHour}:${match[2]}${seconds}${fraction} ${hour < 12 ? 'AM' : 'PM'}`
 }
 
-export function splitDatabaseWallClock(value: string) {
-  const match = value.match(databaseTimestampPattern)
-  if (match) {
-    return {
-      date: match[1],
-      time24: match[2],
-      time: formatTimeWithPeriod(`${match[2]}${match[3] ?? ''}`),
-      offset: normalizeOffset(match[4]),
-    }
+/** Splits an instant into its calendar and clock fields in Bangladesh time. */
+export function splitBangladeshDateTime(value: string | Date) {
+  const date = toDate(value)
+  if (!date) {
+    return { date: '', time24: '', time: String(value) }
   }
 
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return { date: '', time24: '', time: value, offset: '' }
-  }
+  const parts = Object.fromEntries(
+    bangladeshDateTimePartsFormatter
+      .formatToParts(date)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value]),
+  )
 
   return {
-    date: format(date, 'yyyy-MM-dd'),
-    time24: [date.getHours(), date.getMinutes(), date.getSeconds()]
-      .map(part => String(part).padStart(2, '0'))
-      .join(':'),
-    time: date.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    }),
-    offset: '',
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time24: `${parts.hour}:${parts.minute}:${parts.second}`,
+    time: bangladeshTimeFormatter.format(date),
   }
 }
 
-export function formatDatabaseWallClock(value: string | null) {
+/** Formats a Supabase timestamptz instant in Asia/Dhaka. */
+export function formatBangladeshDateTime(value: string | Date | null | undefined) {
   if (!value) return '—'
-  const parsed = splitDatabaseWallClock(value)
+
+  const parsed = splitBangladeshDateTime(value)
   if (!parsed.date) return parsed.time
-  return `${formatDisplayDate(parsed.date)} ${parsed.time}${parsed.offset ? ` ${parsed.offset}` : ''}`
+  return `${formatDateOnly(parsed.date)} ${parsed.time}`
 }
 
 export function formatDisplayDate(value: string | Date | null | undefined) {
   if (!value) return '—'
 
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? '—' : format(value, 'dd-MM-yyyy')
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return formatDateOnly(value)
   }
 
-  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (dateOnly) return `${dateOnly[3]}-${dateOnly[2]}-${dateOnly[1]}`
-
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : format(date, 'dd-MM-yyyy')
+  const date = toDate(value)
+  return date ? bangladeshDateFormatter.format(date).replaceAll('/', '-') : String(value)
 }
 
 export function formatDisplayDateTime(value: string | Date | null | undefined) {
   if (!value) return '—'
-  const date = value instanceof Date ? value : new Date(value)
-  return Number.isNaN(date.getTime()) ? String(value) : format(date, 'dd-MM-yyyy, h:mm:ss a')
+  return formatBangladeshDateTime(value)
 }
 
-function normalizeOffset(offset: string | undefined) {
-  if (!offset) return ''
-  if (offset === 'Z' || offset === '+00:00' || offset === '+0000') return '+00'
-  if (/^[+-]\d{2}:00$/.test(offset)) return offset.slice(0, 3)
-  return offset
+function formatDateOnly(value: string) {
+  const [year, month, day] = value.split('-')
+  return `${day}-${month}-${year}`
+}
+
+function toDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
 }

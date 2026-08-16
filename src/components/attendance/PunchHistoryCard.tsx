@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDisplayDate, splitDatabaseWallClock } from '@/lib/dateTime'
+import { formatDisplayDate, splitBangladeshDateTime } from '@/lib/dateTime'
 import { DateFilter } from '@/components/shared/DateFilter'
 
 interface PunchHistoryCardProps {
@@ -412,8 +412,7 @@ function groupDailyPunches(punches: DashboardPunch[]): DailyPunches[] {
 }
 
 function punchTime(value: string) {
-  const { date, time24 } = splitPunchTime(value)
-  const timestamp = new Date(`${date}T${time24}Z`).getTime()
+  const timestamp = new Date(value).getTime()
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
@@ -423,5 +422,5 @@ function isOnTimeArrival(value: string) {
 }
 
 function splitPunchTime(value: string) {
-  return splitDatabaseWallClock(value)
+  return splitBangladeshDateTime(value)
 }
