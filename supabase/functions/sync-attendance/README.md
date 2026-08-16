@@ -17,7 +17,11 @@ select vault.create_secret('https://YOUR_PROJECT_REF.supabase.co', 'project_url'
 select vault.create_secret('the-same-long-random-value', 'attendance_sync_secret');
 ```
 
-Redeploy the function after changing its secret. The migration schedules it for `18:00 UTC`, which is midnight in `Asia/Dhaka`.
+Redeploy the function after changing its secret. The database schedules invoke it
+at `18:00`, `19:00`, and `00:00` UTC, which are `00:00`, `01:00`, and `06:00`
+in `Asia/Dhaka`. Repeated calls are idempotent: they create missing daily
+attendance and refresh punch-derived statuses without duplicating sessions or
+records.
 
 ## Service app call
 
@@ -34,4 +38,3 @@ X-Sync-Secret: the-same-long-random-value
 The date is optional. When omitted, the function uses today's date in `Asia/Dhaka`. The service should also call the endpoint once at startup or when its local date changes; the database schedule remains the fallback that creates the report even if the service is not running and no punch arrives.
 
 Do not put `ATTENDANCE_SYNC_SECRET` in the browser app or any `VITE_` environment variable.
-
