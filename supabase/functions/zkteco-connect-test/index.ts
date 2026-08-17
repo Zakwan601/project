@@ -139,8 +139,12 @@ Deno.serve(async (req: Request) => {
         const date = fields[1];
         const time = fields[2];
 
-        if (!studentBiometricId || !date || !time) {
-          console.warn("Missing ATTLOG fields:", line);
+        if (
+          !studentBiometricId ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+          !/^\d{2}:\d{2}:\d{2}$/.test(time)
+        ) {
+          console.warn("Missing or malformed ATTLOG fields:", line);
           continue;
         }
 
@@ -159,8 +163,9 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        // Daily attendance currently groups device logs by their stored UTC date.
-        affectedDates.add(punchedAtDate.toISOString().slice(0, 10));
+        // The date in the body is the authoritative Dhaka school date. Do not
+        // derive it from the UTC serialization, which can be the previous day.
+        affectedDates.add(date);
 
         /*
          * Keep the entire original ZKTeco transaction.
@@ -238,7 +243,8 @@ Deno.serve(async (req: Request) => {
         console.log(
           "Attendance inserted:",
           studentBiometricId,
-          punchedAtDate.toISOString(),
+          `${date} ${time} Asia/Dhaka`,
+          `(stored as ${punchedAtDate.toISOString()})`,
         );
       }
 
