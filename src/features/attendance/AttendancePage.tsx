@@ -19,7 +19,6 @@ import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
 import { formatBangladeshDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
-import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { DateFilter } from '@/components/shared/DateFilter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -194,7 +193,6 @@ function StaffDailyAttendance() {
           </div>
         ) : undefined}
       />
-      <DesktopSyncLastSync className="-mt-2 mb-3 sm:-mt-3 sm:mb-5" />
 
       <Card className="mb-3 sm:mb-5">
         <CardContent className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-4 lg:grid-cols-3">
@@ -897,7 +895,6 @@ function StudentDailyAttendance() {
         title="My Attendance"
         description="Weekends and Holidays are excluded."
       />
-      <DesktopSyncLastSync className="-mt-2 mb-3 sm:-mt-3 sm:mb-5" label="Attendance last updated" />
       <DateFilter
         mode="month"
         value={month}

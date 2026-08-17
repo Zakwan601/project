@@ -1,16 +1,13 @@
 import { motion } from 'framer-motion'
-import { Activity, CalendarCheck, CheckCircle, Clock, Cpu, GraduationCap, Users, UserX, Wifi, WifiOff } from 'lucide-react'
-import { format, formatDistanceToNow } from 'date-fns'
+import { CalendarCheck, CheckCircle, Clock, GraduationCap, Users, UserX } from 'lucide-react'
+import { format } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Label, Pie, PieChart, XAxis } from 'recharts'
-import { useDashboardStats, useSyncServiceHealth, useWeeklyAttendance } from '@/hooks/useDashboard'
-import { useDevices } from '@/hooks/useDevices'
+import { useDashboardStats, useWeeklyAttendance } from '@/hooks/useDashboard'
 import { useAuth } from '@/contexts/AuthContext'
 import { StudentDashboard } from '@/features/dashboard/StudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { SyncServiceHealth, SyncServiceStatus } from '@/types/database'
 import {
   ChartContainer,
   ChartLegend,
@@ -35,12 +32,6 @@ export function DashboardPage() {
 
   const { data: stats, isLoading, error } = useDashboardStats()
   const { data: weekly, isLoading: weeklyLoading, error: weeklyError } = useWeeklyAttendance()
-  const { data: devices, isLoading: devicesLoading } = useDevices()
-  const {
-    data: syncService,
-    isLoading: syncServiceLoading,
-    error: syncServiceError,
-  } = useSyncServiceHealth()
 
   const weeklyChartData = weekly?.map(day => ({
     date: format(new Date(day.date), 'EEE'),
@@ -97,70 +88,6 @@ export function DashboardPage() {
           to={`/attendance?date=${today}&status=excused`}
         />
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cpu className="h-5 w-5" />
-            Hardware Status
-          </CardTitle>
-
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <SyncServiceStatusCard
-              health={syncService}
-              isLoading={syncServiceLoading}
-              hasError={Boolean(syncServiceError)}
-            />
-
-            {devicesLoading ? (
-              <>
-                <HardwareCardSkeleton />
-                <HardwareCardSkeleton />
-              </>
-            ) : devices && devices.length > 0 ? (
-              devices.map(device => (
-                <div
-                  key={device.id}
-                className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 sm:gap-4 sm:p-4"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className={`rounded-lg p-2.5 ${
-                      device.is_online
-                        ? 'bg-emerald-500/10 text-emerald-600'
-                        : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {device.is_online
-                        ? <Wifi className="h-5 w-5" />
-                        : <WifiOff className="h-5 w-5" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{device.alias || device.name}</p>
-                      <p className="truncate font-mono text-xs text-muted-foreground">{device.sn}</p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <Badge
-                      variant={device.is_online ? 'default' : 'secondary'}
-                      className={device.is_online ? 'bg-emerald-600 hover:bg-emerald-600' : ''}
-                    >
-                      {device.is_online ? 'Online' : 'Offline'}
-                    </Badge>
-                    <span className="text-[11px] text-muted-foreground">
-                      {device.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-                No biometric machine is registered.
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
@@ -239,71 +166,6 @@ export function DashboardPage() {
   )
 }
 
-function SyncServiceStatusCard({
-  health,
-  isLoading,
-  hasError,
-}: {
-  health: SyncServiceHealth | null | undefined
-  isLoading: boolean
-  hasError: boolean
-}) {
-  if (isLoading) return <HardwareCardSkeleton />
-
-  const isRunning = health?.is_running === true
-
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 sm:gap-4 sm:p-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className={`rounded-lg p-2.5 ${
-          isRunning
-            ? 'bg-emerald-500/10 text-emerald-600'
-            : 'bg-muted text-muted-foreground'
-        }`}>
-          <Activity className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">Desktop Sync Service</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {syncServiceDetail(health, isLoading, hasError)}
-          </p>
-        </div>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <Badge
-          variant={isRunning ? 'default' : 'secondary'}
-          className={isRunning ? 'bg-emerald-600 hover:bg-emerald-600' : ''}
-        >
-          {isLoading ? 'Checking' : hasError || !health ? 'Unavailable' : isRunning ? 'Running' : 'Stopped'}
-        </Badge>
-        <span className={`text-[11px] ${syncStatusClass(health?.last_sync_status)}`}>
-          {health ? `Sync: ${health.last_sync_status}` : 'Sync: unavailable'}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function syncServiceDetail(
-  health: SyncServiceHealth | null | undefined,
-  isLoading: boolean,
-  hasError: boolean,
-) {
-  if (isLoading) return 'Checking service heartbeat...'
-  if (hasError) return 'Could not load service status'
-  if (!health) return 'No service heartbeat has been recorded'
-  if (!health.last_sync_at) return 'No completed sync yet'
-
-  return `Last sync ${formatDistanceToNow(new Date(health.last_sync_at), { addSuffix: true })}`
-}
-
-function syncStatusClass(status?: SyncServiceStatus) {
-  if (status === 'success') return 'text-emerald-600'
-  if (status === 'failed') return 'text-red-600'
-  if (status === 'running') return 'text-amber-600'
-  return 'text-muted-foreground'
-}
-
 function SummaryCard({
   icon: Icon,
   label,
@@ -339,21 +201,6 @@ function SummaryCard({
     >
       {card}
     </Link>
-  )
-}
-
-function HardwareCardSkeleton() {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 sm:p-4">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-10 w-10 rounded-lg" />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-24" />
-        </div>
-      </div>
-      <Skeleton className="h-6 w-16 rounded-full" />
-    </div>
   )
 }
 

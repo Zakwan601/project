@@ -5,7 +5,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useStudentDashboardStats, useStudentIdentity, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { DesktopSyncLastSync } from '@/components/shared/DesktopSyncLastSync'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
@@ -87,7 +86,6 @@ export function StudentDashboard() {
         <h2 className="relative mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
           Good {getGreeting()}, {linkedStudent?.first_name ?? profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
-        <DesktopSyncLastSync className="relative mt-2 sm:mt-3" label="Attendance last updated" />
         {dashboardLoading ? (
           <Skeleton className="relative mt-3 h-14 w-52 rounded-xl" />
         ) : stats?.className && (

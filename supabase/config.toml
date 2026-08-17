@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.absent-students]
 verify_jwt = false
+
+[functions.zkteco-connect-test]
+verify_jwt = false
