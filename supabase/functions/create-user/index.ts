@@ -50,7 +50,59 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const body = await req.json();
-    const { email, password, full_name, role, extra } = body;
+    const { action = "create", email, password, full_name, role, extra, student_id } = body;
+
+    if (action === "get-student-login" || action === "reset-student-password") {
+      if (!student_id) {
+        return jsonResponse(400, { error: "Missing required field: student_id" });
+      }
+
+      const { data: student, error: studentErr } = await adminClient
+        .from("students")
+        .select("id, profile_id")
+        .eq("id", student_id)
+        .maybeSingle();
+
+      if (studentErr || !student) {
+        return jsonResponse(404, { error: "Student record not found" });
+      }
+
+      if (!student.profile_id) {
+        return jsonResponse(404, { error: "This student does not have a login yet" });
+      }
+
+      const { data: linkedUser, error: linkedUserErr } = await adminClient.auth.admin
+        .getUserById(student.profile_id);
+
+      if (linkedUserErr || !linkedUser.user) {
+        return jsonResponse(404, { error: "The linked login account could not be found" });
+      }
+
+      if (action === "reset-student-password") {
+        if (!password || password.length < 8) {
+          return jsonResponse(400, { error: "Password must be at least 8 characters" });
+        }
+
+        const { error: resetErr } = await adminClient.auth.admin.updateUserById(
+          student.profile_id,
+          { password },
+        );
+        if (resetErr) {
+          return jsonResponse(400, { error: resetErr.message });
+        }
+      }
+
+      return jsonResponse(200, {
+        success: true,
+        user_id: linkedUser.user.id,
+        email: linkedUser.user.email,
+        password_reset: action === "reset-student-password",
+      });
+    }
+
+    if (action !== "create") {
+      return jsonResponse(400, { error: "Unsupported action" });
+    }
 
     if (!email || !password || !full_name || !role) {
       return jsonResponse(400, { error: "Missing required fields: email, password, full_name, role" });
@@ -60,8 +112,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: "Role must be 'student'" });
     }
 
-    if (password.length < 6) {
-      return jsonResponse(400, { error: "Password must be at least 6 characters" });
+    if (password.length < 8) {
+      return jsonResponse(400, { error: "Password must be at least 8 characters" });
     }
 
     // Create the auth user with admin API

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, Clock3, GraduationCap, History, KeyRound, Pencil, Search, Trash2, UserCircle, X } from 'lucide-react'
+import { Check, Clock3, Copy, Eye, EyeOff, GraduationCap, History, KeyRound, Pencil, RefreshCw, Search, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -273,12 +273,12 @@ export function StudentsPage() {
                           <Clock3 className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {!student.profile_id && (
+                      {role === 'admin' && (
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => setAccountStudent(student)}
-                          title="Set up or link login account"
+                          title={student.profile_id ? 'View or reset login credentials' : 'Set up login account'}
                           className="text-blue-600 hover:text-blue-700"
                         >
                           <KeyRound className="h-3.5 w-3.5" />
@@ -476,7 +476,7 @@ export function StudentsPage() {
           <DialogHeader>
             <DialogTitle>Set Up Student Login</DialogTitle>
             <DialogDescription>
-              Link an existing login by email, or enter a password to create a new account for {accountStudent?.first_name} {accountStudent?.last_name}.
+              Create, view, and share login access for {accountStudent?.first_name} {accountStudent?.last_name}.
             </DialogDescription>
           </DialogHeader>
           <StudentAccountForm
@@ -685,13 +685,91 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [accountExists, setAccountExists] = useState(false)
+  const [passwordReady, setPasswordReady] = useState(false)
+  const [loadingAccount, setLoadingAccount] = useState(false)
   const queryClient = useQueryClient()
+
+  const makeEmail = (currentStudent: StudentWithClass) => {
+    const domain = (import.meta.env.VITE_STUDENT_LOGIN_DOMAIN || 'students.school').trim()
+    const localPart = currentStudent.admission_number.toLowerCase().replace(/[^a-z0-9._-]/g, '')
+    return `${localPart || currentStudent.id.slice(0, 8)}@${domain}`
+  }
+
+  const makePassword = () => {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+    const lower = 'abcdefghijkmnopqrstuvwxyz'
+    const numbers = '23456789'
+    const symbols = '!@#$%'
+    const all = upper + lower + numbers + symbols
+    const random = (characters: string) => characters[crypto.getRandomValues(new Uint32Array(1))[0] % characters.length]
+    const chars = [random(upper), random(lower), random(numbers), random(symbols)]
+    while (chars.length < 12) chars.push(random(all))
+    for (let index = chars.length - 1; index > 0; index -= 1) {
+      const swapIndex = crypto.getRandomValues(new Uint32Array(1))[0] % (index + 1)
+      ;[chars[index], chars[swapIndex]] = [chars[swapIndex], chars[index]]
+    }
+    return chars.join('')
+  }
+
+  const callAccountApi = async (body: Record<string, unknown>) => {
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error || 'Student login request failed')
+    return result as { email?: string }
+  }
+
+  useEffect(() => {
+    if (!student) return
+
+    setShowPassword(false)
+    setPasswordReady(false)
+    setAccountExists(Boolean(student.profile_id))
+
+    if (!student.profile_id) {
+      setEmail(makeEmail(student))
+      setPassword(makePassword())
+      return
+    }
+
+    setEmail('')
+    setPassword('')
+    setLoadingAccount(true)
+    callAccountApi({ action: 'get-student-login', student_id: student.id })
+      .then(result => setEmail(result.email ?? ''))
+      .catch(error => toast.error((error as Error).message))
+      .finally(() => setLoadingAccount(false))
+    // The selected student is the reset boundary for this form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student?.id])
 
   if (!student) return null
 
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success(`${label} copied`)
+    } catch {
+      toast.error(`Could not copy ${label.toLowerCase()}`)
+    }
+  }
+
+  const credentialMessage = passwordReady || !accountExists
+    ? `Student login\nName: ${student.first_name} ${student.last_name}\nEmail: ${email}\nPassword: ${password}\n\nPlease change the password after signing in.`
+    : `Student login\nName: ${student.first_name} ${student.last_name}\nEmail: ${email}`
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email) return
+    if (!email || accountExists) return
     setCreating(true)
     try {
       const { error: linkError } = await db.rpc('link_student_account_by_email', {
@@ -701,8 +779,10 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
 
       if (!linkError) {
         await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+        setAccountExists(true)
+        setPassword('')
+        setPasswordReady(false)
         toast.success('Existing student login linked successfully')
-        onClose()
         return
       }
 
@@ -714,30 +794,40 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
         throw new Error('No existing login was found. Enter a password to create a new account.')
       }
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          full_name: `${student.first_name} ${student.last_name}`,
-          role: 'student',
-          extra: { student_id: student.id },
-        }),
+      await callAccountApi({
+        email,
+        password,
+        full_name: `${student.first_name} ${student.last_name}`,
+        role: 'student',
+        extra: { student_id: student.id },
       })
 
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Failed to create account')
-
       await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      setAccountExists(true)
+      setPasswordReady(true)
       toast.success('Student account created successfully')
-      onClose()
     } catch (e) {
       toast.error((e as Error).message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const resetPassword = async () => {
+    const nextPassword = makePassword()
+    setCreating(true)
+    try {
+      await callAccountApi({
+        action: 'reset-student-password',
+        student_id: student.id,
+        password: nextPassword,
+      })
+      setPassword(nextPassword)
+      setPasswordReady(true)
+      setShowPassword(true)
+      toast.success('A new temporary password is ready to share')
+    } catch (error) {
+      toast.error((error as Error).message)
     } finally {
       setCreating(false)
     }
@@ -746,32 +836,80 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
   return (
     <form onSubmit={handleSubmit}>
       <div className="space-y-4 py-4">
+        {accountExists && (
+          <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">Login account active</p>
+              <p className="text-xs opacity-80">
+                {passwordReady ? 'Copy the credentials below before closing.' : 'The login email is retained. Generate a new temporary password whenever it needs to be shared again.'}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="space-y-2">
           <Label>Email *</Label>
-          <Input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder={`${student.first_name.toLowerCase()}.${student.last_name.toLowerCase()}@school.edu`}
-            required
-          />
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder={loadingAccount ? 'Loading login...' : 'Student login email'}
+              readOnly={accountExists}
+              disabled={loadingAccount}
+              required
+            />
+            <Button type="button" variant="outline" size="icon" onClick={() => copyText(email, 'Email')} disabled={!email} title="Copy email">
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          {!accountExists && <p className="text-xs text-muted-foreground">Generated from the admission number. You can edit it before creating the account.</p>}
         </div>
-        <div className="space-y-2">
-          <Label>Password <span className="text-muted-foreground">(new accounts only)</span></Label>
-          <Input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Min 6 characters"
-            minLength={6}
-          />
-        </div>
+        {(!accountExists || passwordReady) && <div className="space-y-2">
+          <Label>{accountExists ? 'New temporary password' : 'Temporary password'}</Label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="pr-10 font-mono"
+                minLength={8}
+                required={!accountExists}
+              />
+              <Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => setShowPassword(value => !value)} title={showPassword ? 'Hide password' : 'Show password'}>
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+            {!accountExists && <Button type="button" variant="outline" size="icon" onClick={() => setPassword(makePassword())} title="Generate another password">
+              <RefreshCw className="h-4 w-4" />
+            </Button>}
+            <Button type="button" variant="outline" size="icon" onClick={() => copyText(password, 'Password')} title="Copy password">
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>}
+        {accountExists && !passwordReady && (
+          <Button type="button" variant="outline" className="w-full" onClick={resetPassword} disabled={creating || loadingAccount}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {creating ? 'Generating...' : 'Generate new temporary password'}
+          </Button>
+        )}
+        {(passwordReady || !accountExists) && (
+          <Button type="button" variant="secondary" className="w-full" onClick={() => copyText(credentialMessage, 'Login message')} disabled={!email || !password}>
+            <Copy className="mr-2 h-4 w-4" />
+            Copy login message
+          </Button>
+        )}
+        <p className="text-xs text-muted-foreground">
+          For security, passwords are not stored or displayed again. The login email stays available here, and an admin can issue a fresh temporary password at any time.
+        </p>
       </div>
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-        <Button type="submit" disabled={creating}>
-          {creating ? 'Checking...' : 'Link or Create Account'}
-        </Button>
+        <Button type="button" variant="outline" onClick={onClose}>{accountExists ? 'Done' : 'Cancel'}</Button>
+        {!accountExists && <Button type="submit" disabled={creating || !email || password.length < 8}>
+          {creating ? 'Creating...' : 'Create Student Login'}
+        </Button>}
       </DialogFooter>
     </form>
   )
