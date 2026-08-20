@@ -156,7 +156,7 @@ function AdminPunchTable({
 
   return (
     <div>
-      <div className={`max-h-[620px] overflow-auto transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
+      <div className={`transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
         <Table className="min-w-[860px]">
           <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
             <TableRow>

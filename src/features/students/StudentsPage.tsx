@@ -62,6 +62,7 @@ export function StudentsPage() {
   const { session, role } = useAuth()
 
   const [search, setSearch] = useState('')
+  const [classFilter, setClassFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editing, setEditing] = useState<StudentWithClass | null>(null)
@@ -84,9 +85,15 @@ export function StudentsPage() {
   const classId = watch('class_id')
   const guardianPhone = watch('guardian_phone')
 
-  const filtered = students?.filter(s =>
-    `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase())
-  ) ?? []
+  const filtered = students?.filter(student => {
+    const matchesSearch = `${student.first_name} ${student.last_name} ${student.admission_number}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
+    const matchesClass = classFilter === 'all'
+      || (classFilter === 'unassigned' ? !student.class_id : student.class_id === classFilter)
+
+    return matchesSearch && matchesClass
+  }) ?? []
   const allFilteredSelected = filtered.length > 0 && filtered.every(student => selectedStudentIds.includes(student.id))
 
   const toggleStudent = (studentId: string, checked: boolean) => {
@@ -207,19 +214,40 @@ export function StudentsPage() {
 
       <Card>
         <div className="border-b p-3 sm:p-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search students..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-9"
-            />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search students..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={classFilter} onValueChange={setClassFilter}>
+              <SelectTrigger className="w-full sm:w-56" aria-label="Filter students by class">
+                <SelectValue placeholder="All classes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All classes</SelectItem>
+                <SelectItem value="unassigned">No class assigned</SelectItem>
+                {classes?.map(currentClass => (
+                  <SelectItem key={currentClass.id} value={currentClass.id}>
+                    {currentClass.name} ({currentClass.grade}-{currentClass.section})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState title="No students found" description={search ? 'Try a different search' : 'Students will appear here when synchronized.'} />
+          <EmptyState
+            title="No students found"
+            description={search || classFilter !== 'all'
+              ? 'Try changing the search or class filter.'
+              : 'Students will appear here when synchronized.'}
+          />
         ) : (
           <Table>
             <TableHeader>
