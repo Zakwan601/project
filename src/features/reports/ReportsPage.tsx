@@ -117,6 +117,13 @@ function useClassAttendanceReport(classId: string, startDate: string, endDate: s
 
 interface DailyPoint { date: string; present: number; absent: number; late: number }
 
+interface DailyAttendanceSummary {
+  attendance_date: string
+  present_count: number | string
+  absent_count: number | string
+  late_count: number | string
+}
+
 function useDailyReport(startDate: string, endDate: string) {
   return useQuery<DailyPoint[]>({
     queryKey: ['daily_report', startDate, endDate],
@@ -129,32 +136,30 @@ function useDailyReport(startDate: string, endDate: string) {
         d.setDate(d.getDate() + 1)
       }
 
-      const results: DailyPoint[] = []
-      for (const date of days) {
-        const { data: sessions } = await db
-          .from('attendance_sessions')
-          .select('id')
-          .eq('date', date)
+      const { data, error } = await db.rpc('get_daily_attendance_report', {
+        p_start_date: startDate,
+        p_end_date: endDate,
+      })
 
-        const sessionIds = ((sessions ?? []) as Array<{ id: string }>).map(s => s.id)
-        if (!sessionIds.length) {
-          results.push({ date: formatDisplayDate(date), present: 0, absent: 0, late: 0 })
-          continue
-        }
+      if (error) throw error
 
-        const { data: rec } = await db
-          .from('attendance_records')
-          .select('status')
-          .in('session_id', sessionIds)
+      const resultsByDate = new Map<string, DailyPoint>(days.map(date => [date, {
+        date: formatDisplayDate(date),
+        present: 0,
+        absent: 0,
+        late: 0,
+      }]))
 
-        results.push({
-          date: formatDisplayDate(date),
-          present: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'present').length,
-          absent: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'absent').length,
-          late: ((rec ?? []) as Array<{ status: string }>).filter(r => r.status === 'late').length,
-        })
+      for (const summary of (data ?? []) as DailyAttendanceSummary[]) {
+        const result = resultsByDate.get(summary.attendance_date)
+        if (!result) continue
+
+        result.present = Number(summary.present_count)
+        result.absent = Number(summary.absent_count)
+        result.late = Number(summary.late_count)
       }
-      return results
+
+      return days.map(date => resultsByDate.get(date)!)
     },
   })
 }

@@ -21,14 +21,12 @@ export function isProfileComplete(profile: Profile | null | undefined, student?:
   if (profile?.role === 'student') {
     return Boolean(
       student
-        && isValidBangladeshMobile(student.guardian_phone)
-        && student.address?.trim(),
+        && isValidBangladeshMobile(student.guardian_phone),
     )
   }
 
   return Boolean(
     profile
-      && isValidBangladeshMobile(profile.phone)
-      && profile.address?.trim(),
+      && isValidBangladeshMobile(profile.phone),
   )
 }

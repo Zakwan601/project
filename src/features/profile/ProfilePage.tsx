@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { AlertCircle, Check, Circle, Clock3, Eye, EyeOff, Loader2, Save, X } from 'lucide-react'
+import { Check, Circle, Clock3, Eye, EyeOff, Loader2, Save, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
-import { isProfileComplete, isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
+import { isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 import { toast } from 'sonner'
@@ -24,9 +24,8 @@ const profileSchema = z.object({
   full_name: z.string().trim().min(2, 'Required'),
   phone: z.string()
     .trim()
-    .min(1, "Parent's phone is required")
+    .min(1, 'Phone is required')
     .refine(isValidBangladeshMobile, 'Enter a valid Bangladesh mobile number'),
-  address: z.string().trim().min(1, 'Address is required'),
 })
 type ProfileForm = z.infer<typeof profileSchema>
 
@@ -77,7 +76,6 @@ export function ProfilePage() {
         ? `${student.first_name} ${student.last_name}`.trim()
         : profile?.full_name ?? '',
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
-      address: role === 'student' ? student?.address ?? '' : profile?.address ?? '',
     },
   })
 
@@ -87,7 +85,6 @@ export function ProfilePage() {
         ? `${student.first_name} ${student.last_name}`.trim()
         : profile?.full_name ?? '',
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
-      address: role === 'student' ? student?.address ?? '' : profile?.address ?? '',
     })
   }, [profile, resetProfile, role, student])
 
@@ -122,7 +119,6 @@ export function ProfilePage() {
         : {
             full_name: data.full_name.trim(),
             phone: normalizeBangladeshMobile(data.phone),
-            address: data.address.trim(),
           }
 
       const { error } = await db
@@ -182,20 +178,6 @@ export function ProfilePage() {
     <div className="max-w-2xl space-y-3 sm:space-y-6">
       <PageHeader title="Profile" description="Manage your personal information and security" />
 
-      {!isProfileComplete(profile, student) && (
-        <div className="flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="alert">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium">Wait for Admin to complete your profile</p>
-            <p className="text-xs opacity-80">
-              {role === 'student'
-                ? "Ask an administrator to add a valid guardian phone number and address to your student record."
-                : 'Add a valid Bangladesh mobile number and your address.'}
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Profile Info */}
       <Card>
         <CardHeader>
@@ -238,7 +220,7 @@ export function ProfilePage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <Label>{role === 'student' ? "Parent's Phone" : 'Phone'}</Label>
+                  <Label>{role === 'student' ? 'Guardian Phone' : 'Phone'}</Label>
                   {role === 'student' && <Badge variant="outline">Managed by admin</Badge>}
                 </div>
                 <Input
@@ -263,20 +245,6 @@ export function ProfilePage() {
                 <Label>Email</Label>
                 <Input value={user?.email ?? ''} disabled />
               </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                  <Label>Address</Label>
-                  {role === 'student' && <Badge variant="outline">Managed by admin</Badge>}
-                </div>
-              <Input
-                {...regProfile('address')}
-                readOnly={phoneManagedByAdmin}
-                className={phoneManagedByAdmin ? 'bg-muted' : undefined}
-                aria-invalid={!!profileErrors.address}
-              />
-              {profileErrors.address && <p className="text-xs text-destructive">{profileErrors.address.message}</p>}
-              {phoneManagedByAdmin && <p className="text-xs text-muted-foreground">This address is maintained in the admin panel.</p>}
             </div>
             {role === 'admin' && <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

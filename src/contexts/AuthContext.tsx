@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Student, UserRole } from '@/types/database'
@@ -25,18 +25,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [student, setStudent] = useState<Student | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = async (userId: string) => {
-    const [{ data: profileData }, { data: studentData }] = await Promise.all([
+  const fetchProfile = useCallback(async (userId: string) => {
+    const [{ data: profileData, error: profileError }, { data: studentData, error: studentError }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
       supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
     ])
+    if (profileError) throw profileError
+    if (studentError) throw studentError
     setProfile(profileData)
     setStudent(studentData)
-  }
+  }, [])
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (user) await fetchProfile(user.id)
-  }
+  }, [fetchProfile, user])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -64,7 +66,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [fetchProfile])
+
+  useEffect(() => {
+    if (!user) return
+
+    const refreshWhenActive = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchProfile(user.id).catch(() => undefined)
+      }
+    }
+
+    window.addEventListener('focus', refreshWhenActive)
+    document.addEventListener('visibilitychange', refreshWhenActive)
+
+    return () => {
+      window.removeEventListener('focus', refreshWhenActive)
+      document.removeEventListener('visibilitychange', refreshWhenActive)
+    }
+  }, [fetchProfile, user])
 
   const signIn = async (email: string, password: string, captchaToken: string) => {
     const { error } = await supabase.auth.signInWithPassword({
