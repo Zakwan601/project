@@ -27,6 +27,7 @@ import { isValidBangladeshMobile } from '@/lib/profile'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { syncZktecoUsers, type ZktecoSyncSummary } from '@/services/zktecoUsers'
 
 // Database types are maintained manually in this project.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,6 +58,7 @@ export function StudentsPage() {
   const updateStudent = useUpdateStudent()
   const deleteStudent = useDeleteStudent()
   const promoteStudents = usePromoteStudents()
+  const queryClient = useQueryClient()
   const { session, role } = useAuth()
 
   const [search, setSearch] = useState('')
@@ -71,6 +73,8 @@ export function StudentsPage() {
   const [targetClassId, setTargetClassId] = useState('')
   const [promotionDate, setPromotionDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [historyStudent, setHistoryStudent] = useState<StudentWithClass | null>(null)
+  const [isSyncingUsers, setIsSyncingUsers] = useState(false)
+  const [syncSummary, setSyncSummary] = useState<ZktecoSyncSummary | null>(null)
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<StudentForm>({
     resolver: zodResolver(studentSchema),
@@ -108,6 +112,27 @@ export function StudentsPage() {
     const targetClass = classes?.find(cls => cls.id === classId)
     if (targetClass?.academic_years?.start_date) {
       setPromotionDate(targetClass.academic_years.start_date)
+    }
+  }
+
+  const syncUsers = async () => {
+    setIsSyncingUsers(true)
+    try {
+      const summary = await syncZktecoUsers()
+      setSyncSummary(summary)
+      await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+
+      if (summary.received === 0) {
+        toast.info('No new ZKTeco users found.')
+      } else if (summary.failed > 0 || summary.acknowledgementFailed > 0) {
+        toast.warning('ZKTeco sync completed with some issues')
+      } else {
+        toast.success('ZKTeco users synchronized successfully')
+      }
+    } catch (syncError) {
+      toast.error((syncError as Error).message)
+    } finally {
+      setIsSyncingUsers(false)
     }
   }
 
@@ -164,11 +189,19 @@ export function StudentsPage() {
       <PageHeader
         title="Students"
         description={`${students?.length ?? 0} students enrolled`}
-        action={role === 'admin' && selectedStudentIds.length > 0 ? (
-          <Button size="sm" onClick={() => setPromotionOpen(true)}>
-            <GraduationCap className="mr-1.5 h-4 w-4" />
-            Promote ({selectedStudentIds.length})
-          </Button>
+        action={role === 'admin' ? (
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button size="sm" variant="outline" onClick={syncUsers} disabled={isSyncingUsers}>
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${isSyncingUsers ? 'animate-spin' : ''}`} />
+              {isSyncingUsers ? 'Syncing users...' : 'Sync ZKTeco users'}
+            </Button>
+            {selectedStudentIds.length > 0 && (
+              <Button size="sm" onClick={() => setPromotionOpen(true)}>
+                <GraduationCap className="mr-1.5 h-4 w-4" />
+                Promote ({selectedStudentIds.length})
+              </Button>
+            )}
+          </div>
         ) : undefined}
       />
 
@@ -299,6 +332,46 @@ export function StudentsPage() {
           </Table>
         )}
       </Card>
+
+      <Dialog open={syncSummary !== null} onOpenChange={open => { if (!open) setSyncSummary(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>ZKTeco Sync Complete</DialogTitle>
+            <DialogDescription>
+              {syncSummary?.received === 0
+                ? 'No new ZKTeco users found.'
+                : 'Each device user was processed and acknowledged individually.'}
+            </DialogDescription>
+          </DialogHeader>
+          {syncSummary && syncSummary.received > 0 && (
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <SyncSummaryItem label="Users received" value={syncSummary.received} />
+                <SyncSummaryItem label="Users created" value={syncSummary.created} />
+                <SyncSummaryItem label="Already existed" value={syncSummary.alreadyExisted} />
+                <SyncSummaryItem label="Creation failed" value={syncSummary.failed} />
+                <SyncSummaryItem label="Acknowledged" value={syncSummary.acknowledged} />
+                <SyncSummaryItem label="Remaining pending" value={syncSummary.remainingPending} />
+              </div>
+              {syncSummary.acknowledgementFailed > 0 && (
+                <p className="text-sm text-destructive">
+                  {syncSummary.acknowledgementFailed} saved user{syncSummary.acknowledgementFailed === 1 ? ' was' : 's were'} not acknowledged and can be retried.
+                </p>
+              )}
+              {syncSummary.errors.length > 0 && (
+                <div className="max-h-32 overflow-y-auto rounded-md border bg-muted/30 p-3">
+                  {syncSummary.errors.map((message, index) => (
+                    <p key={`${message}-${index}`} className="text-xs text-muted-foreground">{message}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" onClick={() => setSyncSummary(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={promotionOpen} onOpenChange={setPromotionOpen}>
         <DialogContent className="max-w-md">
@@ -494,6 +567,15 @@ export function StudentsPage() {
         onClose={() => setPunchStudent(null)}
       />
       <EnrollmentHistoryDialog student={historyStudent} onClose={() => setHistoryStudent(null)} />
+    </div>
+  )
+}
+
+function SyncSummaryItem({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold">{value}</p>
     </div>
   )
 }

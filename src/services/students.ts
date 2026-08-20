@@ -28,6 +28,24 @@ export const studentsService = {
     return data as StudentWithClass | null
   },
 
+  async getByZktecoPin(pin: string) {
+    const { data: admissionMatch, error: admissionError } = await db
+      .from('students')
+      .select('*')
+      .eq('admission_number', pin)
+      .maybeSingle()
+    if (admissionError) throw admissionError
+    if (admissionMatch) return admissionMatch as Student
+
+    const { data: biometricMatch, error: biometricError } = await db
+      .from('students')
+      .select('*')
+      .eq('biometric_id', pin)
+      .maybeSingle()
+    if (biometricError) throw biometricError
+    return biometricMatch as Student | null
+  },
+
   async create(student: Omit<Student, 'id' | 'created_at' | 'updated_at'>) {
     const { data, error } = await db
       .from('students')
