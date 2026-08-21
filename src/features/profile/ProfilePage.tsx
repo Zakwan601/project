@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -19,6 +19,9 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
+
+const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
 
 const profileSchema = z.object({
   full_name: z.string().trim().min(2, 'Required'),
@@ -57,6 +60,10 @@ export function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [changingPwd, setChangingPwd] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({ old: false, new: false, confirm: false })
+  const passwordTurnstileRef = useRef<TurnstileInstance>(null)
+  const passwordTurnstileRejectRef = useRef<((error: Error) => void) | null>(null)
+  const passwordTurnstileFailedRef = useRef(false)
+  const passwordTurnstileResetAttemptedRef = useRef(false)
   const phoneManagedByAdmin = role === 'student'
   const { data: enrollmentHistory = [], isLoading: historyLoading } = useStudentEnrollmentHistory(
     role === 'student' ? student?.id : undefined,
@@ -109,6 +116,49 @@ export function ProfilePage() {
     setVisiblePasswords(current => ({ ...current, [field]: !current[field] }))
   }
 
+  const handlePasswordTurnstileFailure = () => {
+    passwordTurnstileFailedRef.current = true
+    passwordTurnstileRejectRef.current?.(new Error('Security verification failed'))
+    passwordTurnstileRejectRef.current = null
+
+    if (!passwordTurnstileResetAttemptedRef.current) {
+      passwordTurnstileResetAttemptedRef.current = true
+      window.setTimeout(() => passwordTurnstileRef.current?.reset(), 0)
+    }
+  }
+
+  const getPasswordTurnstileToken = async () => {
+    if (!turnstileSiteKey) throw new Error('Security verification is not configured')
+
+    const widget = passwordTurnstileRef.current
+    if (!widget) throw new Error('Security verification is still loading')
+
+    if (passwordTurnstileFailedRef.current || widget.isExpired()) {
+      passwordTurnstileFailedRef.current = false
+      widget.reset()
+    }
+
+    const existingToken = widget.getResponse()
+    if (existingToken) return existingToken
+
+    let rejectFailure: ((error: Error) => void) | null = null
+    const failure = new Promise<string>((_resolve, reject) => {
+      rejectFailure = reject
+      passwordTurnstileRejectRef.current = reject
+    })
+
+    try {
+      return await Promise.race([
+        widget.getResponsePromise(30_000),
+        failure,
+      ])
+    } finally {
+      if (passwordTurnstileRejectRef.current === rejectFailure) {
+        passwordTurnstileRejectRef.current = null
+      }
+    }
+  }
+
   const saveProfile = async (data: ProfileForm) => {
     setSaving(true)
     try {
@@ -137,15 +187,26 @@ export function ProfilePage() {
 
   const changePassword = async (data: PasswordForm) => {
     setChangingPwd(true)
+    passwordTurnstileResetAttemptedRef.current = false
     try {
       // Verify old password by re-authenticating
+      const captchaToken = await getPasswordTurnstileToken()
       const { error: verifyErr } = await supabase.auth.signInWithPassword({
         email: user?.email ?? '',
         password: data.oldPassword,
+        options: { captchaToken },
       })
       if (verifyErr) {
-        toast.error('Current password is incorrect')
-        setChangingPwd(false)
+        const status = 'status' in verifyErr ? Number(verifyErr.status) : 0
+        const code = 'code' in verifyErr ? String(verifyErr.code) : ''
+        const message = verifyErr.message.toLowerCase()
+        if (status === 403 || code === 'captcha_failed' || /captcha|turnstile|security verification/.test(message)) {
+          toast.error('Security verification failed. Please try again.')
+        } else if (/network|fetch|connection|timeout/.test(message)) {
+          toast.error('Unable to verify your password. Check your connection and try again.')
+        } else {
+          toast.error('Current password is incorrect')
+        }
         return
       }
 
@@ -155,8 +216,12 @@ export function ProfilePage() {
       toast.success('Password changed successfully')
       resetPwd()
     } catch (e) {
-      toast.error((e as Error).message)
+      const message = e instanceof Error ? e.message : ''
+      toast.error(/security verification|turnstile|timed out|still loading|not configured/i.test(message)
+        ? 'Security verification failed. Please try again.'
+        : message || 'Unable to change password. Please try again.')
     } finally {
+      passwordTurnstileRef.current?.reset()
       setChangingPwd(false)
     }
   }
@@ -409,6 +474,33 @@ export function ProfilePage() {
               )}
               {pwdErrors.confirmPassword && <p className="text-xs text-destructive">{pwdErrors.confirmPassword.message}</p>}
             </div>
+            {turnstileSiteKey ? (
+              <div className="flex justify-center rounded-md border bg-background p-2">
+                <Turnstile
+                  ref={passwordTurnstileRef}
+                  siteKey={turnstileSiteKey}
+                  options={{
+                    action: 'change_password',
+                    appearance: 'interaction-only',
+                    refreshExpired: 'manual',
+                    refreshTimeout: 'manual',
+                    size: 'flexible',
+                    theme: 'auto',
+                  }}
+                  onSuccess={() => {
+                    passwordTurnstileFailedRef.current = false
+                    passwordTurnstileResetAttemptedRef.current = false
+                  }}
+                  onExpire={() => passwordTurnstileRef.current?.reset()}
+                  onTimeout={handlePasswordTurnstileFailure}
+                  onUnsupported={handlePasswordTurnstileFailure}
+                  onError={handlePasswordTurnstileFailure}
+                  scriptOptions={{ onError: handlePasswordTurnstileFailure }}
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-destructive">Security verification is not configured.</p>
+            )}
             <Button type="submit" variant="outline" disabled={changingPwd}>
               {changingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Update Password
