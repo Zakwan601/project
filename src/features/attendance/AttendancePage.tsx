@@ -483,7 +483,7 @@ function DailyAttendanceSheet({
 }) {
   const { data: records = [], isLoading, error } = useAttendanceRecords(session.id)
   const { data: students = [] } = useQuery({
-    queryKey: ['students_by_class', session.class_id],
+    queryKey: ['students_by_class', session.class_id, session.date],
     queryFn: async () => {
       const students = await studentsService.getByClassForPeriod(session.class_id, session.date)
       const today = format(new Date(), 'yyyy-MM-dd')
