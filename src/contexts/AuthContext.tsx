@@ -46,9 +46,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ])
         if (profileError) throw profileError
         if (studentError) throw studentError
+        const loadedProfile = profileData as Profile | null
+        const linkedStudent = studentData as Student | null
+        if (!loadedProfile) throw new Error('Profile record not found')
+        if (loadedProfile.role === 'student' && !linkedStudent) throw new Error('Linked student record not found')
         if (profileLoadRef.current !== load) return
-        setProfile(profileData)
-        setStudent(studentData)
+        setProfile(loadedProfile)
+        setStudent(linkedStudent)
         loadedUserIdRef.current = userId
       } catch (error) {
         if (profileLoadRef.current === load) throw error
@@ -64,7 +68,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await fetchProfile(user.id)
   }, [fetchProfile, user])
 
+  const hydrateProfile = useCallback(async (userId: string) => {
+    setLoading(true)
+    try {
+      await fetchProfile(userId)
+    } catch (error) {
+      if (activeUserIdRef.current === userId) {
+        setProfile(null)
+        setStudent(null)
+      }
+      throw error
+    } finally {
+      if (activeUserIdRef.current === userId) setLoading(false)
+    }
+  }, [fetchProfile])
+
   useEffect(() => {
+    const deferredProfileLoads = new Set<number>()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       const nextUser = nextSession?.user ?? null
       const nextUserId = nextUser?.id ?? null
@@ -88,28 +108,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setLoading(true)
-      void fetchProfile(nextUserId)
-        .catch(() => {
-          if (activeUserIdRef.current === nextUserId) {
-            setProfile(null)
-            setStudent(null)
-          }
-        })
-        .finally(() => {
-          if (activeUserIdRef.current === nextUserId) setLoading(false)
-        })
+      const timeoutId = window.setTimeout(() => {
+        deferredProfileLoads.delete(timeoutId)
+        if (activeUserIdRef.current === nextUserId) {
+          void hydrateProfile(nextUserId).catch(() => undefined)
+        }
+      }, 0)
+      deferredProfileLoads.add(timeoutId)
     })
 
-    return () => subscription.unsubscribe()
-  }, [fetchProfile])
+    return () => {
+      for (const timeoutId of deferredProfileLoads) window.clearTimeout(timeoutId)
+      subscription.unsubscribe()
+    }
+  }, [hydrateProfile])
 
   const signIn = async (email: string, password: string, turnstileToken: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
       options: { captchaToken: turnstileToken },
     })
-    return { error: error as Error | null }
+    if (error) return { error: error as Error }
+    if (!data.user || !data.session) return { error: new Error('Sign-in session was not created') }
+
+    const userId = data.user.id
+    activeUserIdRef.current = userId
+    setSession(data.session)
+    setUser(data.user)
+
+    try {
+      await hydrateProfile(userId)
+      return { error: null }
+    } catch (profileError) {
+      await supabase.auth.signOut()
+      return {
+        error: Object.assign(
+          new Error(profileError instanceof Error ? profileError.message : 'Profile loading failed'),
+          { code: 'profile_load_failed' },
+        ),
+      }
+    }
   }
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {

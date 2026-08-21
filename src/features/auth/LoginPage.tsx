@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,45 +18,168 @@ const loginSchema = z.object({
 })
 type LoginForm = z.infer<typeof loginSchema>
 
-const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined
+const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
+const TURNSTILE_WAIT_TIMEOUT = 30_000
+
+type LoginPhase = 'idle' | 'verifying' | 'signing-in'
+
+interface TokenWaiter {
+  resolve: (token: string) => void
+  reject: (error: Error) => void
+  timeoutId: ReturnType<typeof setTimeout>
+}
+
+function isTurnstileAuthError(error: Error) {
+  const status = 'status' in error ? Number(error.status) : 0
+  const code = 'code' in error ? String(error.code) : ''
+  const message = error.message.toLowerCase()
+  return status === 403
+    || code === 'captcha_failed'
+    || message.includes('captcha')
+    || message.includes('turnstile')
+    || message.includes('security verification')
+}
+
+function loginErrorMessage(error: Error) {
+  const status = 'status' in error ? Number(error.status) : 0
+  const code = 'code' in error ? String(error.code) : ''
+  if (isTurnstileAuthError(error)) return 'Security verification failed. Please try again.'
+  if (code === 'profile_load_failed') return 'Signed in, but your profile could not be loaded. Please try again.'
+  if (status === 429) return 'Too many attempts. Wait a few minutes and try again.'
+  if (/network|fetch|connection|timeout/i.test(error.message)) {
+    return 'Unable to reach the sign-in service. Check your connection and try again.'
+  }
+  return 'Unable to sign in. Check your credentials and try again.'
+}
 
 export function LoginPage() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [loginPhase, setLoginPhase] = useState<LoginPhase>('idle')
   const turnstileRef = useRef<TurnstileInstance>(null)
+  const turnstileTokenRef = useRef<string | null>(null)
+  const widgetReadyRef = useRef(false)
+  const widgetFailedRef = useRef(false)
+  const errorResetAttemptedRef = useRef(false)
+  const tokenWaitersRef = useRef(new Set<TokenWaiter>())
+  const loginAttemptRef = useRef(0)
+  const loginPhaseRef = useRef<LoginPhase>('idle')
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   })
 
+  const updateLoginPhase = useCallback((phase: LoginPhase) => {
+    loginPhaseRef.current = phase
+    setLoginPhase(phase)
+  }, [])
+
+  const rejectTokenWaiters = useCallback((reason: Error) => {
+    for (const waiter of tokenWaitersRef.current) {
+      clearTimeout(waiter.timeoutId)
+      waiter.reject(reason)
+    }
+    tokenWaitersRef.current.clear()
+  }, [])
+
+  const resolveTokenWaiters = useCallback((token: string) => {
+    for (const waiter of tokenWaitersRef.current) {
+      clearTimeout(waiter.timeoutId)
+      waiter.resolve(token)
+    }
+    tokenWaitersRef.current.clear()
+  }, [])
+
+  const resetTurnstile = useCallback(() => {
+    turnstileTokenRef.current = null
+    widgetFailedRef.current = false
+    turnstileRef.current?.reset()
+  }, [])
+
+  const handleTurnstileFailure = useCallback(() => {
+    const verificationError = new Error('Security verification failed')
+    turnstileTokenRef.current = null
+    widgetFailedRef.current = true
+    setError('Security verification failed. Please try again.')
+    rejectTokenWaiters(verificationError)
+
+    // Reset once for this failure. A later Login click resets it again for a fresh retry.
+    if (!errorResetAttemptedRef.current) {
+      errorResetAttemptedRef.current = true
+      window.setTimeout(() => turnstileRef.current?.reset(), 0)
+    }
+  }, [rejectTokenWaiters])
+
+  const waitForTurnstileToken = useCallback(() => {
+    if (!turnstileSiteKey) {
+      return Promise.reject(new Error('Security verification is not configured'))
+    }
+
+    const widget = turnstileRef.current
+    if (widgetReadyRef.current && widget?.isExpired()) {
+      resetTurnstile()
+    }
+
+    const existingToken = turnstileTokenRef.current
+      || (widgetReadyRef.current ? widget?.getResponse() : undefined)
+    if (existingToken) return Promise.resolve(existingToken)
+
+    if (widgetFailedRef.current) resetTurnstile()
+
+    return new Promise<string>((resolve, reject) => {
+      const waiter: TokenWaiter = {
+        resolve,
+        reject,
+        timeoutId: setTimeout(() => {
+          tokenWaitersRef.current.delete(waiter)
+          reject(new Error('Security verification timed out'))
+        }, TURNSTILE_WAIT_TIMEOUT),
+      }
+      tokenWaitersRef.current.add(waiter)
+    })
+  }, [resetTurnstile])
+
+  useEffect(() => () => {
+    loginAttemptRef.current += 1
+    rejectTokenWaiters(new Error('Login page closed'))
+  }, [rejectTokenWaiters])
+
   const onSubmit = async (data: LoginForm) => {
+    if (loginPhaseRef.current === 'signing-in') return
+
+    const attemptId = ++loginAttemptRef.current
     setError('')
     if (!turnstileSiteKey) {
       setError('Security verification is not configured. Contact the administrator.')
       return
     }
-    if (!turnstileToken) {
-      setError('Complete the security verification before signing in.')
-      return
-    }
 
-    const { error: signInError } = await signIn(data.email, data.password, turnstileToken)
-    turnstileRef.current?.reset()
-    setTurnstileToken(null)
+    errorResetAttemptedRef.current = false
+    updateLoginPhase('verifying')
+    try {
+      const token = await waitForTurnstileToken()
+      if (attemptId !== loginAttemptRef.current) return
 
-    if (signInError) {
-      const status = 'status' in signInError ? Number(signInError.status) : 0
-      const code = 'code' in signInError ? String(signInError.code) : ''
-      setError(code === 'captcha_failed'
-        ? 'Security verification failed. Please try again.'
-        : status === 429
-          ? 'Too many attempts. Wait a few minutes and try again.'
-          : 'Unable to sign in. Check your credentials and try again.')
-    } else {
+      updateLoginPhase('signing-in')
+      const { error: signInError } = await signIn(data.email, data.password, token)
+      if (attemptId !== loginAttemptRef.current) return
+
+      resetTurnstile()
+      if (signInError) {
+        setError(loginErrorMessage(signInError))
+        return
+      }
       navigate('/dashboard')
+    } catch (submissionError) {
+      if (attemptId !== loginAttemptRef.current) return
+      resetTurnstile()
+      setError(submissionError instanceof Error && submissionError.message.includes('not configured')
+        ? 'Security verification is not configured. Contact the administrator.'
+        : 'Security verification failed. Please try again.')
+    } finally {
+      if (attemptId === loginAttemptRef.current) updateLoginPhase('idle')
     }
   }
 
@@ -136,19 +259,32 @@ export function LoginPage() {
                     options={{
                       action: 'login',
                       appearance: 'interaction-only',
+                      refreshExpired: 'manual',
+                      refreshTimeout: 'manual',
                       size: 'flexible',
                       theme: 'auto',
                     }}
+                    onLoadScript={() => {
+                      widgetFailedRef.current = false
+                    }}
+                    onWidgetLoad={() => {
+                      widgetReadyRef.current = true
+                      widgetFailedRef.current = false
+                    }}
                     onSuccess={token => {
-                      setTurnstileToken(token)
-                      setError('')
+                      turnstileTokenRef.current = token
+                      widgetFailedRef.current = false
+                      errorResetAttemptedRef.current = false
+                      resolveTokenWaiters(token)
                     }}
-                    onExpire={() => setTurnstileToken(null)}
-                    onTimeout={() => setTurnstileToken(null)}
-                    onError={() => {
-                      setTurnstileToken(null)
-                      setError('Security verification could not load. Refresh the page and try again.')
+                    onExpire={() => {
+                      turnstileTokenRef.current = null
+                      turnstileRef.current?.reset()
                     }}
+                    onTimeout={handleTurnstileFailure}
+                    onUnsupported={handleTurnstileFailure}
+                    onError={handleTurnstileFailure}
+                    scriptOptions={{ onError: handleTurnstileFailure }}
                   />
                 </div>
               ) : (
@@ -158,9 +294,9 @@ export function LoginPage() {
               )}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={isSubmitting || !turnstileToken || !turnstileSiteKey}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
+              <Button type="submit" className="w-full">
+                {loginPhase !== 'idle' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loginPhase === 'verifying' ? 'Verifying...' : loginPhase === 'signing-in' ? 'Signing in...' : 'Sign In'}
               </Button>
               <p className="text-xs text-muted-foreground text-center">
                 Contact your administrator for account credentials.
