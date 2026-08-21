@@ -116,12 +116,31 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: "Password must be at least 8 characters" });
     }
 
+    const targetStudentId = extra?.student_id;
+    if (!targetStudentId) {
+      return jsonResponse(400, { error: "A student record is required to create a student login" });
+    }
+
+    const { data: targetStudent, error: targetStudentErr } = await adminClient
+      .from("students")
+      .select("id, profile_id")
+      .eq("id", targetStudentId)
+      .maybeSingle();
+
+    if (targetStudentErr || !targetStudent) {
+      return jsonResponse(404, { error: "Student record not found" });
+    }
+
+    if (targetStudent.profile_id) {
+      return jsonResponse(409, { error: "This student already has a login account" });
+    }
+
     // Create the auth user with admin API
     const { data: newUserData, error: createErr } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name, role, student_id: extra?.student_id ?? null },
+      user_metadata: { full_name, role, student_id: targetStudentId },
     });
 
     if (createErr) {
@@ -130,37 +149,45 @@ Deno.serve(async (req: Request) => {
 
     const newUserId = newUserData.user.id;
 
-    // The trigger will create the profile automatically, but we update it with extra fields
-    if (extra?.phone || extra?.address) {
-      await adminClient
-        .from("profiles")
-        .update({
-          phone: extra.phone || null,
-          address: extra.address || null,
-        })
-        .eq("id", newUserId);
+    // The auth trigger normally creates this row. Upsert it explicitly so every
+    // student login is guaranteed to have the profile ID used by RLS and queries.
+    const { error: ensuredProfileErr } = await adminClient
+      .from("profiles")
+      .upsert({
+        id: newUserId,
+        full_name,
+        role: "student",
+        is_active: true,
+      }, { onConflict: "id" });
+
+    if (ensuredProfileErr) {
+      await adminClient.auth.admin.deleteUser(newUserId);
+      return jsonResponse(400, {
+        error: `Failed to create student profile: ${ensuredProfileErr.message}`,
+      });
     }
 
-    // Link the student record to the new auth user.
-    if (extra?.student_id) {
-      const { data: linkedStudent, error: linkErr } = await adminClient
-        .from("students")
-        .update({ profile_id: newUserId })
-        .eq("id", extra.student_id)
-        .select("id")
-        .maybeSingle();
+    // Link only an unlinked student. If another request won the race, roll back
+    // this newly created auth user instead of leaving an orphan login/profile.
+    const { data: linkedStudent, error: linkErr } = await adminClient
+      .from("students")
+      .update({ profile_id: newUserId })
+      .eq("id", targetStudentId)
+      .is("profile_id", null)
+      .select("id, profile_id")
+      .maybeSingle();
 
-      if (linkErr || !linkedStudent) {
-        await adminClient.auth.admin.deleteUser(newUserId);
-        return jsonResponse(400, {
-          error: `Failed to link student: ${linkErr?.message ?? "student record not found"}`,
-        });
-      }
+    if (linkErr || !linkedStudent || linkedStudent.profile_id !== newUserId) {
+      await adminClient.auth.admin.deleteUser(newUserId);
+      return jsonResponse(400, {
+        error: `Failed to link student: ${linkErr?.message ?? "student record is already linked"}`,
+      });
     }
 
     return jsonResponse(200, {
       success: true,
       user_id: newUserId,
+      profile_id: newUserId,
       email,
       role,
       full_name,

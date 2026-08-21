@@ -39,8 +39,8 @@ School classes/sections linked to an academic year and assigned teacher.
 
 ### 5. students
 Student-specific data linked to profiles and enrolled in a class.
-- admission_number, class_id, roll_number, date_of_birth, guardian_name,
-  guardian_phone, date_of_admission, biometric_id (for ZKTeco device integration),
+- admission_number, class_id, roll_number, guardian_phone, date_of_admission,
+  biometric_id (for ZKTeco device integration),
   is_active
 
 ### 6. subjects
@@ -287,17 +287,13 @@ CREATE POLICY "classes_delete" ON classes FOR DELETE TO authenticated
 CREATE TABLE IF NOT EXISTS students (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id         uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  -- Nullable only until login credentials are created; then it equals auth.users.id.
   admission_number   text UNIQUE NOT NULL,
   class_id           uuid REFERENCES classes(id) ON DELETE SET NULL,
   roll_number        integer,
   first_name         text NOT NULL,
   last_name          text NOT NULL,
-  date_of_birth      date,
-  gender             text,
-  guardian_name      text,
   guardian_phone     text,
-  guardian_email     text,
-  address            text,
   date_of_admission  date NOT NULL DEFAULT CURRENT_DATE,
   biometric_id       text UNIQUE,
   photo_url          text,
@@ -309,6 +305,9 @@ CREATE TABLE IF NOT EXISTS students (
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS students_class_id_idx ON students(class_id);
 CREATE INDEX IF NOT EXISTS students_profile_id_idx ON students(profile_id);
+CREATE UNIQUE INDEX IF NOT EXISTS students_profile_id_unique_idx
+  ON students(profile_id)
+  WHERE profile_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS students_biometric_id_idx ON students(biometric_id);
 
 DROP TRIGGER IF EXISTS students_updated_at ON students;

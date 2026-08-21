@@ -128,12 +128,7 @@ export interface Student {
   roll_number: number | null
   first_name: string
   last_name: string
-  date_of_birth: string | null
-  gender: string | null
-  guardian_name: string | null
   guardian_phone: string | null
-  guardian_email: string | null
-  address: string | null
   date_of_admission: string
   biometric_id: string | null
   photo_url: string | null

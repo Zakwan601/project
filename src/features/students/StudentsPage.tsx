@@ -39,15 +39,10 @@ const studentSchema = z.object({
   admission_number: z.string().min(1, 'Required'),
   class_id: z.string().optional(),
   roll_number: z.number().optional(),
-  gender: z.string().optional(),
-  date_of_birth: z.string().optional(),
-  guardian_name: z.string().optional(),
   guardian_phone: z.string().optional().refine(
     value => !value?.trim() || isValidBangladeshMobile(value),
     'Enter a valid Bangladesh mobile number',
   ),
-  guardian_email: z.string().email().optional().or(z.literal('')),
-  address: z.string().optional(),
   biometric_id: z.string().optional(),
 })
 type StudentForm = z.infer<typeof studentSchema>
@@ -151,35 +146,21 @@ export function StudentsPage() {
       admission_number: s.admission_number,
       class_id: s.class_id ?? undefined,
       roll_number: s.roll_number ?? undefined,
-      gender: s.gender ?? undefined,
-      date_of_birth: s.date_of_birth ?? undefined,
-      guardian_name: s.guardian_name ?? undefined,
       guardian_phone: s.guardian_phone ?? undefined,
-      guardian_email: s.guardian_email ?? undefined,
-      address: s.address ?? undefined,
       biometric_id: s.biometric_id ?? undefined,
     })
     setDialogOpen(true)
   }
 
   const onSubmit = async (data: StudentForm) => {
-    const payload: Omit<Student, 'id' | 'created_at' | 'updated_at'> = {
+    const payload: Partial<Student> = {
       first_name: data.first_name,
       last_name: data.last_name,
       admission_number: data.admission_number,
       class_id: data.class_id || null,
       roll_number: data.roll_number ?? null,
-      gender: data.gender || null,
-      date_of_birth: data.date_of_birth || null,
-      guardian_name: data.guardian_name || null,
       guardian_phone: data.guardian_phone?.trim() || null,
-      guardian_email: data.guardian_email || null,
-      address: data.address || null,
       biometric_id: data.biometric_id || null,
-      profile_id: null,
-      photo_url: null,
-      date_of_admission: new Date().toISOString().split('T')[0],
-      is_active: true,
     }
 
     if (!editing) return
@@ -265,7 +246,7 @@ export function StudentsPage() {
                 <TableHead>Admission No.</TableHead>
                 <TableHead>Class</TableHead>
                 <TableHead>Roll No.</TableHead>
-                <TableHead>Guardian</TableHead>
+                <TableHead>Guardian Phone</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -291,7 +272,6 @@ export function StudentsPage() {
                       <UserCircle className="h-8 w-8 text-muted-foreground shrink-0" />
                       <div>
                         <p className="font-medium">{student.first_name} {student.last_name}</p>
-                        <p className="text-xs text-muted-foreground">{student.gender ?? '—'}</p>
                       </div>
                     </div>
                   </TableCell>
@@ -303,7 +283,6 @@ export function StudentsPage() {
                   </TableCell>
                   <TableCell>{student.roll_number ?? '—'}</TableCell>
                   <TableCell>
-                    <p className="text-sm">{student.guardian_name ?? '—'}</p>
                     <p className="text-xs text-muted-foreground">{student.guardian_phone ?? ''}</p>
                   </TableCell>
                   <TableCell>
@@ -488,31 +467,8 @@ export function StudentsPage() {
                 <Input type="number" {...register('roll_number', { valueAsNumber: true })} />
               </div>
               <div className="space-y-2">
-                <Label>Gender</Label>
-                <Select value={watch('gender')} onValueChange={v => setValue('gender', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Date of Birth</Label>
-                <DatePickerInput
-                  value={watch('date_of_birth') ?? ''}
-                  onChange={value => setValue('date_of_birth', value, { shouldDirty: true })}
-                  max={format(new Date(), 'yyyy-MM-dd')}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label>Biometric ID</Label>
                 <Input {...register('biometric_id')} placeholder="ZKTeco device ID" />
-              </div>
-              <div className="space-y-2">
-                <Label>Guardian Name</Label>
-                <Input {...register('guardian_name')} />
               </div>
               <div className="space-y-2">
                 <Label>Guardian Phone</Label>
@@ -529,15 +485,6 @@ export function StudentsPage() {
                     {errors.guardian_phone?.message ?? 'Valid Bangladesh mobile number'}
                   </p>
                 )}
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label>Guardian Email</Label>
-                <Input type="email" {...register('guardian_email')} />
-                {errors.guardian_email && <p className="text-xs text-destructive">{errors.guardian_email.message}</p>}
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label>Address</Label>
-                <Input {...register('address')} />
               </div>
             </div>
             <DialogFooter>
