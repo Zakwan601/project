@@ -831,7 +831,7 @@ interface CorrectionTarget {
 }
 
 function StudentDailyAttendance() {
-  const { user } = useAuth()
+  const { student } = useAuth()
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
   const monthStart = `${month}-01`
@@ -840,40 +840,29 @@ function StudentDailyAttendance() {
 
   useEffect(() => setSelectedCalendarDate(null), [month])
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['student-daily-attendance', user?.id, month],
+  const { data: records = [], isLoading, error } = useQuery({
+    queryKey: ['student-daily-attendance', student?.id, month],
     queryFn: async () => {
-      const { data: student, error: studentError } = await db
-        .from('students')
-        .select('id, first_name, last_name, admission_number')
-        .eq('profile_id', user!.id)
-        .maybeSingle()
-      if (studentError) throw studentError
-      if (!student) return { student: null, records: [] }
-
-      const { data: records, error: recordsError } = await db
+      const { data: attendanceRecords, error: recordsError } = await db
         .from('attendance_records')
         .select('id, status, biometric_verified, marked_at, check_in_at, check_out_at, attendance_sessions!inner(date)')
-        .eq('student_id', student.id)
+        .eq('student_id', student!.id)
         .gte('attendance_sessions.date', monthStart)
         .lte('attendance_sessions.date', monthEnd)
         .order('date', { referencedTable: 'attendance_sessions', ascending: false })
       if (recordsError) throw recordsError
-      return {
-        student,
-        records: (records ?? []) as StudentDailyAttendanceRecord[],
-      }
+      return (attendanceRecords ?? []) as StudentDailyAttendanceRecord[]
     },
-    enabled: Boolean(user),
+    enabled: Boolean(student?.id),
   })
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorState message={(error as Error).message} />
-  if (!data?.student) {
+  if (!student) {
     return <EmptyState title="Student profile not linked" description="Contact your administrator." />
   }
 
-  const sortedRecords = [...data.records].sort((a, b) => {
+  const sortedRecords = [...records].sort((a, b) => {
     const dateOrder = b.attendance_sessions.date.localeCompare(a.attendance_sessions.date)
     if (dateOrder !== 0) return dateOrder
     return b.marked_at.localeCompare(a.marked_at)
@@ -885,7 +874,7 @@ function StudentDailyAttendance() {
   const selectedRecord = selectedCalendarDate ? recordsByDate.get(selectedCalendarDate) ?? null : null
   const selectedHoliday = selectedCalendarDate ? holidaysByDate.get(selectedCalendarDate) ?? null : null
   const calendarMonth = databaseDateToDate(monthStart)
-  const statusDates = (status: AttendanceStatus) => data.records
+  const statusDates = (status: AttendanceStatus) => records
     .filter(record => record.status === status)
     .map(record => databaseDateToDate(record.attendance_sessions.date))
 
@@ -1020,7 +1009,7 @@ function StudentDailyAttendance() {
             ))}
           </TableBody>
         </Table>
-        {data.records.length === 0 && (
+        {records.length === 0 && (
           <EmptyState title="No attendance records" description="No daily attendance is available for this month." />
         )}
       </Card>

@@ -117,7 +117,7 @@ export interface Class {
 
 export interface ClassWithDetails extends Class {
   academic_years: AcademicYear | null
-  student_count?: number
+  active_student_count?: number
 }
 
 export interface Student {

@@ -1,15 +1,13 @@
-import { EmptyState, ErrorState, LoadingState, PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState, PageHeader } from '@/components/shared/PageHeader'
 import { PunchHistoryCard } from '@/components/attendance/PunchHistoryCard'
 import { useAuth } from '@/contexts/AuthContext'
-import { useStudentIdentity } from '@/hooks/useStudentDashboard'
 import { DEVICE_LOGS_KEY } from '@/hooks/useDeviceLogs'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 
 export function RecentPunchesPage() {
-  const { role } = useAuth()
-  const { data: student, isLoading, error } = useStudentIdentity()
+  const { role, student } = useAuth()
   const queryClient = useQueryClient()
   const isRefreshing = useIsFetching({ queryKey: [DEVICE_LOGS_KEY] }) > 0
   const isStudent = role === 'student'
@@ -19,8 +17,6 @@ export function RecentPunchesPage() {
     type: 'active',
   })
 
-  if (isStudent && isLoading) return <LoadingState message="Loading your punches..." />
-  if (isStudent && error) return <ErrorState message={(error as Error).message} />
   if (isStudent && !student) {
     return (
       <EmptyState

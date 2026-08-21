@@ -6,15 +6,9 @@ const db = supabase as any
 
 export const classesService = {
   async getAll(academicYearId?: string) {
-    let query = db
-      .from('classes')
-      .select(`*, academic_years(*)`)
-      .order('grade')
-      .order('section')
-
-    if (academicYearId) query = query.eq('academic_year_id', academicYearId)
-
-    const { data, error } = await query
+    const { data, error } = await db.rpc('get_classes_with_active_student_count', {
+      p_academic_year_id: academicYearId ?? null,
+    })
     if (error) throw error
     return data as ClassWithDetails[]
   },
@@ -53,15 +47,5 @@ export const classesService = {
   async delete(id: string) {
     const { error } = await db.from('classes').delete().eq('id', id)
     if (error) throw error
-  },
-
-  async getStudentCount(classId: string) {
-    const { count, error } = await db
-      .from('students')
-      .select('*', { count: 'exact', head: true })
-      .eq('class_id', classId)
-      .eq('is_active', true)
-    if (error) throw error
-    return count ?? 0
   },
 }

@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useClasses, useCreateClass, useUpdateClass, useDeleteClass } from '@/hooks/useClasses'
-import { useStudents } from '@/hooks/useStudents'
 import { supabase } from '@/lib/supabase'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
@@ -47,7 +46,6 @@ function useAcademicYears() {
 
 export function ClassesPage() {
   const { data: classes, isLoading, error } = useClasses()
-  const { data: students } = useStudents()
   const { data: academicYears } = useAcademicYears()
   const createClass = useCreateClass()
   const updateClass = useUpdateClass()
@@ -67,9 +65,6 @@ export function ClassesPage() {
   const filtered = classes?.filter(c =>
     `${c.name} ${c.grade} ${c.section}`.toLowerCase().includes(search.toLowerCase())
   ) ?? []
-
-  const getStudentCount = (classId: string) =>
-    students?.filter(s => s.class_id === classId).length ?? 0
 
   const openCreate = () => {
     setEditing(null)
@@ -135,7 +130,7 @@ export function ClassesPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {filtered.map((cls, i) => {
-            const count = getStudentCount(cls.id)
+            const count = cls.active_student_count ?? 0
             const occupancy = cls.capacity > 0 ? Math.round((count / cls.capacity) * 100) : 0
             return (
               <motion.div key={cls.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>

@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { CheckCircle, UserX, Clock, TrendingUp, GraduationCap, Sparkles } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '@/contexts/AuthContext'
-import { useStudentDashboardStats, useStudentIdentity, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
+import { useStudentDashboardStats, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
@@ -54,12 +54,11 @@ function StatCard({ title, value, description, icon: Icon, delay = 0, colorClass
 }
 
 export function StudentDashboard() {
-  const { profile, student: linkedStudent } = useAuth()
-  const { data: student, isLoading: idLoading, error: identityError } = useStudentIdentity()
+  const { profile, student } = useAuth()
   const studentId = student?.id
   const { data: stats, isLoading: statsLoading, error } = useStudentDashboardStats(studentId)
   const { data: weekly, isLoading: weeklyLoading, error: weeklyError } = useStudentWeeklyAttendance(studentId)
-  const dashboardLoading = idLoading || statsLoading
+  const dashboardLoading = statsLoading
 
   const today = format(new Date(), 'yyyy-MM-dd')
   const weeklyChartData = weekly?.map(d => ({
@@ -84,7 +83,7 @@ export function StudentDashboard() {
           {formatDisplayDate(new Date())}
         </div>
         <h2 className="relative mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-          Good {getGreeting()}, {linkedStudent?.first_name ?? profile?.full_name?.split(' ')[0] ?? 'there'}
+          Good {getGreeting()}, {student?.first_name ?? profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
         {dashboardLoading ? (
           <Skeleton className="relative mt-3 h-14 w-52 rounded-xl" />
@@ -143,7 +142,7 @@ export function StudentDashboard() {
         />
       </div>
 
-      {(identityError || error) && (
+      {error && (
         <p className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
           Could not load your attendance summary.
         </p>
@@ -163,7 +162,7 @@ export function StudentDashboard() {
             <CardDescription>Last 7 days attendance overview</CardDescription>
           </CardHeader>
           <CardContent>
-            {idLoading || weeklyLoading ? (
+            {weeklyLoading ? (
               <StudentChartSkeleton />
             ) : weeklyError ? (
               <p className="py-12 text-center text-sm text-destructive">Could not load weekly attendance.</p>

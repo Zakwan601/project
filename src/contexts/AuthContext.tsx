@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Student, UserRole } from '@/types/database'
@@ -16,6 +16,11 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>
 }
 
+interface ProfileLoad {
+  userId: string
+  promise: Promise<void>
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -24,16 +29,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [student, setStudent] = useState<Student | null>(null)
   const [loading, setLoading] = useState(true)
+  const profileLoadRef = useRef<ProfileLoad | null>(null)
+  const loadedUserIdRef = useRef<string | null>(null)
+  const activeUserIdRef = useRef<string | null>(null)
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    const [{ data: profileData, error: profileError }, { data: studentData, error: studentError }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-      supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
-    ])
-    if (profileError) throw profileError
-    if (studentError) throw studentError
-    setProfile(profileData)
-    setStudent(studentData)
+  const fetchProfile = useCallback((userId: string) => {
+    const currentLoad = profileLoadRef.current
+    if (currentLoad?.userId === userId) return currentLoad.promise
+
+    const load: ProfileLoad = { userId, promise: Promise.resolve() }
+    load.promise = (async () => {
+      try {
+        const [{ data: profileData, error: profileError }, { data: studentData, error: studentError }] = await Promise.all([
+          supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+          supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
+        ])
+        if (profileError) throw profileError
+        if (studentError) throw studentError
+        if (profileLoadRef.current !== load) return
+        setProfile(profileData)
+        setStudent(studentData)
+        loadedUserIdRef.current = userId
+      } catch (error) {
+        if (profileLoadRef.current === load) throw error
+      } finally {
+        if (profileLoadRef.current === load) profileLoadRef.current = null
+      }
+    })()
+    profileLoadRef.current = load
+    return load.promise
   }, [])
 
   const refreshProfile = useCallback(async () => {
@@ -41,28 +65,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile, user])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false))
-      } else {
-        setLoading(false)
-      }
-    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      const nextUser = nextSession?.user ?? null
+      const nextUserId = nextUser?.id ?? null
+      activeUserIdRef.current = nextUserId
+      setSession(nextSession)
+      setUser(nextUser)
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      ;(async () => {
-        if (session?.user) {
-          await fetchProfile(session.user.id)
-        } else {
-          setProfile(null)
-          setStudent(null)
-        }
+      if (!nextUserId) {
+        profileLoadRef.current = null
+        loadedUserIdRef.current = null
+        setProfile(null)
+        setStudent(null)
         setLoading(false)
-      })()
+        return
+      }
+
+      const needsProfile = loadedUserIdRef.current !== nextUserId || event === 'USER_UPDATED'
+      if (!needsProfile) {
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      void fetchProfile(nextUserId)
+        .catch(() => {
+          if (activeUserIdRef.current === nextUserId) {
+            setProfile(null)
+            setStudent(null)
+          }
+        })
+        .finally(() => {
+          if (activeUserIdRef.current === nextUserId) setLoading(false)
+        })
     })
 
     return () => subscription.unsubscribe()
