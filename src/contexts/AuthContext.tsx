@@ -10,7 +10,7 @@ interface AuthContextValue {
   student: Student | null
   role: UserRole | null
   loading: boolean
-  signIn: (email: string, password: string, captchaToken: string) => Promise<{ error: Error | null }>
+  signIn: (email: string, password: string, turnstileToken: string) => Promise<{ error: Error | null }>
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -121,11 +121,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchProfile, user])
 
-  const signIn = async (email: string, password: string, captchaToken: string) => {
+  const signIn = async (email: string, password: string, turnstileToken: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
-      options: { captchaToken },
+      options: { captchaToken: turnstileToken },
     })
     return { error: error as Error | null }
   }

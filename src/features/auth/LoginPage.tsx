@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
-import HCaptcha from '@hcaptcha/react-hcaptcha'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { Eye, EyeOff, GraduationCap, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -18,15 +18,15 @@ const loginSchema = z.object({
 })
 type LoginForm = z.infer<typeof loginSchema>
 
-const hcaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY as string | undefined
+const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined
 
 export function LoginPage() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const captchaRef = useRef<HCaptcha>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance>(null)
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -34,24 +34,27 @@ export function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setError('')
-    if (!hcaptchaSiteKey) {
+    if (!turnstileSiteKey) {
       setError('Security verification is not configured. Contact the administrator.')
       return
     }
-    if (!captchaToken) {
+    if (!turnstileToken) {
       setError('Complete the security verification before signing in.')
       return
     }
 
-    const { error: signInError } = await signIn(data.email, data.password, captchaToken)
-    captchaRef.current?.resetCaptcha()
-    setCaptchaToken(null)
+    const { error: signInError } = await signIn(data.email, data.password, turnstileToken)
+    turnstileRef.current?.reset()
+    setTurnstileToken(null)
 
     if (signInError) {
       const status = 'status' in signInError ? Number(signInError.status) : 0
-      setError(status === 429
-        ? 'Too many attempts. Wait a few minutes and try again.'
-        : 'Unable to sign in. Check your credentials and try again.')
+      const code = 'code' in signInError ? String(signInError.code) : ''
+      setError(code === 'captcha_failed'
+        ? 'Security verification failed. Please try again.'
+        : status === 429
+          ? 'Too many attempts. Wait a few minutes and try again.'
+          : 'Unable to sign in. Check your credentials and try again.')
     } else {
       navigate('/dashboard')
     }
@@ -125,31 +128,37 @@ export function LoginPage() {
                 </div>
                 {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
               </div>
-              {hcaptchaSiteKey ? (
+              {turnstileSiteKey ? (
                 <div className="flex justify-center rounded-md border bg-background p-2">
-                  <HCaptcha
-                    ref={captchaRef}
-                    sitekey={hcaptchaSiteKey}
-                    size="compact"
-                    onVerify={token => {
-                      setCaptchaToken(token)
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={turnstileSiteKey}
+                    options={{
+                      action: 'login',
+                      appearance: 'interaction-only',
+                      size: 'flexible',
+                      theme: 'auto',
+                    }}
+                    onSuccess={token => {
+                      setTurnstileToken(token)
                       setError('')
                     }}
-                    onExpire={() => setCaptchaToken(null)}
+                    onExpire={() => setTurnstileToken(null)}
+                    onTimeout={() => setTurnstileToken(null)}
                     onError={() => {
-                      setCaptchaToken(null)
+                      setTurnstileToken(null)
                       setError('Security verification could not load. Refresh the page and try again.')
                     }}
                   />
                 </div>
               ) : (
                 <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  Security verification is not configured. Add the hCaptcha site key before deploying.
+                  Security verification is not configured. Add the Turnstile site key before deploying.
                 </div>
               )}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={isSubmitting || !captchaToken || !hcaptchaSiteKey}>
+              <Button type="submit" className="w-full" disabled={isSubmitting || !turnstileToken || !turnstileSiteKey}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign In
               </Button>
