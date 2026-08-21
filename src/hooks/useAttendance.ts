@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { attendanceService } from '@/services/attendance'
 import type { AttendanceStatus } from '@/types/database'
 import { toast } from 'sonner'
+import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 
 export const SESSIONS_KEY = 'attendance_sessions'
 export const RECORDS_KEY = 'attendance_records'
@@ -48,6 +49,7 @@ export function useMarkAttendance() {
       attendanceService.upsertRecord(r),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: [RECORDS_KEY, vars.session_id] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -60,6 +62,7 @@ export function useBulkMarkAttendance() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [RECORDS_KEY] })
       qc.invalidateQueries({ queryKey: [SESSIONS_KEY] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Attendance saved successfully')
     },
     onError: (e: Error) => toast.error(e.message),
@@ -77,6 +80,7 @@ export function useCorrectAttendance() {
       qc.invalidateQueries({ queryKey: ['student_dashboard_stats'] })
       qc.invalidateQueries({ queryKey: ['student_weekly_attendance'] })
       qc.invalidateQueries({ queryKey: ['student-daily-attendance'] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success(`${count} attendance record${count === 1 ? '' : 's'} corrected`)
     },
     onError: (e: Error) => toast.error(e.message),
@@ -112,6 +116,7 @@ export function useSyncDailyAttendance() {
       qc.invalidateQueries({ queryKey: ['daily_stats'] })
       qc.invalidateQueries({ queryKey: ['my-attendance'] })
       qc.invalidateQueries({ queryKey: ['device-logs'] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success(
         `Daily attendance synced: ${data.attendance_records_synced} present, ${data.device_logs_processed} punches processed`,
       )
@@ -142,6 +147,7 @@ export function useMarkAttendanceVacation() {
       qc.invalidateQueries({ queryKey: ['student_dashboard_stats'] })
       qc.invalidateQueries({ queryKey: ['student_weekly_attendance'] })
       qc.invalidateQueries({ queryKey: ['holidays'] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success(
         data.sessions_removed > 0
           ? `Vacation added and ${data.sessions_removed} attendance sheet${data.sessions_removed === 1 ? '' : 's'} removed`

@@ -28,6 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { syncZktecoUsers, type ZktecoSyncSummary } from '@/services/zktecoUsers'
+import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 
 // Database types are maintained manually in this project.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,6 +124,9 @@ export function StudentsPage() {
       const summary = await syncZktecoUsers()
       setSyncSummary(summary)
       await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      if (summary.created > 0) {
+        await queryClient.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
+      }
 
       if (summary.received === 0) {
         toast.info('No new ZKTeco users found.')

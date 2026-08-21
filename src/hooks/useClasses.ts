@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { classesService } from '@/services/classes'
 import type { Class } from '@/types/database'
 import { toast } from 'sonner'
+import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 
 export const CLASSES_KEY = 'classes'
 
@@ -26,6 +27,7 @@ export function useCreateClass() {
     mutationFn: (c: Omit<Class, 'id' | 'created_at' | 'updated_at'>) => classesService.create(c),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [CLASSES_KEY] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Class created successfully')
     },
     onError: (e: Error) => toast.error(e.message),
@@ -39,6 +41,7 @@ export function useUpdateClass() {
       classesService.update(id, updates),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [CLASSES_KEY] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Class updated successfully')
     },
     onError: (e: Error) => toast.error(e.message),
@@ -51,6 +54,7 @@ export function useDeleteClass() {
     mutationFn: (id: string) => classesService.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [CLASSES_KEY] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Class deleted')
     },
     onError: (e: Error) => toast.error(e.message),

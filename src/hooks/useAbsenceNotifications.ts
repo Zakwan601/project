@@ -12,7 +12,6 @@ export function useAbsenceNotificationStatus(date: string, enabled: boolean) {
     enabled: enabled && Boolean(date),
     staleTime: 60_000,
     refetchInterval: ABSENCE_NOTIFICATION_STATUS_REFRESH_INTERVAL,
-    refetchOnWindowFocus: true,
   })
 }
 

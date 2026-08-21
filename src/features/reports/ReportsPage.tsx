@@ -18,7 +18,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import type { AttendanceStatus } from '@/types/database'
 import { formatDisplayDate } from '@/lib/dateTime'
 
 const chartConfig: ChartConfig = {
@@ -51,65 +50,14 @@ function useClassAttendanceReport(classId: string, startDate: string, endDate: s
     queryFn: async () => {
       if (!classId) return []
 
-      const { data: sessions, error: sErr } = await db
-        .from('attendance_sessions')
-        .select('id, date')
-        .eq('class_id', classId)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date')
-
-      if (sErr) throw sErr
-      if (!sessions?.length) return []
-
-      const sessionIds = (sessions as Array<{ id: string }>).map(s => s.id)
-
-      const { data: records, error: rErr } = await db
-        .from('attendance_records')
-        .select('student_id, status')
-        .in('session_id', sessionIds)
-
-      if (rErr) throw rErr
-
-      const { data: studentsData, error: stErr } = await db.rpc('get_class_students_for_period', {
+      const { data, error } = await db.rpc('get_class_attendance_report', {
         p_class_id: classId,
         p_start_date: startDate,
         p_end_date: endDate,
       })
 
-      if (stErr) throw stErr
-
-      const studentMap = new Map<string, StudentReportRow>()
-
-      const students = (studentsData ?? []) as Array<{ id: string; first_name: string; last_name: string; admission_number: string; roll_number: number | null }>
-      students.forEach(s => {
-        studentMap.set(s.id, {
-          id: s.id,
-          name: `${s.first_name} ${s.last_name}`,
-          admission: s.admission_number,
-          roll: s.roll_number,
-          present: 0,
-          absent: 0,
-          late: 0,
-          excused: 0,
-          total: 0,
-          percentage: 0,
-        })
-      })
-
-      const recs = (records ?? []) as Array<{ student_id: string; status: string }>
-      recs.forEach(r => {
-        const entry = studentMap.get(r.student_id)
-        if (!entry) return
-        const status = r.status as AttendanceStatus
-        entry[status]++
-        entry.total++
-      })
-
-      return Array.from(studentMap.values()).map(row => ({
-        ...row,
-        percentage: row.total > 0 ? Math.round(((row.present + row.late) / row.total) * 100) : 0,
-      })).sort((a, b) => (a.roll ?? 999) - (b.roll ?? 999))
+      if (error) throw error
+      return (data ?? []) as StudentReportRow[]
     },
     enabled: !!classId && !!startDate && !!endDate,
   })

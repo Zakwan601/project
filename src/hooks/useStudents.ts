@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { studentsService } from '@/services/students'
 import type { Student } from '@/types/database'
 import { toast } from 'sonner'
+import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 
 export const STUDENTS_KEY = 'students'
 
@@ -26,6 +27,7 @@ export function useCreateStudent() {
     mutationFn: (s: Omit<Student, 'id' | 'created_at' | 'updated_at'>) => studentsService.create(s),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Student created successfully')
     },
     onError: (e: Error) => toast.error(e.message),
@@ -39,6 +41,7 @@ export function useUpdateStudent() {
       studentsService.update(id, updates),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Student updated successfully')
     },
     onError: (e: Error) => toast.error(e.message),
@@ -51,6 +54,7 @@ export function useDeleteStudent() {
     mutationFn: (id: string) => studentsService.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Student deleted')
     },
     onError: (e: Error) => toast.error(e.message),

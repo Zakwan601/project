@@ -12,6 +12,5 @@ export function useAdminDashboard() {
   return useQuery({
     queryKey: [ADMIN_DASHBOARD_KEY, weeklyStart, weeklyEnd],
     queryFn: () => dashboardService.getDashboard(weeklyEnd, weeklyStart, weeklyEnd),
-    refetchInterval: 60_000,
   })
 }

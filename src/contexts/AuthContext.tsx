@@ -103,24 +103,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [fetchProfile])
 
-  useEffect(() => {
-    if (!user) return
-
-    const refreshWhenActive = () => {
-      if (document.visibilityState === 'visible') {
-        void fetchProfile(user.id).catch(() => undefined)
-      }
-    }
-
-    window.addEventListener('focus', refreshWhenActive)
-    document.addEventListener('visibilitychange', refreshWhenActive)
-
-    return () => {
-      window.removeEventListener('focus', refreshWhenActive)
-      document.removeEventListener('visibilitychange', refreshWhenActive)
-    }
-  }, [fetchProfile, user])
-
   const signIn = async (email: string, password: string, turnstileToken: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
