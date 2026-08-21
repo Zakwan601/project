@@ -1,5 +1,9 @@
 import { supabase } from '@/lib/supabase'
 
+// The handwritten database types do not include this RPC yet.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any
+
 export interface SendAbsenceNotificationsInput {
   date: string
 }
@@ -21,21 +25,22 @@ export interface SendAbsenceNotificationsResult {
 
 export const absenceNotificationsService = {
   async getStatus(date: string): Promise<AbsenceNotificationStatus> {
-    const { data, error } = await supabase.functions.invoke<{
-      success?: boolean
-      error?: string
-      has_sent_message?: boolean
-      has_message_in_progress?: boolean
-    }>('absent-students', { body: { action: 'status', date } })
+    const { data, error } = await db.rpc('get_absence_notification_status', {
+      p_date: date,
+    })
 
     if (error) {
-      const responseMessage = await readFunctionError(error)
-      throw new Error(responseMessage || error.message || 'Absence notification status could not be checked.')
+      throw new Error(error.message || 'Absence notification status could not be checked.')
     }
-    if (data?.success === false) throw new Error(data.error || 'Absence notification status could not be checked.')
+
+    const status = data as {
+      has_sent_message?: boolean
+      has_message_in_progress?: boolean
+    } | null
+
     return {
-      hasSentMessage: data?.has_sent_message === true,
-      hasMessageInProgress: data?.has_message_in_progress === true,
+      hasSentMessage: status?.has_sent_message === true,
+      hasMessageInProgress: status?.has_message_in_progress === true,
     }
   },
 

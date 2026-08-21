@@ -3,30 +3,23 @@ import { toast } from 'sonner'
 import { absenceNotificationsService } from '@/services/absenceNotifications'
 
 const ABSENCE_NOTIFICATION_STATUS_KEY = 'absence-notification-status'
+const ABSENCE_NOTIFICATION_STATUS_REFRESH_INTERVAL = 2 * 60 * 1000
 
 export function useAbsenceNotificationStatus(date: string, enabled: boolean) {
   return useQuery({
     queryKey: [ABSENCE_NOTIFICATION_STATUS_KEY, date],
     queryFn: () => absenceNotificationsService.getStatus(date),
     enabled: enabled && Boolean(date),
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    refetchInterval: ABSENCE_NOTIFICATION_STATUS_REFRESH_INTERVAL,
+    refetchOnWindowFocus: true,
   })
 }
 
 export function useSendAbsenceNotifications() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { date: string }) => {
-      const status = await absenceNotificationsService.getStatus(input.date)
-      if (status.hasSentMessage) {
-        throw new Error('Absence SMS messages have already been sent for this date.')
-      }
-      if (status.hasMessageInProgress) {
-        throw new Error('Absence SMS messages are already being processed for this date.')
-      }
-      return absenceNotificationsService.send(input)
-    },
+    mutationFn: absenceNotificationsService.send,
     onSuccess: result => {
       void queryClient.invalidateQueries({ queryKey: [ABSENCE_NOTIFICATION_STATUS_KEY] })
       const submitted = result.submitted ?? 0

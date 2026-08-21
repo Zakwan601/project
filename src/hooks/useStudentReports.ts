@@ -72,7 +72,8 @@ export function useAdminUnreadComplaintCount(enabled = true, subscribe = true) {
     queryKey: [STUDENT_REPORTS_KEY, 'admin', 'unread-count'],
     queryFn: studentReportsService.getAdminUnreadCount,
     enabled,
-    refetchInterval: 30_000,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   })
 }
 

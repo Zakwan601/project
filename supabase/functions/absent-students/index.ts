@@ -594,6 +594,31 @@ Deno.serve(
       );
       const displayDate = formatDisplayDate(attendanceDate);
 
+      if (action === "status") {
+        const { data: status, error: statusError } = await supabase.rpc(
+          "get_absence_notification_status",
+          { p_date: attendanceDate },
+        );
+
+        if (statusError) {
+          throw statusError;
+        }
+
+        const notificationStatus = status as {
+          has_sent_message?: boolean;
+          has_message_in_progress?: boolean;
+        } | null;
+
+        return jsonResponse({
+          success: true,
+          date: displayDate,
+          attendance_date: attendanceDate,
+          has_sent_message: notificationStatus?.has_sent_message === true,
+          has_message_in_progress:
+            notificationStatus?.has_message_in_progress === true,
+        });
+      }
+
       const {
         data: sessions,
         error: sessionError,
@@ -691,15 +716,6 @@ Deno.serve(
         (message) => message.status === "queued" || message.status === "processing",
       );
 
-      if (action === "status") {
-        return jsonResponse({
-          success: true,
-          date: displayDate,
-          attendance_date: attendanceDate,
-          has_sent_message: hasSentMessage,
-          has_message_in_progress: hasMessageInProgress,
-        });
-      }
 
       if (!isCronRequest && (hasSentMessage || hasMessageInProgress)) {
         return jsonResponse(

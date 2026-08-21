@@ -1,18 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
+import { format, subDays } from 'date-fns'
 import { dashboardService } from '@/services/dashboard'
 
-export function useDashboardStats() {
-  return useQuery({
-    queryKey: ['dashboard_stats'],
-    queryFn: () => dashboardService.getStats(),
-    refetchInterval: 60_000,
-  })
-}
+export const ADMIN_DASHBOARD_KEY = 'admin_dashboard'
 
-export function useWeeklyAttendance() {
+export function useAdminDashboard() {
+  const today = new Date()
+  const weeklyEnd = format(today, 'yyyy-MM-dd')
+  const weeklyStart = format(subDays(today, 6), 'yyyy-MM-dd')
+
   return useQuery({
-    queryKey: ['weekly_attendance'],
-    queryFn: () => dashboardService.getWeeklyAttendance(),
-    refetchInterval: 300_000,
+    queryKey: [ADMIN_DASHBOARD_KEY, weeklyStart, weeklyEnd],
+    queryFn: () => dashboardService.getDashboard(weeklyEnd, weeklyStart, weeklyEnd),
+    refetchInterval: 60_000,
   })
 }

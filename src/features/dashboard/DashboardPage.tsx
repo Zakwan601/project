@@ -3,7 +3,7 @@ import { CalendarCheck, CheckCircle, Clock, GraduationCap, Users, UserX } from '
 import { format } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Label, Pie, PieChart, XAxis } from 'recharts'
-import { useDashboardStats, useWeeklyAttendance } from '@/hooks/useDashboard'
+import { useAdminDashboard } from '@/hooks/useDashboard'
 import { useAuth } from '@/contexts/AuthContext'
 import { StudentDashboard } from '@/features/dashboard/StudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,8 +30,9 @@ export function DashboardPage() {
 
   if (profile?.role === 'student') return <StudentDashboard />
 
-  const { data: stats, isLoading, error } = useDashboardStats()
-  const { data: weekly, isLoading: weeklyLoading, error: weeklyError } = useWeeklyAttendance()
+  const { data: dashboard, isLoading, error } = useAdminDashboard()
+  const stats = dashboard?.stats
+  const weekly = dashboard?.weekly
 
   const weeklyChartData = weekly?.map(day => ({
     date: format(new Date(day.date), 'EEE'),
@@ -96,9 +97,9 @@ export function DashboardPage() {
             <CardDescription>One attendance result per student each day</CardDescription>
           </CardHeader>
           <CardContent>
-            {weeklyLoading ? (
+            {isLoading ? (
               <ChartSkeleton />
-            ) : weeklyError ? (
+            ) : error ? (
               <SectionError message="Could not load weekly attendance." />
             ) : weeklyChartData.length > 0 ? (
               <ChartContainer config={chartConfig} className="h-[200px] w-full aspect-auto sm:h-[260px]">
