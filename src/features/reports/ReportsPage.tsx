@@ -19,6 +19,7 @@ import type { ChartConfig } from '@/components/ui/chart'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { formatDisplayDate } from '@/lib/dateTime'
+import type { AttendanceStatus } from '@/types/database'
 
 const chartConfig: ChartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
@@ -58,6 +59,82 @@ function useClassAttendanceReport(classId: string, startDate: string, endDate: s
 
       if (error) throw error
       return (data ?? []) as StudentReportRow[]
+    },
+    enabled: !!classId && !!startDate && !!endDate,
+  })
+}
+
+interface DailyStudentAttendance {
+  dates: string[]
+  statuses: Record<string, AttendanceStatus>
+}
+
+interface AttendanceSessionDate {
+  date: string
+}
+
+interface AttendanceRecordStatus {
+  student_id: string
+  status: AttendanceStatus
+  attendance_sessions: { date: string } | Array<{ date: string }>
+}
+
+const dailyStatusMeta: Record<AttendanceStatus, { mark: string; label: string; className: string }> = {
+  present: { mark: 'P', label: 'Present', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' },
+  absent: { mark: 'A', label: 'Absent', className: 'bg-red-500/15 text-red-700 dark:text-red-300' },
+  late: { mark: 'L', label: 'Late', className: 'bg-amber-500/20 text-amber-700 dark:text-amber-300' },
+  excused: { mark: 'E', label: 'Approved Leave', className: 'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
+}
+
+function dailyStatusKey(studentId: string, date: string) {
+  return studentId + ':' + date
+}
+
+function useDailyStudentAttendance(classId: string, startDate: string, endDate: string) {
+  return useQuery<DailyStudentAttendance>({
+    queryKey: ['daily_student_attendance_report', classId, startDate, endDate],
+    queryFn: async () => {
+      if (!classId) return { dates: [], statuses: {} }
+
+      const { data: sessionData, error: sessionError } = await db
+        .from('attendance_sessions')
+        .select('date')
+        .eq('class_id', classId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true })
+      if (sessionError) throw sessionError
+
+      const sessions = (sessionData ?? []) as AttendanceSessionDate[]
+      const dates = [...new Set(sessions.map(session => session.date))]
+      if (sessions.length === 0) return { dates, statuses: {} }
+
+      const records: AttendanceRecordStatus[] = []
+      const pageSize = 1000
+      for (let from = 0; ; from += pageSize) {
+        const { data: recordData, error: recordError } = await db
+          .from('attendance_records')
+          .select('student_id, status, attendance_sessions!inner(date)')
+          .eq('attendance_sessions.class_id', classId)
+          .gte('attendance_sessions.date', startDate)
+          .lte('attendance_sessions.date', endDate)
+          .order('id', { ascending: true })
+          .range(from, from + pageSize - 1)
+        if (recordError) throw recordError
+
+        const page = (recordData ?? []) as AttendanceRecordStatus[]
+        records.push(...page)
+        if (page.length < pageSize) break
+      }
+
+      const statuses: Record<string, AttendanceStatus> = {}
+      for (const record of records) {
+        const relation = record.attendance_sessions
+        const date = Array.isArray(relation) ? relation[0]?.date : relation.date
+        if (date) statuses[dailyStatusKey(record.student_id, date)] = record.status
+      }
+
+      return { dates, statuses }
     },
     enabled: !!classId && !!startDate && !!endDate,
   })
@@ -119,6 +196,11 @@ export function ReportsPage() {
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
 
   const { data: studentReport, isLoading: studentLoading, error: studentError } = useClassAttendanceReport(selectedClass, startDate, endDate)
+  const {
+    data: dailyStudentAttendance,
+    isLoading: dailyStudentLoading,
+    error: dailyStudentError,
+  } = useDailyStudentAttendance(selectedClass, startDate, endDate)
   const selectedClassName = classes?.find(c => c.id === selectedClass)?.name ?? 'selected class'
   const { data: dailyData, isLoading: dailyLoading } = useDailyReport(
     format(subDays(new Date(), 14), 'yyyy-MM-dd'),
@@ -126,13 +208,31 @@ export function ReportsPage() {
   )
 
   const exportStudentReport = () => {
-    if (!studentReport?.length) return
+    if (!studentReport?.length || !dailyStudentAttendance) return
 
-    const headers = ['Roll', 'Student', 'Admission No.', 'Present', 'Absent', 'Late', 'Approved Leave', 'Total Days', 'Attendance %']
-    const rows = studentReport.map(row => [
+    const dailyHeaders = dailyStudentAttendance.dates.map(date => formatDisplayDate(date))
+    const headers = [
+      'SN',
+      'Roll',
+      'Student',
+      'Admission No.',
+      ...dailyHeaders,
+      'Present',
+      'Absent',
+      'Late',
+      'Approved Leave',
+      'Total Days',
+      'Attendance %',
+    ]
+    const rows = studentReport.map((row, index) => [
+      index + 1,
       row.roll,
       row.name,
       row.admission,
+      ...dailyStudentAttendance.dates.map(date => {
+        const status = dailyStudentAttendance.statuses[dailyStatusKey(row.id, date)]
+        return status ? dailyStatusMeta[status].label : ''
+      }),
       row.present,
       row.absent,
       row.late,
@@ -143,12 +243,12 @@ export function ReportsPage() {
     const csv = [headers, ...rows]
       .map(row => row.map(escapeCsvCell).join(','))
       .join('\r\n')
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' })
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     const classSlug = selectedClassName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'class'
     link.href = url
-    link.download = `attendance-${classSlug}-${startDate}-to-${endDate}.csv`
+    link.download = 'attendance-' + classSlug + '-' + startDate + '-to-' + endDate + '.csv'
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -221,7 +321,7 @@ export function ReportsPage() {
                 type="button"
                 variant="outline"
                 onClick={exportStudentReport}
-                disabled={!studentReport?.length || studentLoading}
+                disabled={!studentReport?.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
               >
                 <Download /> Export CSV
               </Button>
@@ -234,6 +334,10 @@ export function ReportsPage() {
 
           {studentLoading && selectedClass && <LoadingState />}
           {studentError && <ErrorState message={(studentError as Error).message} />}
+          {dailyStudentError && <ErrorState message={(dailyStudentError as Error).message} />}
+          {studentReport && studentReport.length > 0 && dailyStudentLoading && (
+            <LoadingState message="Loading daily attendance..." />
+          )}
 
           {studentReport && studentReport.length > 0 && (
             <div className="overflow-x-auto">
@@ -277,6 +381,80 @@ export function ReportsPage() {
             </div>
           )}
 
+          {studentReport && studentReport.length > 0 && dailyStudentAttendance && (
+            <div className="mt-6 space-y-3 border-t pt-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="font-semibold">Daily Attendance</h3>
+                  <p className="text-sm text-muted-foreground">
+                    One status per student for each attendance day in the selected range.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {(Object.keys(dailyStatusMeta) as AttendanceStatus[]).map(status => (
+                    <span key={status} className="flex items-center gap-1.5">
+                      <span className={'inline-flex h-6 w-6 items-center justify-center rounded font-semibold ' + dailyStatusMeta[status].className}>
+                        {dailyStatusMeta[status].mark}
+                      </span>
+                      <span className="text-muted-foreground">{dailyStatusMeta[status].label}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border">
+                <Table className="min-w-max">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background text-center">SN</TableHead>
+                      <TableHead className="sticky left-12 z-20 w-16 min-w-16 bg-background">Roll</TableHead>
+                      <TableHead className="sticky left-28 z-20 min-w-48 bg-background">Student</TableHead>
+                      {dailyStudentAttendance.dates.map(date => (
+                        <TableHead key={date} className="min-w-20 px-2 text-center">
+                          <span className="block font-semibold">{date.slice(8, 10)}</span>
+                          <span className="block text-[10px] font-normal text-muted-foreground">
+                            {date.slice(5, 7)}-{date.slice(2, 4)}
+                          </span>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {studentReport.map((row, index) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="sticky left-0 z-10 bg-card text-center text-muted-foreground">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell className="sticky left-12 z-10 bg-card">{row.roll ?? '-'}</TableCell>
+                        <TableCell className="sticky left-28 z-10 min-w-48 bg-card font-medium">
+                          {row.name}
+                        </TableCell>
+                        {dailyStudentAttendance.dates.map(date => {
+                          const status = dailyStudentAttendance.statuses[dailyStatusKey(row.id, date)]
+                          const meta = status ? dailyStatusMeta[status] : null
+                          return (
+                            <TableCell key={date} className="px-2 text-center">
+                              {meta ? (
+                                <span
+                                  title={meta.label}
+                                  aria-label={formatDisplayDate(date) + ': ' + meta.label}
+                                  className={'inline-flex h-7 w-7 items-center justify-center rounded font-semibold ' + meta.className}
+                                >
+                                  {meta.mark}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground" title="No attendance record">-</span>
+                              )}
+                            </TableCell>
+                          )
+                        })}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
           {studentReport && studentReport.length === 0 && selectedClass && !studentLoading && (
             <div className="py-12 text-center text-muted-foreground text-sm">
               No attendance data for selected period

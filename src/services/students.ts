@@ -9,7 +9,9 @@ export const studentsService = {
     let query = db
       .from('students')
       .select('*, classes(id, name, grade, section)')
-      .order('first_name')
+      .order('roll_number', { ascending: true, nullsFirst: false })
+      .order('first_name', { ascending: true })
+      .order('last_name', { ascending: true })
 
     if (classId) query = query.eq('class_id', classId)
 
@@ -78,7 +80,9 @@ export const studentsService = {
       .select('*')
       .eq('class_id', classId)
       .eq('is_active', true)
-      .order('roll_number')
+      .order('roll_number', { ascending: true, nullsFirst: false })
+      .order('first_name', { ascending: true })
+      .order('last_name', { ascending: true })
     if (error) throw error
     return data as Student[]
   },
