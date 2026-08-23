@@ -31,17 +31,15 @@ export function AppLayout() {
   const { session, profile, student, loading } = useAuth()
   const location = useLocation()
 
-  if (loading) {
-    return (
+  if (!session) {
+    return loading ? (
       <div className="min-h-screen flex items-center justify-center">
         <Spinner className="h-8 w-8" />
       </div>
-    )
+    ) : <Navigate to="/login" replace />
   }
 
-  if (!session) return <Navigate to="/login" replace />
-
-  if (!isProfileComplete(profile, student) && location.pathname !== '/profile') {
+  if ((loading || !isProfileComplete(profile, student)) && location.pathname !== '/profile') {
     return <Navigate to="/profile" replace />
   }
 

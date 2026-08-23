@@ -10,6 +10,32 @@ import type {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 
+async function freshAccessToken() {
+  const { data, error } = await supabase.auth.refreshSession()
+  if (error || !data.session?.access_token) {
+    throw new Error('Your session has expired. Please sign in again.')
+  }
+  return data.session.access_token
+}
+
+async function functionInvocationError(error: unknown) {
+  if (error && typeof error === 'object' && 'context' in error) {
+    const response = (error as { context?: unknown }).context
+    if (response instanceof Response) {
+      if (response.status === 401) {
+        return new Error('Your session has expired. Please sign in again.')
+      }
+      try {
+        const body = await response.clone().json() as { error?: unknown }
+        if (typeof body.error === 'string' && body.error) return new Error(body.error)
+      } catch {
+        // Use the original invocation error when the response is not JSON.
+      }
+    }
+  }
+  return error instanceof Error ? error : new Error('Attendance sync failed')
+}
+
 export const attendanceService = {
   async getSessions(classId?: string, date?: string) {
     let query = db
@@ -146,10 +172,12 @@ export const attendanceService = {
   },
 
   async syncDailyAttendance(date: string) {
+    const accessToken = await freshAccessToken()
     const { data, error } = await supabase.functions.invoke('sync-attendance', {
       body: { date },
+      headers: { Authorization: 'Bearer ' + accessToken },
     })
-    if (error) throw error
+    if (error) throw await functionInvocationError(error)
     return data as {
       date: string
       sessions_created: number

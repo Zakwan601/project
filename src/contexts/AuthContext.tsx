@@ -10,6 +10,7 @@ interface AuthContextValue {
   student: Student | null
   role: UserRole | null
   loading: boolean
+  profileError: string | null
   signIn: (email: string, password: string, turnstileToken: string) => Promise<{ error: Error | null }>
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
@@ -29,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [student, setStudent] = useState<Student | null>(null)
   const [loading, setLoading] = useState(true)
+  const [profileError, setProfileError] = useState<string | null>(null)
   const profileLoadRef = useRef<ProfileLoad | null>(null)
   const loadedUserIdRef = useRef<string | null>(null)
   const activeUserIdRef = useRef<string | null>(null)
@@ -39,23 +41,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const load: ProfileLoad = { userId, promise: Promise.resolve() }
     load.promise = (async () => {
+      let lastError: unknown
       try {
-        const [{ data: profileData, error: profileError }, { data: studentData, error: studentError }] = await Promise.all([
-          supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-          supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
-        ])
-        if (profileError) throw profileError
-        if (studentError) throw studentError
-        const loadedProfile = profileData as Profile | null
-        const linkedStudent = studentData as Student | null
-        if (!loadedProfile) throw new Error('Profile record not found')
-        if (loadedProfile.role === 'student' && !linkedStudent) throw new Error('Linked student record not found')
-        if (profileLoadRef.current !== load) return
-        setProfile(loadedProfile)
-        setStudent(linkedStudent)
-        loadedUserIdRef.current = userId
-      } catch (error) {
-        if (profileLoadRef.current === load) throw error
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const [
+              { data: profileData, error: profileQueryError },
+              { data: studentData, error: studentError },
+            ] = await Promise.all([
+              supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+              supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
+            ])
+            if (profileQueryError) throw profileQueryError
+            if (studentError) throw studentError
+
+            const loadedProfile = profileData as Profile | null
+            const linkedStudent = studentData as Student | null
+            if (!loadedProfile) throw new Error('Profile record not found')
+            if (loadedProfile.role === 'student' && !linkedStudent) {
+              throw new Error('Linked student record not found')
+            }
+            if (profileLoadRef.current !== load) return
+
+            setProfile(loadedProfile)
+            setStudent(linkedStudent)
+            loadedUserIdRef.current = userId
+            return
+          } catch (error) {
+            lastError = error
+            if (profileLoadRef.current !== load) return
+            if (attempt < 2) {
+              await new Promise(resolve => window.setTimeout(resolve, 400 * (attempt + 1)))
+            }
+          }
+        }
+        throw lastError instanceof Error ? lastError : new Error('Profile loading failed')
       } finally {
         if (profileLoadRef.current === load) profileLoadRef.current = null
       }
@@ -64,24 +84,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return load.promise
   }, [])
 
-  const refreshProfile = useCallback(async () => {
-    if (user) await fetchProfile(user.id)
-  }, [fetchProfile, user])
-
   const hydrateProfile = useCallback(async (userId: string) => {
     setLoading(true)
+    setProfileError(null)
     try {
       await fetchProfile(userId)
     } catch (error) {
       if (activeUserIdRef.current === userId) {
+        loadedUserIdRef.current = null
         setProfile(null)
         setStudent(null)
+        setProfileError(error instanceof Error ? error.message : 'Profile loading failed')
       }
       throw error
     } finally {
       if (activeUserIdRef.current === userId) setLoading(false)
     }
   }, [fetchProfile])
+
+  const refreshProfile = useCallback(async () => {
+    if (user) await hydrateProfile(user.id)
+  }, [hydrateProfile, user])
 
   useEffect(() => {
     const deferredProfileLoads = new Set<number>()
@@ -97,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadedUserIdRef.current = null
         setProfile(null)
         setStudent(null)
+        setProfileError(null)
         setLoading(false)
         return
       }
@@ -137,18 +161,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(data.session)
     setUser(data.user)
 
-    try {
-      await hydrateProfile(userId)
-      return { error: null }
-    } catch (profileError) {
-      await supabase.auth.signOut()
-      return {
-        error: Object.assign(
-          new Error(profileError instanceof Error ? profileError.message : 'Profile loading failed'),
-          { code: 'profile_load_failed' },
-        ),
-      }
-    }
+    setLoading(true)
+    setProfileError(null)
+    void hydrateProfile(userId).catch(() => undefined)
+    return { error: null }
   }
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {
@@ -167,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, student, role: profile?.role ?? null,
-      loading, signIn, signUp, signOut, refreshProfile,
+      loading, profileError, signIn, signUp, signOut, refreshProfile,
     }}>
       {children}
     </AuthContext.Provider>

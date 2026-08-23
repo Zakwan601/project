@@ -10,7 +10,7 @@ import { isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profil
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 import { toast } from 'sonner'
-import { PageHeader } from '@/components/shared/PageHeader'
+import { LoadingState, PageHeader } from '@/components/shared/PageHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,7 +56,7 @@ const passwordRequirements = [
 ]
 
 export function ProfilePage() {
-  const { profile, student, user, refreshProfile, role } = useAuth()
+  const { profile, student, user, refreshProfile, role, loading, profileError } = useAuth()
   const [saving, setSaving] = useState(false)
   const [changingPwd, setChangingPwd] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({ old: false, new: false, confirm: false })
@@ -239,6 +239,42 @@ export function ProfilePage() {
     student: 'bg-secondary text-secondary-foreground',
   }
 
+  if (loading || (!profile && !profileError)) {
+    return (
+      <div className="max-w-2xl space-y-3 sm:space-y-6">
+        <PageHeader title="Profile" description="Loading your account information" />
+        <Card>
+          <CardContent>
+            <LoadingState message="Loading your profile..." />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div className="max-w-2xl space-y-3 sm:space-y-6">
+        <PageHeader title="Profile" description="Manage your personal information and security" />
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile unavailable</CardTitle>
+            <CardDescription>
+              You are signed in, but your profile data could not be loaded.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {profileError || 'Please check your connection and try again.'}
+            </p>
+            <Button type="button" onClick={() => void refreshProfile().catch(() => undefined)}>
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
   return (
     <div className="max-w-2xl space-y-3 sm:space-y-6">
       <PageHeader title="Profile" description="Manage your personal information and security" />

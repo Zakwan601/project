@@ -62,7 +62,6 @@ export function LoginPage() {
   const turnstileTokenRef = useRef<string | null>(null)
   const widgetReadyRef = useRef(false)
   const widgetFailedRef = useRef(false)
-  const errorResetAttemptedRef = useRef(false)
   const tokenWaitersRef = useRef(new Set<TokenWaiter>())
   const loginAttemptRef = useRef(0)
   const loginPhaseRef = useRef<LoginPhase>('idle')
@@ -99,18 +98,16 @@ export function LoginPage() {
   }, [])
 
   const handleTurnstileFailure = useCallback(() => {
-    const verificationError = new Error('Security verification failed')
     turnstileTokenRef.current = null
     widgetFailedRef.current = true
-    setError('Security verification failed. Please try again.')
-    rejectTokenWaiters(verificationError)
+    rejectTokenWaiters(new Error('Security verification failed'))
 
-    // Reset once for this failure. A later Login click resets it again for a fresh retry.
-    if (!errorResetAttemptedRef.current) {
-      errorResetAttemptedRef.current = true
-      window.setTimeout(() => turnstileRef.current?.reset(), 0)
+    // Background expiry/timeouts are recoverable and should not alarm the user.
+    // During a login, the submit flow resets and retries with a fresh token.
+    if (loginPhaseRef.current === 'idle') {
+      window.setTimeout(() => resetTurnstile(), 0)
     }
-  }, [rejectTokenWaiters])
+  }, [rejectTokenWaiters, resetTurnstile])
 
   const waitForTurnstileToken = useCallback(() => {
     if (!turnstileSiteKey) {
@@ -147,7 +144,7 @@ export function LoginPage() {
   }, [rejectTokenWaiters])
 
   const onSubmit = async (data: LoginForm) => {
-    if (loginPhaseRef.current === 'signing-in') return
+    if (loginPhaseRef.current !== 'idle') return
 
     const attemptId = ++loginAttemptRef.current
     setError('')
@@ -156,22 +153,41 @@ export function LoginPage() {
       return
     }
 
-    errorResetAttemptedRef.current = false
-    updateLoginPhase('verifying')
     try {
-      const token = await waitForTurnstileToken()
-      if (attemptId !== loginAttemptRef.current) return
+      for (let verificationAttempt = 0; verificationAttempt < 2; verificationAttempt += 1) {
+        updateLoginPhase('verifying')
 
-      updateLoginPhase('signing-in')
-      const { error: signInError } = await signIn(data.email, data.password, token)
-      if (attemptId !== loginAttemptRef.current) return
+        let token: string
+        try {
+          token = await waitForTurnstileToken()
+        } catch (verificationError) {
+          if (attemptId !== loginAttemptRef.current) return
+          resetTurnstile()
+          if (verificationAttempt === 0) continue
+          throw verificationError
+        }
 
-      resetTurnstile()
-      if (signInError) {
+        if (attemptId !== loginAttemptRef.current) return
+        updateLoginPhase('signing-in')
+        const { error: signInError } = await signIn(data.email, data.password, token)
+        if (attemptId !== loginAttemptRef.current) return
+
+        // Turnstile tokens are single-use, including rejected authentication requests.
+        resetTurnstile()
+        if (!signInError) {
+          navigate('/dashboard')
+          return
+        }
+
+        if (isTurnstileAuthError(signInError) && verificationAttempt === 0) {
+          continue
+        }
+
         setError(loginErrorMessage(signInError))
         return
       }
-      navigate('/dashboard')
+
+      setError('Security verification failed. Please try again.')
     } catch (submissionError) {
       if (attemptId !== loginAttemptRef.current) return
       resetTurnstile()
@@ -259,8 +275,8 @@ export function LoginPage() {
                     options={{
                       action: 'login',
                       appearance: 'interaction-only',
-                      refreshExpired: 'manual',
-                      refreshTimeout: 'manual',
+                      refreshExpired: 'auto',
+                      refreshTimeout: 'auto',
                       size: 'flexible',
                       theme: 'auto',
                     }}
@@ -274,12 +290,11 @@ export function LoginPage() {
                     onSuccess={token => {
                       turnstileTokenRef.current = token
                       widgetFailedRef.current = false
-                      errorResetAttemptedRef.current = false
                       resolveTokenWaiters(token)
                     }}
                     onExpire={() => {
                       turnstileTokenRef.current = null
-                      turnstileRef.current?.reset()
+                      widgetFailedRef.current = false
                     }}
                     onTimeout={handleTurnstileFailure}
                     onUnsupported={handleTurnstileFailure}
@@ -294,7 +309,7 @@ export function LoginPage() {
               )}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full" disabled={loginPhase !== 'idle'}>
                 {loginPhase !== 'idle' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {loginPhase === 'verifying' ? 'Verifying...' : loginPhase === 'signing-in' ? 'Signing in...' : 'Sign In'}
               </Button>
