@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { AcademicYear, Class, ClassWithDetails } from '@/types/database'
+import { useAuth } from '@/contexts/AuthContext'
 
 const classSchema = z.object({
   academic_year_id: z.string().min(1, 'Academic year is required'),
@@ -45,6 +46,8 @@ function useAcademicYears() {
 }
 
 export function ClassesPage() {
+  const { can } = useAuth()
+  const canWriteClasses = can('classes', 'write')
   const { data: classes, isLoading, error } = useClasses()
   const { data: academicYears } = useAcademicYears()
   const createClass = useCreateClass()
@@ -113,11 +116,11 @@ export function ClassesPage() {
       <PageHeader
         title="Classes"
         description={`${classes?.length ?? 0} classes`}
-        action={
+        action={canWriteClasses ? (
           <Button onClick={openCreate} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Add Class
           </Button>
-        }
+        ) : undefined}
       />
 
       <div className="relative mb-3 max-w-sm sm:mb-4">
@@ -146,14 +149,14 @@ export function ClassesPage() {
                           <p className="text-xs text-muted-foreground">Grade {cls.grade} · Section {cls.section}</p>
                         </div>
                       </div>
-                      <div className="flex gap-1">
+                      {canWriteClasses && <div className="flex gap-1">
                         <Button variant="ghost" size="icon-sm" onClick={() => openEdit(cls)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => setDeleteId(cls.id)} className="text-destructive hover:text-destructive">
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      </div>
+                      </div>}
                     </div>
 
                     <div className="space-y-2 text-sm">

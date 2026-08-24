@@ -70,8 +70,8 @@ export function AttendancePage() {
 }
 
 function StaffDailyAttendance() {
-  const { role } = useAuth()
-  const isAdmin = role === 'admin'
+  const { can } = useAuth()
+  const isAdmin = can('attendance', 'write')
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedStatus = searchParams.get('status')
   const initialStatus = isAttendanceStatus(requestedStatus) ? requestedStatus : 'all'

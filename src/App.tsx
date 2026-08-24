@@ -20,6 +20,7 @@ import { SmsMessagesPage } from '@/features/sms/SmsMessagesPage'
 import { AnnouncementsPage } from '@/features/announcements/AnnouncementsPage'
 import { DepartureAnomaliesPage } from '@/features/departure-anomalies/DepartureAnomaliesPage'
 import { VacationsPage } from '@/features/vacations/VacationsPage'
+import { AccessControlPage } from '@/features/access/AccessControlPage'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
 const queryClient = new QueryClient({
@@ -108,6 +109,14 @@ function App() {
                 <Route path="/devices" element={<DevicesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route
+                  path="/access-control"
+                  element={(
+                    <ProtectedRoute roles={['admin']}>
+                      <AccessControlPage />
+                    </ProtectedRoute>
+                  )}
+                />
               </Route>
 
               {/* Default redirect */}

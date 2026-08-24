@@ -115,14 +115,14 @@ Deno.serve(async (request: Request) => {
       return jsonResponse(401, { error: "Invalid or expired session", request_id: requestId });
     }
 
-    const { data: profile, error: profileError } = await adminClient
-      .from("profiles")
-      .select("role, is_active")
-      .eq("id", authData.user.id)
-      .maybeSingle();
+    const requestedAccess = request.method === "GET" ? "read" : "write";
+    const { data: allowed, error: permissionError } = await userClient.rpc("has_permission", {
+      p_permission_key: "departure_anomalies",
+      p_access: requestedAccess,
+    });
 
-    if (profileError || profile?.role !== "admin" || profile.is_active !== true) {
-      return jsonResponse(403, { error: "An active administrator account is required", request_id: requestId });
+    if (permissionError || allowed !== true) {
+      return jsonResponse(403, { error: `Departure anomalies ${requestedAccess} permission is required`, request_id: requestId });
     }
     authorizedAdmin = true;
 

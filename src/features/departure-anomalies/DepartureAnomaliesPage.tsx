@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useAuth } from '@/contexts/AuthContext'
 
 const categoryLabels: Record<DepartureAnomalyCategory, string> = {
   missing_departure: 'No departure scan',
@@ -29,6 +30,8 @@ const categoryLabels: Record<DepartureAnomalyCategory, string> = {
 }
 
 export function DepartureAnomaliesPage() {
+  const { can } = useAuth()
+  const canWriteDepartureAnalysis = can('departure_anomalies', 'write')
   const { data: classes = [], isLoading: classesLoading } = useClasses()
   const analysis = useAnalyzeDepartureAnomalies()
   const [classId, setClassId] = useState('')
@@ -113,7 +116,7 @@ export function DepartureAnomaliesPage() {
               label="Attendance date"
             />
 
-            <div className="space-y-1.5">
+            {canWriteDepartureAnalysis && <div className="space-y-1.5">
               <Label htmlFor="departure-analysis-time" className="text-xs">Departure time</Label>
               <Input
                 id="departure-analysis-time"
@@ -127,9 +130,9 @@ export function DepartureAnomaliesPage() {
                 required
               />
               <p className="text-[11px] text-muted-foreground">For the selected class and date only</p>
-            </div>
+            </div>}
 
-            <Button
+            {canWriteDepartureAnalysis && <Button
               type="submit"
               className="w-full sm:self-end lg:mb-[22px] lg:w-auto"
               disabled={!classId || !date || !departureTime || analysis.isPending}
@@ -142,7 +145,7 @@ export function DepartureAnomaliesPage() {
                   : savedAnalysis.data
                     ? 'Refresh analysis'
                     : 'Analyze'}
-            </Button>
+            </Button>}
           </form>
         </CardContent>
       </Card>

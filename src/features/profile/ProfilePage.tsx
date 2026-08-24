@@ -236,6 +236,7 @@ export function ProfilePage() {
 
   const roleColors: Record<string, string> = {
     admin: 'bg-destructive text-destructive-foreground',
+    sub_admin: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
     student: 'bg-secondary text-secondary-foreground',
   }
 
@@ -299,7 +300,9 @@ export function ProfilePage() {
                 </span>
               </p>
               {role && (
-                <Badge className={`mt-2 text-xs capitalize ${roleColors[role] ?? ''}`}>{role}</Badge>
+                <Badge className={`mt-2 text-xs capitalize ${roleColors[role] ?? ''}`}>
+                  {role === 'sub_admin' ? 'Sub-admin' : role}
+                </Badge>
               )}
             </div>
           </div>
@@ -347,7 +350,7 @@ export function ProfilePage() {
                 <Input value={user?.email ?? ''} disabled />
               </div>
             </div>
-            {role === 'admin' && <Button type="submit" disabled={saving}>
+            {role !== 'student' && <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save Changes
             </Button>}

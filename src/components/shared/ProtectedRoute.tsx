@@ -21,7 +21,12 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
 
   if (!session) return <Navigate to="/login" replace />
 
-  if (roles && profile && !roles.includes(profile.role)) {
+  const roleAllowed = !roles
+    || !profile
+    || roles.includes(profile.role)
+    || (profile.role === 'sub_admin' && roles.includes('admin'))
+
+  if (!roleAllowed) {
     return <Navigate to="/dashboard" replace />
   }
 

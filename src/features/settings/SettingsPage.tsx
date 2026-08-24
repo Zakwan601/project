@@ -155,7 +155,7 @@ export function SettingsPage() {
           )}
 
           <form onSubmit={handleSubmit(d => createYear.mutate(d))} className="space-y-3 sm:space-y-4">
-            <h4 className="text-sm font-medium">Add New Academic Year</h4>
+            <h4 className="text-sm font-medium">Add New Academic Session</h4>
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="space-y-2">
                 <Label>Name</Label>

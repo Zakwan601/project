@@ -1,4 +1,27 @@
-export type UserRole = 'admin' | 'student'
+export type UserRole = 'admin' | 'sub_admin' | 'student'
+
+export type PermissionKey =
+  | 'dashboard'
+  | 'students'
+  | 'classes'
+  | 'attendance'
+  | 'punches'
+  | 'reports'
+  | 'vacations'
+  | 'departure_anomalies'
+  | 'devices'
+  | 'sms_messages'
+  | 'complaints'
+  | 'announcements'
+
+export interface SubAdminPermission {
+  profile_id: string
+  permission_key: PermissionKey
+  can_read: boolean
+  can_write: boolean
+  created_at: string
+  updated_at: string
+}
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
 export type SessionType = 'morning' | 'afternoon' | 'period' | 'full_day'
 export type AttendanceSource = 'manual' | 'biometric' | 'system'
@@ -10,6 +33,11 @@ export interface Database {
         Row: Profile
         Insert: Omit<Profile, 'created_at' | 'updated_at'>
         Update: Partial<Omit<Profile, 'id' | 'created_at'>>
+      }
+      sub_admin_permissions: {
+        Row: SubAdminPermission
+        Insert: Omit<SubAdminPermission, 'created_at' | 'updated_at'>
+        Update: Partial<Pick<SubAdminPermission, 'can_read' | 'can_write'>>
       }
       academic_years: {
         Row: AcademicYear

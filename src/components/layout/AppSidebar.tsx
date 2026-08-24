@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
-  BarChart3, CalendarOff, Cpu, Settings, User, GraduationCap, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight,
+  BarChart3, CalendarOff, Cpu, Settings, User, GraduationCap, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import type { UserRole } from '@/types/database'
+import type { PermissionKey, UserRole } from '@/types/database'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem,
@@ -44,34 +44,61 @@ const advancedNavItems: NavItem[] = [
   { title: 'Complaints', href: '/complaints', icon: MessageSquareWarning, roles: ['admin'] },
   { title: 'Announcements', href: '/announcements', icon: Megaphone, roles: ['admin'] },
   { title: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
+  { title: 'Access Control', href: '/access-control', icon: UserCog, roles: ['admin'] },
 ]
 
 const bottomNavItems: NavItem[] = [
   { title: 'Profile', href: '/profile', icon: User, roles: ['admin', 'student'] },
 ]
 
+const permissionByHref: Partial<Record<string, PermissionKey>> = {
+  '/dashboard': 'dashboard',
+  '/students': 'students',
+  '/classes': 'classes',
+  '/attendance': 'attendance',
+  '/punches': 'punches',
+  '/vacations': 'vacations',
+  '/reports': 'reports',
+  '/departure-anomalies': 'departure_anomalies',
+  '/devices': 'devices',
+  '/sms-messages': 'sms_messages',
+  '/complaints': 'complaints',
+  '/announcements': 'announcements',
+}
+
 const roleColors: Record<UserRole, string> = {
   admin: 'bg-destructive text-destructive-foreground',
+  sub_admin: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
   student: 'bg-secondary text-secondary-foreground',
 }
 
 export function AppSidebar() {
-  const { profile, student, role, signOut } = useAuth()
+  const { profile, student, role, signOut, can } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const { isMobile, setOpenMobile } = useSidebar()
   const profileComplete = isProfileComplete(profile, student)
-  const { data: unreadComplaints = 0 } = useAdminUnreadComplaintCount(role === 'admin' && profileComplete)
+  const canReadComplaints = role === 'admin' || (role === 'sub_admin' && can('complaints'))
+  const { data: unreadComplaints = 0 } = useAdminUnreadComplaintCount(canReadComplaints && profileComplete)
+
+  const canAccessNavItem = (item: NavItem) => {
+    if (!role) return false
+    if (role === 'sub_admin') {
+      if (item.href === '/profile') return true
+      const permission = permissionByHref[item.href]
+      return Boolean(permission && can(permission))
+    }
+    return item.roles.includes(role)
+  }
 
   const filteredNav = profileComplete
-    ? navItems.filter(item => role && item.roles.includes(role))
+    ? navItems.filter(canAccessNavItem)
     : []
   const filteredAdvancedNav = profileComplete
-    ? advancedNavItems.filter(item => role && item.roles.includes(role))
+    ? advancedNavItems.filter(canAccessNavItem)
     : []
-  const filteredBottom = bottomNavItems.filter(item =>
-    role && item.roles.includes(role) && (profileComplete || item.href === '/profile')
-  )
+  const filteredBottom = bottomNavItems.filter(item => canAccessNavItem(item)
+    && (profileComplete || item.href === '/profile'))
   const isAdvancedActive = filteredAdvancedNav.some(item => location.pathname.startsWith(item.href))
   const [advancedOpen, setAdvancedOpen] = useState(isAdvancedActive)
 
@@ -198,7 +225,7 @@ export function AppSidebar() {
             <span className="text-sm font-medium truncate">{accountName}</span>
             {role && (
               <Badge variant="secondary" className={`text-xs w-fit mt-0.5 capitalize ${roleColors[role]}`}>
-                {role}
+                {role === 'sub_admin' ? 'Sub-admin' : role}
               </Badge>
             )}
           </div>

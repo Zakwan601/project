@@ -7,8 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { PaginationFooter } from '@/components/shared/PaginationFooter'
+import { useAuth } from '@/contexts/AuthContext'
 
 export function StudentReportNotifications() {
+  const { can } = useAuth()
+  const canWriteComplaints = can('complaints', 'write')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const { data: reportPage, isLoading, isFetching, error } = useAdminStudentReports({ page, pageSize })
@@ -63,7 +66,7 @@ export function StudentReportNotifications() {
                           {studentName} · {report.students.admission_number} · {formatDisplayDate(report.created_at)}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
+                      {canWriteComplaints && <div className="flex shrink-0 items-center gap-1">
                         {!report.admin_read_at && (
                           <Button
                             size="icon"
@@ -87,7 +90,7 @@ export function StudentReportNotifications() {
                             Solved
                           </Button>
                         )}
-                      </div>
+                      </div>}
                     </div>
                     <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground sm:mt-3">{report.message}</p>
                   </div>

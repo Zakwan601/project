@@ -12,8 +12,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useAuth } from '@/contexts/AuthContext'
 
 export function VacationsPage() {
+  const { can } = useAuth()
+  const canWriteVacations = can('vacations', 'write')
   const today = format(new Date(), 'yyyy-MM-dd')
   const [date, setDate] = useState(today)
   const [name, setName] = useState('')
@@ -39,7 +42,7 @@ export function VacationsPage() {
   return (
     <div className="space-y-3 sm:space-y-6">
       <PageHeader title="Vacations" description="Add school vacations and exclude those dates from attendance." />
-      <Card>
+      {canWriteVacations && <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <CalendarOff className="h-5 w-5" /> Add Vacation
@@ -77,7 +80,7 @@ export function VacationsPage() {
             </Button>
           </form>
         </CardContent>
-      </Card>
+      </Card>}
 
       <Card>
         <CardHeader>
@@ -113,7 +116,7 @@ export function VacationsPage() {
                         </p>
                       )}
                     </div>
-                    <Button type="button" size="icon-sm" variant="ghost"
+                    {canWriteVacations && <Button type="button" size="icon-sm" variant="ghost"
                       className="shrink-0 text-destructive hover:text-destructive"
                       disabled={deleteHoliday.isPending}
                       onClick={() => {
@@ -123,7 +126,7 @@ export function VacationsPage() {
                       }}
                       aria-label={`Remove ${holiday.name}`}>
                       <Trash2 />
-                    </Button>
+                    </Button>}
                   </article>
                 )
               })}

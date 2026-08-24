@@ -10,6 +10,22 @@ import { useLocation } from 'react-router-dom'
 import { isProfileComplete } from '@/lib/profile'
 import { PwaControls } from '@/components/shared/PwaControls'
 import { ZktecoNavbarStatus } from '@/components/shared/ZktecoDeviceStatus'
+import type { PermissionKey } from '@/types/database'
+
+const permissionRoutes: Array<{ path: string; permission: PermissionKey }> = [
+  { path: '/dashboard', permission: 'dashboard' },
+  { path: '/students', permission: 'students' },
+  { path: '/classes', permission: 'classes' },
+  { path: '/attendance', permission: 'attendance' },
+  { path: '/punches', permission: 'punches' },
+  { path: '/reports', permission: 'reports' },
+  { path: '/complaints', permission: 'complaints' },
+  { path: '/announcements', permission: 'announcements' },
+  { path: '/vacations', permission: 'vacations' },
+  { path: '/departure-anomalies', permission: 'departure_anomalies' },
+  { path: '/devices', permission: 'devices' },
+  { path: '/sms-messages', permission: 'sms_messages' },
+]
 
 const pageLabels: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -24,11 +40,12 @@ const pageLabels: Record<string, string> = {
   '/report-issue': 'Report an Issue',
   '/devices': 'Devices',
   '/settings': 'Settings',
+  '/access-control': 'Access Control',
   '/profile': 'Profile',
 }
 
 export function AppLayout() {
-  const { session, profile, student, loading } = useAuth()
+  const { session, profile, student, loading, can } = useAuth()
   const location = useLocation()
 
   if (!session) {
@@ -41,6 +58,29 @@ export function AppLayout() {
 
   if ((loading || !isProfileComplete(profile, student)) && location.pathname !== '/profile') {
     return <Navigate to="/profile" replace />
+  }
+
+  const requestedModule = permissionRoutes.find(item => location.pathname.startsWith(item.path))
+  const firstAllowedPath = permissionRoutes.find(item => can(item.permission))?.path ?? '/profile'
+  const requiresFullAdmin = location.pathname.startsWith('/settings')
+    || location.pathname.startsWith('/access-control')
+
+  if (requiresFullAdmin && profile?.role !== 'admin') {
+    return <Navigate to={profile?.role === 'sub_admin' ? firstAllowedPath : '/dashboard'} replace />
+  }
+
+  if (profile?.role === 'sub_admin') {
+    if (requestedModule && !can(requestedModule.permission)) {
+      return <Navigate to={firstAllowedPath} replace />
+    }
+  }
+
+  if (profile?.role === 'student'
+      && requestedModule
+      && requestedModule.path !== '/dashboard'
+      && requestedModule.path !== '/attendance'
+      && requestedModule.path !== '/punches') {
+    return <Navigate to={'/dashboard'} replace />
   }
 
   const pageTitle = Object.entries(pageLabels).find(([key]) =>

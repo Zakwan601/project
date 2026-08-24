@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { Profile, Student, UserRole } from '@/types/database'
+import type { PermissionKey, Profile, Student, SubAdminPermission, UserRole } from '@/types/database'
 
 interface AuthContextValue {
   session: Session | null
@@ -9,6 +9,8 @@ interface AuthContextValue {
   profile: Profile | null
   student: Student | null
   role: UserRole | null
+  permissions: SubAdminPermission[]
+  can: (permission: PermissionKey, access?: 'read' | 'write') => boolean
   loading: boolean
   profileError: string | null
   signIn: (email: string, password: string, turnstileToken: string) => Promise<{ error: Error | null }>
@@ -29,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [student, setStudent] = useState<Student | null>(null)
+  const [permissions, setPermissions] = useState<SubAdminPermission[]>([])
   const [loading, setLoading] = useState(true)
   const [profileError, setProfileError] = useState<string | null>(null)
   const profileLoadRef = useRef<ProfileLoad | null>(null)
@@ -48,12 +51,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const [
               { data: profileData, error: profileQueryError },
               { data: studentData, error: studentError },
+              { data: permissionData, error: permissionError },
             ] = await Promise.all([
               supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
               supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
+              supabase.from('sub_admin_permissions').select('*').eq('profile_id', userId),
             ])
             if (profileQueryError) throw profileQueryError
             if (studentError) throw studentError
+            if (permissionError) throw permissionError
 
             const loadedProfile = profileData as Profile | null
             const linkedStudent = studentData as Student | null
@@ -65,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             setProfile(loadedProfile)
             setStudent(linkedStudent)
+            setPermissions((permissionData ?? []) as SubAdminPermission[])
             loadedUserIdRef.current = userId
             return
           } catch (error) {
@@ -94,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadedUserIdRef.current = null
         setProfile(null)
         setStudent(null)
+        setPermissions([])
         setProfileError(error instanceof Error ? error.message : 'Profile loading failed')
       }
       throw error
@@ -120,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadedUserIdRef.current = null
         setProfile(null)
         setStudent(null)
+        setPermissions([])
         setProfileError(null)
         setLoading(false)
         return
@@ -180,9 +189,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const can = useCallback((permission: PermissionKey, access: 'read' | 'write' = 'read') => {
+    if (profile?.role === 'admin') return true
+    if (profile?.role !== 'sub_admin') return false
+    const grant = permissions.find(item => item.permission_key === permission)
+    return access === 'write' ? Boolean(grant?.can_write) : Boolean(grant?.can_read)
+  }, [permissions, profile?.role])
+
   return (
     <AuthContext.Provider value={{
-      session, user, profile, student, role: profile?.role ?? null,
+      session, user, profile, student, role: profile?.role ?? null, permissions, can,
       loading, profileError, signIn, signUp, signOut, refreshProfile,
     }}>
       {children}

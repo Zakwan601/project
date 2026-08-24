@@ -430,6 +430,9 @@ Deno.serve(
           "SUPABASE_SERVICE_ROLE_KEY",
         );
 
+      const anonKey =
+        Deno.env.get("SUPABASE_ANON_KEY");
+
       const apiKey =
         Deno.env.get("AUTOMAS_API_KEY");
 
@@ -467,6 +470,12 @@ Deno.serve(
       if (!serviceRoleKey) {
         missingVariables.push(
           "SUPABASE_SERVICE_ROLE_KEY",
+        );
+      }
+
+      if (!anonKey) {
+        missingVariables.push(
+          "SUPABASE_ANON_KEY",
         );
       }
 
@@ -536,19 +545,18 @@ Deno.serve(
           );
         }
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role, is_active")
-          .eq("id", userData.user.id)
-          .maybeSingle();
+        const userClient = createClient(supabaseUrl, anonKey, {
+          global: { headers: { Authorization: authorization } },
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+        const { data: allowed, error: permissionError } = await userClient.rpc(
+          "has_permission",
+          { p_permission_key: "attendance", p_access: "write" },
+        );
 
-        if (
-          profileError ||
-          profile?.role !== "admin" ||
-          profile.is_active !== true
-        ) {
+        if (permissionError || allowed !== true) {
           return jsonResponse(
-            { success: false, error: "An active administrator account is required" },
+            { success: false, error: "Attendance write permission is required" },
             403,
           );
         }

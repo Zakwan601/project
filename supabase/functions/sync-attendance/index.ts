@@ -50,6 +50,14 @@ Deno.serve(async (req: Request) => {
       if (profileError || !profile?.is_active) {
         return jsonResponse(403, { error: "An active user profile is required" });
       }
+
+      const { data: allowed, error: permissionError } = await userClient.rpc("has_permission", {
+        p_permission_key: "attendance",
+        p_access: "write",
+      });
+      if (permissionError || allowed !== true) {
+        return jsonResponse(403, { error: "Attendance write permission is required" });
+      }
     }
 
     let body: Record<string, unknown>;

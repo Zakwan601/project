@@ -55,7 +55,9 @@ export function StudentsPage() {
   const deleteStudent = useDeleteStudent()
   const promoteStudents = usePromoteStudents()
   const queryClient = useQueryClient()
-  const { session, role } = useAuth()
+  const { session, role, can } = useAuth()
+  const canWriteStudents = can('students', 'write')
+  const isFullAdmin = role === 'admin'
 
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('all')
@@ -189,12 +191,12 @@ export function StudentsPage() {
       <PageHeader
         title="Students"
         description={`${students?.length ?? 0} students enrolled`}
-        action={role === 'admin' ? (
+        action={canWriteStudents ? (
           <div className="flex flex-wrap gap-2 sm:justify-end">
-            <Button size="sm" variant="outline" onClick={syncUsers} disabled={isSyncingUsers}>
+            {isFullAdmin && <Button size="sm" variant="outline" onClick={syncUsers} disabled={isSyncingUsers}>
               <RefreshCw className={`mr-1.5 h-4 w-4 ${isSyncingUsers ? 'animate-spin' : ''}`} />
               {isSyncingUsers ? 'Syncing users...' : 'Sync ZKTeco users'}
-            </Button>
+            </Button>}
             {selectedStudentIds.length > 0 && (
               <Button size="sm" onClick={() => setPromotionOpen(true)}>
                 <GraduationCap className="mr-1.5 h-4 w-4" />
@@ -245,7 +247,7 @@ export function StudentsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {role === 'admin' && <TableHead className="w-10">
+                {canWriteStudents && <TableHead className="w-10">
                   <Checkbox
                     checked={allFilteredSelected}
                     onCheckedChange={checked => setSelectedStudentIds(
@@ -272,7 +274,7 @@ export function StudentsPage() {
                   transition={{ delay: i * 0.02 }}
                   className="border-b transition-colors hover:bg-muted/50"
                 >
-                  {role === 'admin' && <TableCell>
+                  {canWriteStudents && <TableCell>
                     <Checkbox
                       checked={selectedStudentIds.includes(student.id)}
                       onCheckedChange={checked => toggleStudent(student.id, checked === true)}
@@ -304,17 +306,15 @@ export function StudentsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {role === 'admin' && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setHistoryStudent(student)}
-                          title="Academic history"
-                        >
-                          <History className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      {role === 'admin' && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setHistoryStudent(student)}
+                        title="Academic history"
+                      >
+                        <History className="h-3.5 w-3.5" />
+                      </Button>
+                      {can('punches') && (
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -325,7 +325,7 @@ export function StudentsPage() {
                           <Clock3 className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {role === 'admin' && (
+                      {isFullAdmin && (
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -336,13 +336,13 @@ export function StudentsPage() {
                           <KeyRound className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon-sm" onClick={() => openEdit(student)}>
+                      {canWriteStudents && <Button variant="ghost" size="icon-sm" onClick={() => openEdit(student)}>
                         <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => setDeleteId(student.id)}
+                      </Button>}
+                      {canWriteStudents && <Button variant="ghost" size="icon-sm" onClick={() => setDeleteId(student.id)}
                         className="text-destructive hover:text-destructive">
                         <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      </Button>}
                     </div>
                   </TableCell>
                 </motion.tr>

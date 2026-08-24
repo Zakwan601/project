@@ -11,8 +11,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
+import { useAuth } from '@/contexts/AuthContext'
 
 export function AnnouncementsPage() {
+  const { can } = useAuth()
+  const canWriteAnnouncements = can('announcements', 'write')
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
@@ -38,7 +41,7 @@ export function AnnouncementsPage() {
     <div className="space-y-3 sm:space-y-6">
       <PageHeader title="Announcements" description="Post simple notices for students." />
 
-      <Card>
+      {canWriteAnnouncements && <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Megaphone /> New Announcement</CardTitle>
           <CardDescription>It will appear on every student dashboard.</CardDescription>
@@ -84,7 +87,7 @@ export function AnnouncementsPage() {
             </Button>
           </form>
         </CardContent>
-      </Card>
+      </Card>}
 
       <Card>
         <CardHeader>
@@ -116,7 +119,7 @@ export function AnnouncementsPage() {
                           {announcement.expires_at ? ` · Expires ${formatDisplayDate(announcement.expires_at)}` : ''}
                         </p>
                       </div>
-                      <Button
+                      {canWriteAnnouncements && <Button
                         type="button"
                         size="icon-sm"
                         variant="ghost"
@@ -128,7 +131,7 @@ export function AnnouncementsPage() {
                         aria-label={`Remove ${announcement.title}`}
                       >
                         <Trash2 />
-                      </Button>
+                      </Button>}
                     </div>
                   </article>
                 )

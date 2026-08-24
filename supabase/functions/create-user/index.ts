@@ -108,12 +108,49 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: "Missing required fields: email, password, full_name, role" });
     }
 
-    if (role !== "student") {
-      return jsonResponse(400, { error: "Role must be 'student'" });
-    }
-
     if (password.length < 8) {
       return jsonResponse(400, { error: "Password must be at least 8 characters" });
+    }
+
+    if (role === "sub_admin") {
+      const { data: newUserData, error: createErr } = await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name, role: "student" },
+      });
+
+      if (createErr) {
+        return jsonResponse(400, { error: createErr.message });
+      }
+
+      const newUserId = newUserData.user.id;
+      const { error: profileCreateError } = await adminClient
+        .from("profiles")
+        .upsert({
+          id: newUserId,
+          full_name,
+          role: "sub_admin",
+          is_active: true,
+        }, { onConflict: "id" });
+
+      if (profileCreateError) {
+        await adminClient.auth.admin.deleteUser(newUserId);
+        return jsonResponse(400, { error: profileCreateError.message });
+      }
+
+      return jsonResponse(200, {
+        success: true,
+        user_id: newUserId,
+        profile_id: newUserId,
+        email,
+        role,
+        full_name,
+      });
+    }
+
+    if (role !== "student") {
+      return jsonResponse(400, { error: "Role must be 'student' or 'sub_admin'" });
     }
 
     const targetStudentId = extra?.student_id;
