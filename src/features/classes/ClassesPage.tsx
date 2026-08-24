@@ -68,7 +68,7 @@ export function ClassesPage() {
 
   const openCreate = () => {
     setEditing(null)
-    reset({ academic_year_id: currentYearId ?? '', section: 'A', capacity: 40 })
+    reset({ academic_year_id: defaultAcademicSessionId ?? '', section: 'A', capacity: 40 })
     setDialogOpen(true)
   }
 
@@ -85,7 +85,7 @@ export function ClassesPage() {
     setDialogOpen(true)
   }
 
-  const currentYearId = academicYears?.find((y: AcademicYear) => y.is_current)?.id ?? null
+  const defaultAcademicSessionId = academicYears?.find((year: AcademicYear) => year.is_current)?.id ?? null
 
   const onSubmit = async (data: ClassForm) => {
     const payload: Omit<Class, 'id' | 'created_at' | 'updated_at'> = {
@@ -210,7 +210,7 @@ export function ClassesPage() {
                   <SelectContent>
                     {academicYears?.map(year => (
                       <SelectItem key={year.id} value={year.id}>
-                        {year.name}{year.is_current ? ' (Current)' : ''}
+                        {year.name}{year.is_current ? ' (Active)' : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -58,7 +58,7 @@ export function SettingsPage() {
           name: data.name,
           start_date: data.start_date,
           end_date: data.end_date,
-          is_current: (years?.length ?? 0) === 0,
+          is_current: true,
         })
         .select()
         .single()
@@ -73,16 +73,17 @@ export function SettingsPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  const setCurrent = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await db.rpc('set_current_academic_year', {
+  const setSessionActive = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const { error } = await db.rpc('set_academic_year_active', {
         p_academic_year_id: id,
+        p_is_active: isActive,
       })
       if (error) throw error
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['academic_years'] })
-      toast.success('Current year updated')
+      toast.success('Academic session status updated')
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -98,8 +99,8 @@ export function SettingsPage() {
           <div className="flex items-center gap-2">
             <School className="h-5 w-5 text-muted-foreground" />
             <div>
-              <CardTitle>Academic Years</CardTitle>
-              <CardDescription>Manage your school's academic years</CardDescription>
+              <CardTitle>Academic Sessions</CardTitle>
+              <CardDescription>Manage overlapping student cohort sessions</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -118,7 +119,13 @@ export function SettingsPage() {
                 </TableHeader>
                 <TableBody>
                   {years.map((year: AcademicYear) => {
-                    const status = year.is_current ? 'Current' : year.start_date > today ? 'Upcoming' : 'Past'
+                    const status = year.is_current
+                      ? 'Active'
+                      : year.start_date > today
+                        ? 'Upcoming'
+                        : year.end_date < today
+                          ? 'Completed'
+                          : 'Inactive'
                     return <TableRow key={year.id}>
                       <TableCell className="font-medium">{year.name}</TableCell>
                       <TableCell>{formatDisplayDate(year.start_date)}</TableCell>
@@ -129,17 +136,15 @@ export function SettingsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {!year.is_current && (
                           <Button
                             size="sm"
                             variant="outline"
                             className="text-xs h-7"
-                            onClick={() => setCurrent.mutate(year.id)}
-                            disabled={setCurrent.isPending}
+                            onClick={() => setSessionActive.mutate({ id: year.id, isActive: !year.is_current })}
+                            disabled={setSessionActive.isPending}
                           >
-                            Set Current
+                            {year.is_current ? 'Deactivate' : 'Activate'}
                           </Button>
-                        )}
                       </TableCell>
                     </TableRow>
                   })}

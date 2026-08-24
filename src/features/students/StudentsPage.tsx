@@ -113,8 +113,16 @@ export function StudentsPage() {
   const selectPromotionTarget = (classId: string) => {
     setTargetClassId(classId)
     const targetClass = classes?.find(cls => cls.id === classId)
-    if (targetClass?.academic_years?.start_date) {
-      setPromotionDate(targetClass.academic_years.start_date)
+    const targetSession = targetClass?.academic_years
+    if (targetSession) {
+      const today = format(new Date(), 'yyyy-MM-dd')
+      setPromotionDate(
+        today < targetSession.start_date
+          ? targetSession.start_date
+          : today > targetSession.end_date
+            ? targetSession.end_date
+            : today,
+      )
     }
   }
 
@@ -389,7 +397,7 @@ export function StudentsPage() {
           <DialogHeader>
             <DialogTitle>Promote students</DialogTitle>
             <DialogDescription>
-              Move {selectedStudentIds.length} selected student{selectedStudentIds.length === 1 ? '' : 's'} to a class in the next academic year. Their current assignments will be archived automatically.
+              Move {selectedStudentIds.length} selected student{selectedStudentIds.length === 1 ? '' : 's'} to the next class. Their cohort session is preserved when the target class belongs to the same session.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
