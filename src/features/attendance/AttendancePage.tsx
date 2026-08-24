@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarCheck, CalendarDays, CalendarOff, CheckCircle, Loader2, MessageSquareWarning, Pencil, RefreshCw, Send, Trash2, UserX, Users } from 'lucide-react'
+import { CalendarCheck, CalendarDays, CalendarOff, CheckCircle, Loader2, MessageSquareWarning, Pencil, RefreshCw, Search, Send, Trash2, UserX, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
@@ -61,6 +61,8 @@ const statusStyles: Record<AttendanceStatus, string> = {
   late: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
   excused: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
 }
+
+const studentIdCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 export function AttendancePage() {
   const { role } = useAuth()
@@ -496,6 +498,8 @@ function DailyAttendanceSheet({
   const [correctionStatus, setCorrectionStatus] = useState<AttendanceStatus>('present')
   const [correctionReason, setCorrectionReason] = useState('')
   const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false)
+  const [studentSearch, setStudentSearch] = useState('')
+  const [appliedStudentSearch, setAppliedStudentSearch] = useState('')
 
   const recordsByStudent = useMemo(
     () => new Map(records.map(record => [record.student_id, record])),
@@ -508,13 +512,28 @@ function DailyAttendanceSheet({
   const approvedLeaveCount = students.filter(student =>
     recordsByStudent.get(student.id)?.status === 'excused'
   ).length
-  const filteredStudents = statusFilter === 'all'
-    ? students
-    : students.filter(student =>
-      (recordsByStudent.get(student.id)?.status ?? 'absent') === statusFilter
-    )
+  const filteredStudents = useMemo(() => {
+    const query = appliedStudentSearch.trim().toLocaleLowerCase()
 
-  useEffect(() => setSelectedStudentIds(new Set()), [session.id, statusFilter])
+    return students
+      .filter(student => statusFilter === 'all'
+        || (recordsByStudent.get(student.id)?.status ?? 'absent') === statusFilter)
+      .filter(student => !query || [
+        student.admission_number,
+        student.roll_number?.toString(),
+        student.first_name,
+        student.last_name,
+        `${student.first_name} ${student.last_name}`,
+      ].some(value => value?.toLocaleLowerCase().includes(query)))
+      .sort((left, right) => studentIdCollator.compare(left.admission_number, right.admission_number))
+  }, [appliedStudentSearch, recordsByStudent, statusFilter, students])
+
+  useEffect(() => setSelectedStudentIds(new Set()), [session.id, statusFilter, appliedStudentSearch])
+
+  useEffect(() => {
+    setStudentSearch('')
+    setAppliedStudentSearch('')
+  }, [session.id])
 
   const targetForStudent = (student: (typeof students)[number]): CorrectionTarget => ({
     studentId: student.id,
@@ -562,6 +581,28 @@ function DailyAttendanceSheet({
           <Summary icon={CalendarDays} label="Approved leave" value={approvedLeaveCount} />
         </div>
 
+        <form
+          className={'flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-end'}
+          onSubmit={event => {
+            event.preventDefault()
+            setAppliedStudentSearch(studentSearch)
+          }}
+        >
+          <div className={'min-w-0 flex-1 space-y-1.5'}>
+            <Label htmlFor={'attendance-student-search'}>Search students</Label>
+            <Input
+              id={'attendance-student-search'}
+              type={'search'}
+              value={studentSearch}
+              onChange={event => setStudentSearch(event.target.value)}
+              placeholder={'Student ID, roll number, or name'}
+            />
+          </div>
+          <Button type={'submit'} variant={'outline'} className={'shrink-0'}>
+            <Search /> Search
+          </Button>
+        </form>
+
         {isAdmin && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2">
             <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
@@ -603,7 +644,9 @@ function DailyAttendanceSheet({
 
         {filteredStudents.length === 0 && (
           <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
-            No students match the selected status.
+            {appliedStudentSearch.trim()
+              ? 'No students match your search.'
+              : 'No students match the selected status.'}
           </div>
         )}
 
