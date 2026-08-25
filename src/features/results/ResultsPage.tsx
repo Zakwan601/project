@@ -66,6 +66,14 @@ interface ClassSubject {
   is_active: boolean
 }
 
+interface ExamSubjectConfigDraft {
+  selected: boolean
+  creative: string
+  written: string
+  practical: string
+  pass: string
+}
+
 export function ResultsPage() {
   const { role } = useAuth()
   return role === 'student' ? <StudentResults /> : <StaffResults />
@@ -144,7 +152,7 @@ function StaffResults() {
   const [examForm, setExamForm] = useState({ typeId: '', title: '', date: '' })
   const [subjectForm, setSubjectForm] = useState({ name: '', code: '' })
   const [typeForm, setTypeForm] = useState({ name: '', sortOrder: '0', isActive: true })
-  const [config, setConfig] = useState({ subjectId: '', creative: '40', written: '40', practical: '20', pass: '33' })
+  const [configRows, setConfigRows] = useState<Record<string, ExamSubjectConfigDraft>>({})
   const [drafts, setDrafts] = useState<Record<string, MarkDraft>>({})
   const [shareUrl, setShareUrl] = useState('')
 
@@ -304,16 +312,35 @@ function StaffResults() {
     await qc.invalidateQueries({ queryKey: ['result-exam-types'] }); toast.success('Exam type deleted')
   }
 
-  const attachSubject = async () => {
-    const values = [config.creative, config.written, config.practical, config.pass].map(Number)
-    if (!config.subjectId || values.some(Number.isNaN)) return toast.error('Complete the subject marks configuration')
-    const { error } = await db.from('result_exam_subjects').insert({
-      exam_id: examId, subject_id: config.subjectId, creative_max: values[0], written_max: values[1], practical_max: values[2], pass_mark: values[3],
-      sort_order: (examSubjectsQuery.data?.length ?? 0) * 10,
+  const openSubjectConfiguration = () => {
+    setConfigRows(Object.fromEntries(unusedSubjects.map(subject => [subject.id, {
+      selected: false, creative: '40', written: '40', practical: '20', pass: '33',
+    }])))
+    setConfigDialog(true)
+  }
+
+  const attachSubjects = async () => {
+    const selected = unusedSubjects.filter(subject => configRows[subject.id]?.selected)
+    if (!selected.length) return toast.error('Select at least one subject')
+    const rows = selected.map((subject, index) => {
+      const row = configRows[subject.id]
+      const values = [row.creative, row.written, row.practical, row.pass].map(Number)
+      return { subject, row, values, index }
     })
+    const invalid = rows.find(({ values }) => values.some(value => Number.isNaN(value) || value < 0)
+      || values[0] + values[1] + values[2] <= 0
+      || values[3] > values[0] + values[1] + values[2])
+    if (invalid) return toast.error(`Check the marks configuration for ${invalid.subject.name}`)
+    const baseOrder = (examSubjectsQuery.data?.length ?? 0) * 10
+    const { error } = await db.from('result_exam_subjects').insert(rows.map(({ subject, values, index }) => ({
+      exam_id: examId, subject_id: subject.id,
+      creative_max: values[0], written_max: values[1], practical_max: values[2], pass_mark: values[3],
+      sort_order: baseOrder + index * 10,
+    })))
     if (error) return toast.error(error.message)
-    setConfigDialog(false); setConfig({ subjectId: '', creative: '40', written: '40', practical: '20', pass: '33' })
-    await qc.invalidateQueries({ queryKey: ['result-exam-subjects', examId] }); toast.success('Subject added to exam')
+    setConfigDialog(false); setConfigRows({})
+    await qc.invalidateQueries({ queryKey: ['result-exam-subjects', examId] })
+    toast.success(`${selected.length} subject${selected.length === 1 ? '' : 's'} added to the exam`)
   }
 
   const saveMarks = useMutation({
@@ -387,7 +414,7 @@ function StaffResults() {
           </TabsContent>
 
           <TabsContent value="workspace" className="mt-4 space-y-4">
-            {selectedExam && <Card><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle>{selectedExam.title || selectedExam.result_exam_types.name}</CardTitle><CardDescription>{selectedExam.classes.name} · {selectedExam.exam_date}</CardDescription></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam.status === 'draft' && <Button variant="outline" onClick={() => setConfigDialog(true)} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Add exam subject</Button>}{canWrite && <Button onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {selectedExam.status === 'published' ? 'Unpublish' : 'Publish results'}</Button>}</div></div></CardHeader></Card>}
+            {selectedExam && <Card><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle>{selectedExam.title || selectedExam.result_exam_types.name}</CardTitle><CardDescription>{selectedExam.classes.name} · {selectedExam.exam_date}</CardDescription></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam.status === 'draft' && <Button variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button>}{canWrite && <Button onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {selectedExam.status === 'published' ? 'Unpublish' : 'Publish results'}</Button>}</div></div></CardHeader></Card>}
 
             {!examSubjectsQuery.data?.length ? <EmptyState title="No subjects configured" description="Add subjects to this exam and define their component marks." /> : <>
               <Card><CardHeader><CardTitle className="text-base">Select student</CardTitle><CardDescription>All configured subjects will appear together for the selected student.</CardDescription></CardHeader><CardContent><Select value={selectedStudentId} onValueChange={value => { setSelectedStudentId(value); setShareUrl('') }}><SelectTrigger className="max-w-xl"><SelectValue placeholder="Choose student by ID, name, or roll" /></SelectTrigger><SelectContent>{studentsQuery.data?.map(student => <SelectItem key={student.id} value={student.id}>{student.admission_number} · {student.first_name} {student.last_name} · Roll {student.roll_number ?? '—'}</SelectItem>)}</SelectContent></Select></CardContent></Card>
@@ -414,7 +441,23 @@ function StaffResults() {
       <SimpleDialog open={examDialog} onOpenChange={setExamDialog} title="Create examination" description="Create a draft exam for the selected class." onSave={createExam} saveLabel="Create exam"><Label>Exam type</Label><Select value={examForm.typeId} onValueChange={value => setExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select><Label>Custom title (optional)</Label><Input value={examForm.title} onChange={event => setExamForm(current => ({ ...current, title: event.target.value }))} placeholder="e.g. First Monthly Exam" /><Label>Exam date</Label><Input type="date" value={examForm.date} min={selectedClass?.academic_years?.start_date} max={selectedClass?.academic_years?.end_date} onChange={event => setExamForm(current => ({ ...current, date: event.target.value }))} /></SimpleDialog>
       <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) setEditingSubjectId(null) }} title={editingSubjectId ? 'Edit class subject' : 'Add class subject'} description="Only full administrators can maintain subjects." onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /></SimpleDialog>
       <SimpleDialog open={typeDialog} onOpenChange={open => { setTypeDialog(open); if (!open) setEditingTypeId(null) }} title={editingTypeId ? 'Edit exam type' : 'Add exam type'} description="Examples: Mid Term, Final, Test, Monthly Exam." onSave={saveExamType} saveLabel={editingTypeId ? 'Save changes' : 'Add type'}><Label>Name</Label><Input value={typeForm.name} onChange={event => setTypeForm(current => ({ ...current, name: event.target.value }))} placeholder="Practical Test" /><NumberField label="Display order" value={typeForm.sortOrder} onChange={value => setTypeForm(current => ({ ...current, sortOrder: value }))} /><div className="flex items-center gap-2"><Checkbox checked={typeForm.isActive} onCheckedChange={checked => setTypeForm(current => ({ ...current, isActive: Boolean(checked) }))} /><Label>Active and available for new exams</Label></div></SimpleDialog>
-      <SimpleDialog open={configDialog} onOpenChange={setConfigDialog} title="Configure exam subject" description="Set the component maximums and total pass mark." onSave={attachSubject} saveLabel="Add to exam"><Label>Subject</Label><Select value={config.subjectId} onValueChange={value => setConfig(current => ({ ...current, subjectId: value }))}><SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger><SelectContent>{unusedSubjects.map(subject => <SelectItem key={subject.id} value={subject.id}>{subject.name} ({subject.code})</SelectItem>)}</SelectContent></Select><div className="grid grid-cols-2 gap-3"><NumberField label="Creative max" value={config.creative} onChange={value => setConfig(current => ({ ...current, creative: value }))} /><NumberField label="Written max" value={config.written} onChange={value => setConfig(current => ({ ...current, written: value }))} /><NumberField label="Practical max" value={config.practical} onChange={value => setConfig(current => ({ ...current, practical: value }))} /><NumberField label="Pass mark" value={config.pass} onChange={value => setConfig(current => ({ ...current, pass: value }))} /></div></SimpleDialog>
+      <Dialog open={configDialog} onOpenChange={setConfigDialog}>
+        <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-5xl">
+          <DialogHeader><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select one or more subjects and keep separate creative, written, practical, and pass marks for each.</DialogDescription></DialogHeader>
+          <div className="overflow-auto rounded-md border">
+            <Table>
+              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">Written max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Pass mark</TableHead><TableHead className="w-24 text-right">Total</TableHead></TableRow></TableHeader>
+              <TableBody>{unusedSubjects.map(subject => {
+                const row = configRows[subject.id] ?? { selected: false, creative: '40', written: '40', practical: '20', pass: '33' }
+                const update = (field: keyof ExamSubjectConfigDraft, value: string | boolean) => setConfigRows(current => ({ ...current, [subject.id]: { ...row, [field]: value } }))
+                const total = (Number(row.creative) || 0) + (Number(row.written) || 0) + (Number(row.practical) || 0)
+                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => update('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => update('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => update('practical', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} max={total} step="0.01" value={row.pass} disabled={!row.selected} onChange={event => update('pass', event.target.value)} /></TableCell><TableCell className="text-right font-semibold">{total}</TableCell></TableRow>
+              })}</TableBody>
+            </Table>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setConfigDialog(false)}>Cancel</Button><Button onClick={() => void attachSubjects()} disabled={!unusedSubjects.some(subject => configRows[subject.id]?.selected)}>Add {unusedSubjects.filter(subject => configRows[subject.id]?.selected).length || ''} selected subject{unusedSubjects.filter(subject => configRows[subject.id]?.selected).length === 1 ? '' : 's'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
