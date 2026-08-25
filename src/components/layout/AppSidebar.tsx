@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
-  BarChart3, CalendarOff, Cpu, Settings, User, GraduationCap, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog,
+  BarChart3, CalendarOff, Cpu, Settings, User, GraduationCap, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog, FileSpreadsheet,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import type { PermissionKey, UserRole } from '@/types/database'
@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
   { title: 'Report Issue', href: '/report-issue', icon: MessageSquareWarning, roles: ['student'] },
   { title: 'Vacations', href: '/vacations', icon: CalendarOff, roles: ['admin'] },
   { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin'] },
+  { title: 'Results', href: '/results', icon: FileSpreadsheet, roles: ['admin', 'student'] },
 ]
 
 const advancedNavItems: NavItem[] = [
@@ -59,6 +60,7 @@ const permissionByHref: Partial<Record<string, PermissionKey>> = {
   '/punches': 'punches',
   '/vacations': 'vacations',
   '/reports': 'reports',
+  '/results': 'results',
   '/departure-anomalies': 'departure_anomalies',
   '/devices': 'devices',
   '/sms-messages': 'sms_messages',

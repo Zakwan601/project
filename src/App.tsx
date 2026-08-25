@@ -21,6 +21,8 @@ import { AnnouncementsPage } from '@/features/announcements/AnnouncementsPage'
 import { DepartureAnomaliesPage } from '@/features/departure-anomalies/DepartureAnomaliesPage'
 import { VacationsPage } from '@/features/vacations/VacationsPage'
 import { AccessControlPage } from '@/features/access/AccessControlPage'
+import { ResultsPage } from '@/features/results/ResultsPage'
+import { SharedResultPage } from '@/features/results/SharedResultPage'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
 const queryClient = new QueryClient({
@@ -42,6 +44,7 @@ function App() {
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/shared-result/:token" element={<SharedResultPage />} />
 
               {/* Protected app routes */}
               <Route element={<AppLayout />}>
@@ -58,6 +61,7 @@ function App() {
                   )}
                 />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/results" element={<ResultsPage />} />
                 <Route
                   path="/complaints"
                   element={(

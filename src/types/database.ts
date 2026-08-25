@@ -13,6 +13,7 @@ export type PermissionKey =
   | 'sms_messages'
   | 'complaints'
   | 'announcements'
+  | 'results'
 
 export interface SubAdminPermission {
   profile_id: string
@@ -391,4 +392,81 @@ export interface Announcement {
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+export type ResultExamStatus = 'draft' | 'published'
+
+export interface ResultExamType {
+  id: string
+  name: string
+  is_active: boolean
+  sort_order: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ResultExam {
+  id: string
+  class_id: string
+  academic_year_id: string
+  exam_type_id: string
+  title: string | null
+  exam_date: string
+  status: ResultExamStatus
+  published_at: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ResultPayloadSubject {
+  id: string
+  name: string
+  code: string
+  creative_max: number
+  creative_marks: number | null
+  written_max: number
+  written_marks: number | null
+  practical_max: number
+  practical_marks: number | null
+  pass_mark: number
+  obtained: number
+  total_max: number
+  is_absent: boolean
+  remarks: string | null
+  passed: boolean
+  letter_grade: string
+  grade_point: number
+}
+
+export interface StudentResultPayload {
+  exam: {
+    id: string
+    exam_date: string
+    status: ResultExamStatus
+    title: string | null
+    exam_type: string
+    class_id: string
+    class_name: string
+    grade: string
+    section: string
+    academic_year: string
+  }
+  student: {
+    id: string
+    admission_number: string
+    full_name: string
+    roll_number: number | null
+  }
+  subjects: ResultPayloadSubject[]
+  summary: {
+    total_obtained: number
+    total_max: number
+    failed_subjects: number
+    gpa: number
+    letter_grade: string
+    position: number | null
+    total_students: number | null
+  }
 }

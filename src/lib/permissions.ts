@@ -14,6 +14,7 @@ export const permissionDefinitions: PermissionDefinition[] = [
   { key: 'attendance', label: 'Attendance', description: 'Daily attendance and manual corrections', supportsWrite: true },
   { key: 'punches', label: 'Punches', description: 'Biometric punch records', supportsWrite: false },
   { key: 'reports', label: 'Reports', description: 'Attendance analytics and exports', supportsWrite: false },
+  { key: 'results', label: 'Student Results', description: 'Exams, marks, publishing, and guardian links', supportsWrite: true },
   { key: 'vacations', label: 'Vacations', description: 'School vacation dates', supportsWrite: true },
   { key: 'departure_anomalies', label: 'Departure Anomalies', description: 'Departure analysis reports', supportsWrite: true },
   { key: 'devices', label: 'Devices', description: 'Biometric device status and details', supportsWrite: false },

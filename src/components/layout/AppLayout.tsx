@@ -19,6 +19,7 @@ const permissionRoutes: Array<{ path: string; permission: PermissionKey }> = [
   { path: '/attendance', permission: 'attendance' },
   { path: '/punches', permission: 'punches' },
   { path: '/reports', permission: 'reports' },
+  { path: '/results', permission: 'results' },
   { path: '/complaints', permission: 'complaints' },
   { path: '/announcements', permission: 'announcements' },
   { path: '/vacations', permission: 'vacations' },
@@ -34,6 +35,7 @@ const pageLabels: Record<string, string> = {
   '/attendance': 'Attendance',
   '/punches': 'Punches',
   '/reports': 'Reports',
+  '/results': 'Student Results',
   '/complaints': 'Complaints',
   '/announcements': 'Announcements',
   '/vacations': 'Vacations',
@@ -79,7 +81,8 @@ export function AppLayout() {
       && requestedModule
       && requestedModule.path !== '/dashboard'
       && requestedModule.path !== '/attendance'
-      && requestedModule.path !== '/punches') {
+      && requestedModule.path !== '/punches'
+      && requestedModule.path !== '/results') {
     return <Navigate to={'/dashboard'} replace />
   }
 

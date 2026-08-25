@@ -159,3 +159,7 @@
     color-scheme: dark;
   }
 }
+@media print {
+  body { background: white !important; }
+  .result-sheet { max-width: none !important; }
+}
