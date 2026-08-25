@@ -72,6 +72,7 @@ interface ExamSubjectConfigDraft {
   written: string
   practical: string
   pass: string
+  total: string
 }
 
 export function ResultsPage() {
@@ -314,7 +315,7 @@ function StaffResults() {
 
   const openSubjectConfiguration = () => {
     setConfigRows(Object.fromEntries(unusedSubjects.map(subject => [subject.id, {
-      selected: false, creative: '40', written: '40', practical: '20', pass: '33',
+      selected: false, creative: '40', written: '40', practical: '20', pass: '33', total: '100',
     }])))
     setConfigDialog(true)
   }
@@ -324,12 +325,13 @@ function StaffResults() {
     if (!selected.length) return toast.error('Select at least one subject')
     const rows = selected.map((subject, index) => {
       const row = configRows[subject.id]
-      const values = [row.creative, row.written, row.practical, row.pass].map(Number)
+      const values = [row.creative, row.written, row.practical, row.pass, row.total].map(Number)
       return { subject, row, values, index }
     })
     const invalid = rows.find(({ values }) => values.some(value => Number.isNaN(value) || value < 0)
-      || values[0] + values[1] + values[2] <= 0
-      || values[3] > values[0] + values[1] + values[2])
+      || values[4] <= 0
+      || Math.abs(values[0] + values[1] + values[2] - values[4]) > 0.009
+      || values[3] > values[4])
     if (invalid) return toast.error(`Check the marks configuration for ${invalid.subject.name}`)
     const baseOrder = (examSubjectsQuery.data?.length ?? 0) * 10
     const { error } = await db.from('result_exam_subjects').insert(rows.map(({ subject, values, index }) => ({
@@ -446,12 +448,32 @@ function StaffResults() {
           <DialogHeader><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select one or more subjects and keep separate creative, written, practical, and pass marks for each.</DialogDescription></DialogHeader>
           <div className="overflow-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">Written max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Pass mark</TableHead><TableHead className="w-24 text-right">Total</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">Written max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Pass mark</TableHead><TableHead className="w-32">Total max</TableHead></TableRow></TableHeader>
               <TableBody>{unusedSubjects.map(subject => {
-                const row = configRows[subject.id] ?? { selected: false, creative: '40', written: '40', practical: '20', pass: '33' }
+                const row = configRows[subject.id] ?? { selected: false, creative: '40', written: '40', practical: '20', pass: '33', total: '100' }
                 const update = (field: keyof ExamSubjectConfigDraft, value: string | boolean) => setConfigRows(current => ({ ...current, [subject.id]: { ...row, [field]: value } }))
-                const total = (Number(row.creative) || 0) + (Number(row.written) || 0) + (Number(row.practical) || 0)
-                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => update('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => update('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => update('practical', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} max={total} step="0.01" value={row.pass} disabled={!row.selected} onChange={event => update('pass', event.target.value)} /></TableCell><TableCell className="text-right font-semibold">{total}</TableCell></TableRow>
+                const updateComponent = (field: 'creative' | 'written' | 'practical', value: string) => {
+                  const next = { ...row, [field]: value }
+                  next.total = String((Number(next.creative) || 0) + (Number(next.written) || 0) + (Number(next.practical) || 0))
+                  setConfigRows(current => ({ ...current, [subject.id]: next }))
+                }
+                const updateTotal = (value: string) => {
+                  const requested = Number(value)
+                  const currentValues = [Number(row.creative) || 0, Number(row.written) || 0, Number(row.practical) || 0]
+                  const currentTotal = currentValues.reduce((sum, item) => sum + item, 0)
+                  if (!Number.isFinite(requested) || requested < 0 || currentTotal <= 0) {
+                    update('total', value)
+                    return
+                  }
+                  const creative = Math.round((currentValues[0] / currentTotal) * requested * 100) / 100
+                  const practical = Math.round((currentValues[2] / currentTotal) * requested * 100) / 100
+                  const written = Math.round((requested - creative - practical) * 100) / 100
+                  const pass = Math.round(((Number(row.pass) || 0) / currentTotal) * requested * 100) / 100
+                  setConfigRows(current => ({ ...current, [subject.id]: {
+                    ...row, total: value, creative: String(creative), written: String(written), practical: String(practical), pass: String(pass),
+                  } }))
+                }
+                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => updateComponent('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => updateComponent('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => updateComponent('practical', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} max={row.total} step="0.01" value={row.pass} disabled={!row.selected} onChange={event => update('pass', event.target.value)} /></TableCell><TableCell><Input type="number" min={0.01} step="0.01" value={row.total} disabled={!row.selected} onChange={event => updateTotal(event.target.value)} /></TableCell></TableRow>
               })}</TableBody>
             </Table>
           </div>
