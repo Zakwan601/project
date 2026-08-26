@@ -370,6 +370,8 @@ export interface SmsMessage {
   source: string | null
   attendance_record_id: string | null
   student_id: string | null
+  result_exam_id: string | null
+  result_share_link_id: string | null
 }
 
 // Holiday types

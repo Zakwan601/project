@@ -75,6 +75,19 @@ interface ExamSubjectConfigDraft {
   total: string
 }
 
+interface ResultSmsSummary {
+  submitted: number
+  skipped: number
+  failed: number
+  missingPhone: number
+}
+
+interface ResultShareLink {
+  id: string
+  token: string
+  expires_at: string | null
+}
+
 export function ResultsPage() {
   const { role } = useAuth()
   return role === 'student' ? <StudentResults /> : <StaffResults />
@@ -156,6 +169,7 @@ function StaffResults() {
   const [configRows, setConfigRows] = useState<Record<string, ExamSubjectConfigDraft>>({})
   const [drafts, setDrafts] = useState<Record<string, MarkDraft>>({})
   const [shareUrl, setShareUrl] = useState('')
+  const [publishing, setPublishing] = useState(false)
 
   useEffect(() => {
     if (!classId && classes[0]) setClassId(classes[0].id)
@@ -367,12 +381,101 @@ function StaffResults() {
     onError: error => toast.error((error as Error).message),
   })
 
+  const getOrCreateShareLink = async (studentId: string): Promise<ResultShareLink> => {
+    const { data: links, error: linksError } = await db.from('result_share_links')
+      .select('id,token,expires_at')
+      .eq('exam_id', examId)
+      .eq('student_id', studentId)
+      .is('revoked_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (linksError) throw linksError
+
+    const existing = (links?.[0] ?? null) as ResultShareLink | null
+    if (existing && (!existing.expires_at || new Date(existing.expires_at).getTime() > Date.now())) return existing
+
+    const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString()
+    const { data: token, error: createError } = await db.rpc('create_result_share_link', {
+      p_exam_id: examId, p_student_id: studentId, p_expires_at: expiresAt,
+    })
+    if (createError) throw createError
+
+    const { data: created, error: createdError } = await db.from('result_share_links')
+      .select('id,token,expires_at').eq('token', token).single()
+    if (createdError) throw createdError
+    return created as ResultShareLink
+  }
+
+  const sendPublishedResultNotifications = async (): Promise<ResultSmsSummary> => {
+    const summary: ResultSmsSummary = { submitted: 0, skipped: 0, failed: 0, missingPhone: 0 }
+    const roster = studentsQuery.data ?? (await studentsQuery.refetch()).data ?? []
+    if (!roster.length) return summary
+
+    const { data: recipients, error } = await db.from('students')
+      .select('id,first_name,last_name,guardian_phone')
+      .in('id', roster.map(student => student.id))
+    if (error) throw error
+
+    for (const student of recipients ?? []) {
+      const guardianPhone = String(student.guardian_phone ?? '').trim()
+      if (!guardianPhone) {
+        summary.missingPhone += 1
+        continue
+      }
+
+      try {
+        const shareLink = await getOrCreateShareLink(student.id)
+        const studentName = `${student.first_name} ${student.last_name}`.trim()
+        const url = `${window.location.origin}/shared-result/${shareLink.token}`
+        const { data, error: smsError } = await supabase.functions.invoke('send-sms', {
+          body: {
+            contacts: guardianPhone,
+            message: `Result published. See result of "${studentName}": ${url}`,
+            source: 'result_published',
+            studentId: student.id,
+            resultExamId: examId,
+            resultShareLinkId: shareLink.id,
+          },
+        })
+        if (smsError) throw smsError
+        summary.submitted += Number(data?.submitted ?? 0)
+        summary.skipped += Number(data?.skipped ?? 0)
+        summary.failed += Number(data?.failed ?? 0)
+      } catch (notificationError) {
+        console.error(`Could not notify guardian for student ${student.id}`, notificationError)
+        summary.failed += 1
+      }
+    }
+    return summary
+  }
+
   const setStatus = async (status: 'draft' | 'published') => {
-    const { error } = await db.from('result_exams').update({ status }).eq('id', examId)
-    if (error) return toast.error(error.message)
-    await qc.invalidateQueries({ queryKey: ['result-exams', classId] })
-    await qc.invalidateQueries({ queryKey: ['result-preview', examId] })
-    toast.success(status === 'published' ? 'Result published to students' : 'Result returned to draft')
+    if (publishing) return
+    if (status === 'published') setPublishing(true)
+    try {
+      const { error } = await db.from('result_exams').update({ status }).eq('id', examId)
+      if (error) return toast.error(error.message)
+      await qc.invalidateQueries({ queryKey: ['result-exams', classId] })
+      await qc.invalidateQueries({ queryKey: ['result-preview', examId] })
+
+      if (status === 'draft') {
+        toast.success('Result returned to draft')
+        return
+      }
+
+      const summary = await sendPublishedResultNotifications()
+      const details = [`${summary.submitted} SMS submitted`]
+      if (summary.skipped) details.push(`${summary.skipped} already sent`)
+      if (summary.missingPhone) details.push(`${summary.missingPhone} without guardian phone`)
+      if (summary.failed) details.push(`${summary.failed} failed`)
+      const message = `Results published. ${details.join(', ')}.`
+      if (summary.failed) toast.warning(message)
+      else toast.success(message)
+    } catch (error) {
+      toast.error(`Results were published, but guardian notification failed: ${(error as Error).message}`)
+    } finally {
+      setPublishing(false)
+    }
   }
 
   const createShareLink = async () => {
@@ -416,7 +519,7 @@ function StaffResults() {
           </TabsContent>
 
           <TabsContent value="workspace" className="mt-4 space-y-4">
-            {selectedExam && <Card><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle>{selectedExam.title || selectedExam.result_exam_types.name}</CardTitle><CardDescription>{selectedExam.classes.name} · {selectedExam.exam_date}</CardDescription></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam.status === 'draft' && <Button variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button>}{canWrite && <Button onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {selectedExam.status === 'published' ? 'Unpublish' : 'Publish results'}</Button>}</div></div></CardHeader></Card>}
+            {selectedExam && <Card><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle>{selectedExam.title || selectedExam.result_exam_types.name}</CardTitle><CardDescription>{selectedExam.classes.name} · {selectedExam.exam_date}</CardDescription></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam.status === 'draft' && <Button variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button>}{canWrite && <Button disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Publishing & sending SMS…' : selectedExam.status === 'published' ? 'Unpublish' : 'Publish results'}</Button>}</div></div></CardHeader></Card>}
 
             {!examSubjectsQuery.data?.length ? <EmptyState title="No subjects configured" description="Add subjects to this exam and define their component marks." /> : <>
               <Card><CardHeader><CardTitle className="text-base">Select student</CardTitle><CardDescription>All configured subjects will appear together for the selected student.</CardDescription></CardHeader><CardContent><Select value={selectedStudentId} onValueChange={value => { setSelectedStudentId(value); setShareUrl('') }}><SelectTrigger className="max-w-xl"><SelectValue placeholder="Choose student by ID, name, or roll" /></SelectTrigger><SelectContent>{studentsQuery.data?.map(student => <SelectItem key={student.id} value={student.id}>{student.admission_number} · {student.first_name} {student.last_name} · Roll {student.roll_number ?? '—'}</SelectItem>)}</SelectContent></Select></CardContent></Card>
