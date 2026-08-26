@@ -337,7 +337,7 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
               {isPresent
                 ? <CheckCircle className="h-3.5 w-3.5" />
                 : <Clock3 className="h-3.5 w-3.5" />}
-              {isPresent ? 'Present' : 'Late — after 9:00 AM'}
+              {isPresent ? 'Present' : `Late — after ${lateCutoffLabel(day.checkIn.punched_at)}`}
             </p>
           </div>
         </div>
@@ -417,8 +417,13 @@ function punchTime(value: string) {
 }
 
 function isOnTimeArrival(value: string) {
-  const { time24 } = splitPunchTime(value)
-  return /^\d{2}:\d{2}:\d{2}$/.test(time24) && time24 <= '09:00:00'
+  const { date, time24 } = splitPunchTime(value)
+  const cutoff = date >= '2026-08-26' ? '08:20:00' : '09:00:00'
+  return /^\d{2}:\d{2}:\d{2}$/.test(time24) && time24 <= cutoff
+}
+
+function lateCutoffLabel(value: string) {
+  return splitPunchTime(value).date >= '2026-08-26' ? '8:20 AM' : '9:00 AM'
 }
 
 function splitPunchTime(value: string) {
