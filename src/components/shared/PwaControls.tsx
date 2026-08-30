@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -30,6 +31,8 @@ export function PwaControls() {
   const updateServiceWorkerRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [needsRefresh, setNeedsRefresh] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateError, setUpdateError] = useState('')
   const [offline, setOffline] = useState(!navigator.onLine)
   const [showIosHelp, setShowIosHelp] = useState(false)
   const [installed, setInstalled] = useState(isStandalone)
@@ -79,8 +82,22 @@ export function PwaControls() {
     if (outcome === 'accepted') setInstallPrompt(null)
   }
 
-  const applyUpdate = () => {
-    void updateServiceWorkerRef.current?.(true)
+  const applyUpdate = async () => {
+    const updateServiceWorker = updateServiceWorkerRef.current
+    if (!updateServiceWorker) {
+      setUpdateError('The update service is not ready. Please check your connection and try again.')
+      return
+    }
+
+    setIsUpdating(true)
+    setUpdateError('')
+    try {
+      await updateServiceWorker(true)
+    } catch (error) {
+      console.error('App update failed:', error)
+      setUpdateError('The update could not be installed. Check your connection and try again.')
+      setIsUpdating(false)
+    }
   }
 
   return (
@@ -95,12 +112,39 @@ export function PwaControls() {
         </span>
       )}
 
-      {needsRefresh && (
-        <Button size="sm" variant="outline" onClick={applyUpdate} title="Install the latest app update">
-          <RefreshCw className="h-4 w-4" />
-          <span className="hidden sm:inline">Update</span>
-        </Button>
-      )}
+      <Dialog open={needsRefresh}>
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={false}
+          onEscapeKeyDown={event => event.preventDefault()}
+          onPointerDownOutside={event => event.preventDefault()}
+          onInteractOutside={event => event.preventDefault()}
+        >
+          <DialogHeader className="items-center text-center sm:text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <RefreshCw className={isUpdating ? 'h-6 w-6 animate-spin' : 'h-6 w-6'} />
+            </span>
+            <DialogTitle>App update required</DialogTitle>
+            <DialogDescription>
+              A new version of Axentra is ready. You must update and restart before continuing.
+            </DialogDescription>
+          </DialogHeader>
+
+          {updateError && (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+              {updateError}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button className="w-full" size="lg" onClick={applyUpdate} disabled={isUpdating}>
+              <RefreshCw className={isUpdating ? 'animate-spin' : undefined} />
+              {isUpdating ? 'Updating...' : 'Update and restart'}
+            </Button>
+          </DialogFooter>
+          <p className="text-center text-xs text-muted-foreground">The app will reopen automatically with the latest version.</p>
+        </DialogContent>
+      </Dialog>
 
       {!installed && (installPrompt || ios) && (
         <Button size="sm" variant="outline" onClick={install} title="Install Axentra on this device">

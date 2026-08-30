@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
-import { BarChart3, Download } from 'lucide-react'
+import { BarChart3, Download, Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
@@ -41,8 +41,18 @@ interface StudentReportRow {
 }
 
 function escapeCsvCell(value: string | number | null) {
-  const text = value == null ? '' : String(value)
+  let text = value == null ? '' : String(value)
+  // Prevent spreadsheet applications from interpreting user-controlled values as formulas.
+  if (/^[=+\-@]/.test(text)) text = String.fromCharCode(39) + text
   return `"${text.replace(/"/g, '""')}"`
+}
+
+function chunkDates(dates: string[], size: number) {
+  const chunks: string[][] = []
+  for (let index = 0; index < dates.length; index += size) {
+    chunks.push(dates.slice(index, index + size))
+  }
+  return chunks
 }
 
 function useClassAttendanceReport(classId: string, startDate: string, endDate: string) {
@@ -213,9 +223,12 @@ export function ReportsPage() {
     const dailyHeaders = dailyStudentAttendance.dates.map(date => formatDisplayDate(date))
     const headers = [
       'SN',
+      'Class',
+      'Report From',
+      'Report To',
       'Roll',
-      'Student',
-      'Admission No.',
+      'Student Name',
+      'Admission Number',
       ...dailyHeaders,
       'Present',
       'Absent',
@@ -226,6 +239,9 @@ export function ReportsPage() {
     ]
     const rows = studentReport.map((row, index) => [
       index + 1,
+      selectedClassName,
+      startDate,
+      endDate,
       row.roll,
       row.name,
       row.admission,
@@ -238,7 +254,7 @@ export function ReportsPage() {
       row.late,
       row.excused,
       row.total,
-      row.percentage,
+      Number(row.percentage.toFixed(2)),
     ])
     const csv = [headers, ...rows]
       .map(row => row.map(escapeCsvCell).join(','))
@@ -249,12 +265,30 @@ export function ReportsPage() {
     const classSlug = selectedClassName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'class'
     link.href = url
     link.download = 'attendance-' + classSlug + '-' + startDate + '-to-' + endDate + '.csv'
+    document.body.appendChild(link)
     link.click()
+    link.remove()
     URL.revokeObjectURL(url)
   }
 
+  const printStudentReport = () => {
+    if (!studentReport?.length || !dailyStudentAttendance) return
+
+    const pageStyle = document.createElement('style')
+    pageStyle.id = 'student-report-page-style'
+    pageStyle.textContent = '@page { size: A4 landscape; margin: 10mm; }'
+    document.head.appendChild(pageStyle)
+    const cleanup = () => {
+      document.body.classList.remove('student-report-printing')
+      pageStyle.remove()
+    }
+    document.body.classList.add('student-report-printing')
+    window.addEventListener('afterprint', cleanup, { once: true })
+    window.print()
+  }
+
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="student-report-screen space-y-3 sm:space-y-6">
       <PageHeader
         title="Reports"
         description="Attendance analytics and insights"
@@ -316,7 +350,7 @@ export function ReportsPage() {
               }}
               className="col-span-2 sm:w-72"
             />
-            <div className="flex items-end">
+            <div className="col-span-2 flex items-end gap-2 sm:col-span-1">
               <Button
                 type="button"
                 variant="outline"
@@ -324,6 +358,14 @@ export function ReportsPage() {
                 disabled={!studentReport?.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
               >
                 <Download /> Export CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={printStudentReport}
+                disabled={!studentReport?.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
+              >
+                <Printer /> Print Report
               </Button>
             </div>
           </div>
@@ -463,6 +505,81 @@ export function ReportsPage() {
         </CardContent>
       </Card>
 
+      {studentReport && studentReport.length > 0 && dailyStudentAttendance && (
+        <div className="student-report-print" aria-hidden="true">
+          <header className="print-report-header">
+            <div>
+              <h1>Student Attendance Report</h1>
+              <p>{selectedClassName}</p>
+            </div>
+            <dl>
+              <dt>Reporting period</dt>
+              <dd>{formatDisplayDate(startDate)} to {formatDisplayDate(endDate)}</dd>
+              <dt>Students</dt>
+              <dd>{studentReport.length}</dd>
+              <dt>Generated</dt>
+              <dd>{format(new Date(), 'dd MMM yyyy, hh:mm a')}</dd>
+            </dl>
+          </header>
+
+          <section className="print-summary-section">
+            <div className="print-section-heading">
+              <h2>Attendance Summary</h2>
+              <p>Consolidated attendance performance for the selected period</p>
+            </div>
+            <table className="print-summary-table">
+              <thead>
+                <tr>
+                  <th>SN</th><th>Roll</th><th>Student</th><th>Admission No.</th>
+                  <th>Present</th><th>Absent</th><th>Late</th><th>Leave</th>
+                  <th>Total</th><th>Attendance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {studentReport.map((row, index) => (
+                  <tr key={row.id}>
+                    <td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>
+                    <td>{row.present}</td><td>{row.absent}</td><td>{row.late}</td><td>{row.excused}</td>
+                    <td>{row.total}</td><td>{Number(row.percentage.toFixed(2))}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="print-footnote">Attendance percentage is based on recorded attendance days in the selected reporting period.</p>
+          </section>
+
+          {chunkDates(dailyStudentAttendance.dates, 12).map(dates => (
+            <section className="print-daily-section" key={dates[0]}>
+              <div className="print-section-heading print-daily-heading">
+                <div>
+                  <h2>Daily Attendance</h2>
+                  <p>{formatDisplayDate(dates[0])} to {formatDisplayDate(dates[dates.length - 1])}</p>
+                </div>
+                <p className="print-legend">P Present | A Absent | L Late | E Approved Leave | - No Record</p>
+              </div>
+              <table className="print-daily-table">
+                <thead>
+                  <tr>
+                    <th>SN</th><th>Roll</th><th>Student</th>
+                    {dates.map(date => <th key={date}>{format(new Date(date + 'T00:00:00'), 'dd MMM')}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentReport.map((row, index) => (
+                    <tr key={row.id}>
+                      <td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td>
+                      {dates.map(date => {
+                        const status = dailyStudentAttendance.statuses[dailyStatusKey(row.id, date)]
+                        return <td className={status ? 'status-' + status : 'status-none'} key={date}>{status ? dailyStatusMeta[status].mark : '-'}</td>
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
