@@ -18,6 +18,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { formatDisplayDate } from '@/lib/dateTime'
 import type { AttendanceStatus } from '@/types/database'
 
@@ -202,6 +203,8 @@ function useDailyReport(startDate: string, endDate: string) {
 export function ReportsPage() {
   const { data: classes } = useClasses()
   const [selectedClass, setSelectedClass] = useState('')
+  const [studentScope, setStudentScope] = useState<'all' | 'below'>('all')
+  const [percentageThreshold, setPercentageThreshold] = useState('75')
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
 
@@ -212,13 +215,27 @@ export function ReportsPage() {
     error: dailyStudentError,
   } = useDailyStudentAttendance(selectedClass, startDate, endDate)
   const selectedClassName = classes?.find(c => c.id === selectedClass)?.name ?? 'selected class'
+  const parsedPercentageThreshold = Number(percentageThreshold)
+  const percentageFilterValid = percentageThreshold.trim() !== ''
+    && Number.isFinite(parsedPercentageThreshold)
+    && parsedPercentageThreshold >= 0
+    && parsedPercentageThreshold <= 100
+  const reportRows = (studentReport ?? []).filter(row =>
+    studentScope === 'all'
+      || (percentageFilterValid && Number(row.percentage) < parsedPercentageThreshold)
+  )
+  const studentFilterDescription = studentScope === 'all'
+    ? 'All students'
+    : percentageFilterValid
+      ? 'Attendance below ' + parsedPercentageThreshold + '%'
+      : 'Invalid percentage filter'
   const { data: dailyData, isLoading: dailyLoading } = useDailyReport(
     format(subDays(new Date(), 14), 'yyyy-MM-dd'),
     format(new Date(), 'yyyy-MM-dd')
   )
 
   const exportStudentReport = () => {
-    if (!studentReport?.length || !dailyStudentAttendance) return
+    if (!reportRows.length || !dailyStudentAttendance) return
 
     const dailyHeaders = dailyStudentAttendance.dates.map(date => formatDisplayDate(date))
     const headers = [
@@ -226,6 +243,7 @@ export function ReportsPage() {
       'Class',
       'Report From',
       'Report To',
+      'Student Filter',
       'Roll',
       'Student Name',
       'Admission Number',
@@ -237,11 +255,12 @@ export function ReportsPage() {
       'Total Days',
       'Attendance %',
     ]
-    const rows = studentReport.map((row, index) => [
+    const rows = reportRows.map((row, index) => [
       index + 1,
       selectedClassName,
       startDate,
       endDate,
+      studentFilterDescription,
       row.roll,
       row.name,
       row.admission,
@@ -272,7 +291,7 @@ export function ReportsPage() {
   }
 
   const printStudentReport = () => {
-    if (!studentReport?.length || !dailyStudentAttendance) return
+    if (!reportRows.length || !dailyStudentAttendance) return
 
     const pageStyle = document.createElement('style')
     pageStyle.id = 'student-report-page-style'
@@ -340,6 +359,39 @@ export function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="col-span-2 min-w-0 space-y-1.5 sm:col-span-1 sm:min-w-[190px]">
+              <Label className="text-xs">Students</Label>
+              <Select value={studentScope} onValueChange={value => setStudentScope(value as 'all' | 'below')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All students</SelectItem>
+                  <SelectItem value="below">Below attendance percentage</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {studentScope === 'below' && (
+              <div className="col-span-1 min-w-0 space-y-1.5 sm:w-36">
+                <Label className="text-xs" htmlFor="attendance-percentage-filter">Below percentage</Label>
+                <div className="relative">
+                  <Input
+                    id="attendance-percentage-filter"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    inputMode="decimal"
+                    value={percentageThreshold}
+                    onChange={event => setPercentageThreshold(event.target.value)}
+                    aria-invalid={!percentageFilterValid}
+                    className="pr-8"
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">%</span>
+                </div>
+                {!percentageFilterValid && <p className="text-xs text-destructive">Enter a value from 0 to 100.</p>}
+              </div>
+            )}
             <DateFilter
               mode="range"
               startDate={startDate}
@@ -355,7 +407,7 @@ export function ReportsPage() {
                 type="button"
                 variant="outline"
                 onClick={exportStudentReport}
-                disabled={!studentReport?.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
+                disabled={!reportRows.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
               >
                 <Download /> Export CSV
               </Button>
@@ -363,7 +415,7 @@ export function ReportsPage() {
                 type="button"
                 variant="outline"
                 onClick={printStudentReport}
-                disabled={!studentReport?.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
+                disabled={!reportRows.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
               >
                 <Printer /> Print Report
               </Button>
@@ -377,11 +429,11 @@ export function ReportsPage() {
           {studentLoading && selectedClass && <LoadingState />}
           {studentError && <ErrorState message={(studentError as Error).message} />}
           {dailyStudentError && <ErrorState message={(dailyStudentError as Error).message} />}
-          {studentReport && studentReport.length > 0 && dailyStudentLoading && (
+          {reportRows.length > 0 && dailyStudentLoading && (
             <LoadingState message="Loading daily attendance..." />
           )}
 
-          {studentReport && studentReport.length > 0 && (
+          {reportRows.length > 0 && (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -398,7 +450,7 @@ export function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {studentReport.map(row => (
+                  {reportRows.map(row => (
                     <TableRow key={row.id}>
                       <TableCell>{row.roll ?? '—'}</TableCell>
                       <TableCell className="font-medium">{row.name}</TableCell>
@@ -423,7 +475,7 @@ export function ReportsPage() {
             </div>
           )}
 
-          {studentReport && studentReport.length > 0 && dailyStudentAttendance && (
+          {reportRows.length > 0 && dailyStudentAttendance && (
             <div className="mt-6 space-y-3 border-t pt-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -462,7 +514,7 @@ export function ReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {studentReport.map((row, index) => (
+                    {reportRows.map((row, index) => (
                       <TableRow key={row.id}>
                         <TableCell className="sticky left-0 z-10 bg-card text-center text-muted-foreground">
                           {index + 1}
@@ -502,10 +554,15 @@ export function ReportsPage() {
               No attendance data for selected period
             </div>
           )}
+          {studentReport && studentReport.length > 0 && reportRows.length === 0 && studentScope === 'below' && percentageFilterValid && !studentLoading && (
+            <div className="py-12 text-center text-muted-foreground text-sm">
+              No students have attendance below {parsedPercentageThreshold}% for the selected period.
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {studentReport && studentReport.length > 0 && dailyStudentAttendance && (
+      {reportRows.length > 0 && dailyStudentAttendance && (
         <div className="student-report-print" aria-hidden="true">
           <header className="print-report-header">
             <div>
@@ -516,7 +573,9 @@ export function ReportsPage() {
               <dt>Reporting period</dt>
               <dd>{formatDisplayDate(startDate)} to {formatDisplayDate(endDate)}</dd>
               <dt>Students</dt>
-              <dd>{studentReport.length}</dd>
+              <dd>{reportRows.length}</dd>
+              <dt>Student filter</dt>
+              <dd>{studentFilterDescription}</dd>
               <dt>Generated</dt>
               <dd>{format(new Date(), 'dd MMM yyyy, hh:mm a')}</dd>
             </dl>
@@ -536,7 +595,7 @@ export function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {studentReport.map((row, index) => (
+                {reportRows.map((row, index) => (
                   <tr key={row.id}>
                     <td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>
                     <td>{row.present}</td><td>{row.absent}</td><td>{row.late}</td><td>{row.excused}</td>
@@ -565,7 +624,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {studentReport.map((row, index) => (
+                  {reportRows.map((row, index) => (
                     <tr key={row.id}>
                       <td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td>
                       {dates.map(date => {
