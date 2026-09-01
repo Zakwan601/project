@@ -5,11 +5,13 @@ import { toast } from 'sonner'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 
 export const STUDENTS_KEY = 'students'
+const STUDENTS_STALE_TIME = 10 * 60 * 1000
 
 export function useStudents(classId?: string) {
   return useQuery({
     queryKey: [STUDENTS_KEY, { classId }],
     queryFn: () => studentsService.getAll(classId),
+    staleTime: STUDENTS_STALE_TIME,
   })
 }
 
@@ -18,6 +20,7 @@ export function useStudent(id: string) {
     queryKey: [STUDENTS_KEY, id],
     queryFn: () => studentsService.getById(id),
     enabled: !!id,
+    staleTime: STUDENTS_STALE_TIME,
   })
 }
 

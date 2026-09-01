@@ -315,6 +315,24 @@
     font-weight: 700;
   }
 
+  .exam-results-print-table {
+    table-layout: auto !important;
+    font-size: 7pt;
+  }
+
+  .exam-results-print-table th,
+  .exam-results-print-table td {
+    width: auto !important;
+    padding: 2px !important;
+    text-align: center !important;
+  }
+
+  .exam-results-print-table th:nth-child(3),
+  .exam-results-print-table td:nth-child(3) {
+    min-width: 90px;
+    text-align: left !important;
+  }
+
   .print-footnote {
     margin-top: 5px;
     font-size: 7.5pt;

@@ -40,7 +40,7 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
               <TableRow>
                 <TableHead className="min-w-44">Subject</TableHead>
                 <TableHead className="text-center">Creative</TableHead>
-                <TableHead className="text-center">Written</TableHead>
+                <TableHead className="text-center">MCQ</TableHead>
                 <TableHead className="text-center">Practical</TableHead>
                 <TableHead className="text-center">Obtained</TableHead>
                 <TableHead className="text-center">Letter</TableHead>

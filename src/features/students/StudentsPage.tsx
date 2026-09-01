@@ -761,7 +761,7 @@ function StudentAccountForm({ student, session, creating, setCreating, onClose }
   const queryClient = useQueryClient()
 
   const makeEmail = (currentStudent: StudentWithClass) => {
-    const domain = (import.meta.env.VITE_STUDENT_LOGIN_DOMAIN || 'students.school').trim()
+    const domain = (import.meta.env.VITE_STUDENT_LOGIN_DOMAIN || 'nmdc.edu').trim()
     const localPart = currentStudent.admission_number.toLowerCase().replace(/[^a-z0-9._-]/g, '')
     return `${localPart || currentStudent.id.slice(0, 8)}@${domain}`
   }
