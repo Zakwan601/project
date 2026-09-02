@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Download, Eye, FilePlus2, Link2, Pencil, Plus, Power, Printer, Send, Settings2, Trash2 } from 'lucide-react'
+import { BarChart3, BookOpenCheck, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, Eye, FilePlus2, GraduationCap, LayoutDashboard, Link2, Pencil, Plus, Power, Printer, Search, Send, Settings2, Trash2, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +18,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Progress } from '@/components/ui/progress'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { ResultExam, ResultExamType, StudentResultPayload, Student } from '@/types/database'
 import { downloadCsv } from '@/lib/csv'
 
@@ -205,10 +208,11 @@ function StaffResults() {
   const isAdmin = profile?.role === 'admin'
   const qc = useQueryClient()
   const { data: classes = [], isLoading: classesLoading } = useClasses()
-  const [activeTab, setActiveTab] = useState('exams')
+  const [activeTab, setActiveTab] = useState('overview')
   const [classId, setClassId] = useState('')
   const [examId, setExamId] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState('')
+  const [studentSearch, setStudentSearch] = useState('')
   const [examDialog, setExamDialog] = useState(false)
   const [subjectDialog, setSubjectDialog] = useState(false)
   const [configDialog, setConfigDialog] = useState(false)
@@ -300,7 +304,7 @@ function StaffResults() {
 
   const examMarksQuery = useQuery<MarkRow[]>({
     queryKey: ['result-exam-marks', examId],
-    enabled: Boolean(examId && activeTab === 'results' && examSubjectsQuery.data?.length),
+    enabled: Boolean(examId && examSubjectsQuery.data?.length),
     queryFn: async () => {
       const subjectIds = examSubjectsQuery.data!.map(item => item.id)
       const { data, error } = await db.from('result_marks').select('*')
@@ -453,7 +457,7 @@ function StaffResults() {
     }).select('id').single()
     if (error) return toast.error(error.message)
     await qc.invalidateQueries({ queryKey: ['result-exams', classId] })
-    setExamDialog(false); setExamForm({ typeId: '', title: '', date: '' }); setExamId(data.id); setActiveTab('workspace')
+    setExamDialog(false); setExamForm({ typeId: '', title: '', date: '' }); setExamId(data.id); setActiveTab('overview')
     toast.success('Exam created')
   }
 
@@ -716,69 +720,111 @@ function StaffResults() {
   }
 
   const unusedSubjects = useMemo(() => subjectsQuery.data?.filter(subject => subject.is_active && !examSubjectsQuery.data?.some(item => item.subject_id === subject.id)) ?? [], [subjectsQuery.data, examSubjectsQuery.data])
+  const selectedStudent = studentsQuery.data?.find(student => student.id === selectedStudentId)
+  const completedResults = examResultRows.filter(row => row.complete).length
+  const publishedExams = examsQuery.data?.filter(exam => exam.status === 'published').length ?? 0
+  const filteredStudents = useMemo(() => {
+    const query = studentSearch.trim().toLowerCase()
+    if (!query) return studentsQuery.data ?? []
+    return (studentsQuery.data ?? []).filter(student => `${student.first_name} ${student.last_name} ${student.admission_number} ${student.roll_number ?? ''}`.toLowerCase().includes(query))
+  }, [studentSearch, studentsQuery.data])
   if (classesLoading) return <LoadingState />
 
   return (
     <div className="student-report-screen">
-      <PageHeader title="Student Results" description="Configure exams, enter component marks, publish report cards, and share guardian links." />
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="w-full sm:max-w-md"><Label>Class and academic session</Label><Select value={classId} onValueChange={value => { setClassId(value); setExamId(''); setSelectedStudentId(''); setActiveTab('exams') }}><SelectTrigger className="mt-1"><SelectValue placeholder="Select class" /></SelectTrigger><SelectContent>{classes.map(item => <SelectItem key={item.id} value={item.id}>{item.name} ({item.grade}-{item.section}) · {item.academic_years?.name}</SelectItem>)}</SelectContent></Select></div>
-        {canWrite && <Button onClick={() => setExamDialog(true)} disabled={!classId}><FilePlus2 className="mr-2 h-4 w-4" /> New exam</Button>}
-      </div>
-
+      <section className="mb-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-sky-500/5 shadow-sm">
+        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-primary p-2.5 text-primary-foreground shadow-sm"><GraduationCap className="h-6 w-6" /></div>
+              <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Academic performance</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Results workspace</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Move from exam setup to marks, review, and publication without losing context.</p></div>
+            </div>
+            <div className="max-w-xl"><Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Class and session</Label><Select value={classId} onValueChange={value => { setClassId(value); setExamId(''); setSelectedStudentId(''); setStudentSearch(''); setActiveTab('overview') }}><SelectTrigger className="mt-2 h-11 bg-background/90 shadow-sm"><SelectValue placeholder="Choose a class to begin" /></SelectTrigger><SelectContent>{classes.map(item => <SelectItem key={item.id} value={item.id}>{item.name} ({item.grade}-{item.section}) · {item.academic_years?.name}</SelectItem>)}</SelectContent></Select></div>
+          </div>
+          <div className="flex flex-wrap gap-3 lg:justify-end">
+            {classId && <div className="flex gap-2 rounded-xl border bg-background/80 p-2 shadow-sm"><MiniStat label="Students" value={studentsQuery.data?.length ?? '—'} /><MiniStat label="Exams" value={examsQuery.data?.length ?? '—'} /><MiniStat label="Published" value={examsQuery.data?.filter(exam => exam.status === 'published').length ?? '—'} /></div>}
+            {canWrite && <Button className="h-11 self-end shadow-sm" onClick={() => setExamDialog(true)} disabled={!classId}><FilePlus2 className="mr-2 h-4 w-4" /> Create exam</Button>}
+          </div>
+        </div>
+      </section>
       {!classId ? <EmptyState title="Select a class" /> : examsQuery.isLoading ? <LoadingState /> : examsQuery.error ? <ErrorState message={(examsQuery.error as Error).message} /> : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-            <TabsTrigger value="exams">Examinations</TabsTrigger>
-            <TabsTrigger value="workspace" disabled={!selectedExam}>Marks workspace</TabsTrigger>
-            <TabsTrigger value="preview" disabled={!selectedStudentId}>Report card</TabsTrigger>
-            <TabsTrigger value="results" disabled={!selectedExam}>All results</TabsTrigger>
-            {isAdmin && <TabsTrigger value="catalog"><Settings2 className="h-4 w-4" /> Subjects & types</TabsTrigger>}
-          </TabsList>
-          <TabsContent value="exams" className="mt-4">
-            {!examsQuery.data?.length ? <EmptyState title="No examinations" description="Create the first exam for this class." /> : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{examsQuery.data.map(exam => (
-              <Card key={exam.id} className={exam.id === examId ? 'border-primary' : undefined}>
-                <CardHeader className="pb-3"><div className="flex items-start justify-between gap-2"><div><CardTitle className="text-base">{exam.title || exam.result_exam_types.name}</CardTitle><CardDescription>{exam.exam_date} · {exam.academic_years.name}</CardDescription></div><Badge variant={exam.status === 'published' ? 'default' : 'secondary'}>{exam.status}</Badge></div></CardHeader>
-                <CardContent><Button className="w-full" variant={exam.id === examId ? 'default' : 'outline'} onClick={() => { setExamId(exam.id); setSelectedStudentId(''); setActiveTab('workspace') }}><Eye className="mr-2 h-4 w-4" /> Manage exam</Button></CardContent>
-              </Card>
-            ))}</div>}
-          </TabsContent>
+          <div className="mb-5 overflow-x-auto rounded-xl border bg-muted/30 p-1.5">
+            <TabsList className="h-auto min-w-max justify-start gap-1 bg-transparent p-0">
+              <TabsTrigger value="overview" className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><LayoutDashboard className="h-4 w-4" /> Overview</TabsTrigger>
+              <TabsTrigger value="marks" disabled={!selectedExam} className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><ClipboardList className="h-4 w-4" /> Enter marks</TabsTrigger>
+              <TabsTrigger value="results" disabled={!selectedExam} className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><BarChart3 className="h-4 w-4" /> All results</TabsTrigger>
+              <TabsTrigger value="preview" disabled={!selectedStudentId} className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><Eye className="h-4 w-4" /> Report card</TabsTrigger>
+              {isAdmin && <TabsTrigger value="catalog" className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><Settings2 className="h-4 w-4" /> Settings</TabsTrigger>}
+            </TabsList>
+          </div>
+          <TabsContent value="overview" className="mt-0 space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <WorkspaceMetric icon={Users} label="Class roster" value={studentsQuery.data?.length ?? 0} detail="enrolled students" />
+              <WorkspaceMetric icon={BookOpenCheck} label="Examinations" value={examsQuery.data?.length ?? 0} detail="in this session" />
+              <WorkspaceMetric icon={CheckCircle2} label="Published" value={publishedExams} detail="visible results" tone="success" />
+              <WorkspaceMetric icon={ClipboardList} label="Drafts" value={(examsQuery.data?.length ?? 0) - publishedExams} detail="need attention" tone="warning" />
+            </div>
 
-          <TabsContent value="workspace" className="mt-4 space-y-4">
-            {selectedExam && <Card><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle>{selectedExam.title || selectedExam.result_exam_types.name}</CardTitle><CardDescription>{selectedExam.classes.name} · {selectedExam.exam_date}</CardDescription></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam.status === 'draft' && <Button variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button>}{canWrite && <Button disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Publishing & sending SMS…' : selectedExam.status === 'published' ? 'Unpublish' : 'Publish results'}</Button>}</div></div></CardHeader></Card>}
-
-            {!examSubjectsQuery.data?.length ? <EmptyState title="No subjects configured" description="Add subjects to this exam and define their component marks." /> : <>
-              <Card><CardHeader><CardTitle className="text-base">Select student</CardTitle><CardDescription>All configured subjects will appear together for the selected student.</CardDescription></CardHeader><CardContent><Select value={selectedStudentId} onValueChange={value => { setSelectedStudentId(value); setShareUrl('') }}><SelectTrigger className="max-w-xl"><SelectValue placeholder="Choose student by ID, name, or roll" /></SelectTrigger><SelectContent>{studentsQuery.data?.map(student => <SelectItem key={student.id} value={student.id}>{student.admission_number} · {student.first_name} {student.last_name} · Roll {student.roll_number ?? '—'}</SelectItem>)}</SelectContent></Select></CardContent></Card>
-              {!selectedStudentId ? <EmptyState title="Choose a student to enter marks" description="You will see every subject serially in one table." /> : <Card><CardHeader><CardTitle className="text-base">All subject marks</CardTitle><CardDescription>{studentsQuery.data?.find(student => student.id === selectedStudentId)?.admission_number} · {studentsQuery.data?.find(student => student.id === selectedStudentId)?.first_name} {studentsQuery.data?.find(student => student.id === selectedStudentId)?.last_name}</CardDescription></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative</TableHead><TableHead className="w-32">MCQ</TableHead><TableHead className="w-32">Practical</TableHead><TableHead className="w-24 text-center">Absent</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{examSubjectsQuery.data.map(examSubject => {
-                const draft = drafts[examSubject.id] ?? { creative: '', written: '', practical: '', absent: false }
-                const total = [draft.creative, draft.written, draft.practical].reduce((sum, value) => sum + (Number(value) || 0), 0)
-                const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
-                return <TableRow key={examSubject.id}><TableCell><p className="font-medium">{examSubject.subjects.name}</p><p className="text-xs text-muted-foreground">{examSubject.subjects.code} · Pass {examSubject.pass_mark} / {examSubject.creative_max + examSubject.written_max + examSubject.practical_max}</p></TableCell><MarkInput value={draft.creative} max={examSubject.creative_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('creative', value)} /><MarkInput value={draft.written} max={examSubject.written_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('written', value)} /><MarkInput value={draft.practical} max={examSubject.practical_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('practical', value)} /><TableCell className="text-center"><Checkbox checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></TableCell><TableCell className="text-right font-semibold">{draft.absent ? 'Absent' : total}</TableCell></TableRow>
-              })}</TableBody></Table></div>{canWrite && selectedExam?.status === 'draft' && <div className="flex flex-col gap-2 border-t p-4 sm:flex-row sm:items-center sm:justify-between"><p className={`text-sm ${marksSaveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">{marksSaveStatus === 'saving' ? 'Saving changes...' : marksSaveStatus === 'saved' ? 'All changes saved' : marksSaveStatus === 'error' ? 'Could not save changes' : 'Changes save automatically'}</p><Button variant="outline" onClick={() => setActiveTab('preview')}><Eye className="mr-2 h-4 w-4" /> Preview report</Button></div>}</CardContent></Card>}
-            </>}
-
-            {selectedStudentId && <Card><CardHeader><CardTitle className="text-base">Report card and guardian link</CardTitle><CardDescription>Guardian links are available after publication and expire after 30 days.</CardDescription></CardHeader><CardContent><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setActiveTab('preview')}><Eye className="mr-2 h-4 w-4" /> View report card</Button>{canWrite && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Create guardian link</Button>}</div>{shareUrl && <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2"><Input readOnly value={shareUrl} /><Button size="icon" variant="ghost" onClick={() => navigator.clipboard.writeText(shareUrl)}><Copy className="h-4 w-4" /></Button></div>}</CardContent></Card>}
-          </TabsContent>
-
-          <TabsContent value="results" className="mt-4">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <CardTitle>All student results</CardTitle>
-                    <CardDescription>
-                      {selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam?.exam_date}
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" onClick={exportExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}>
-                      <Download className="mr-2 h-4 w-4" /> Export CSV
-                    </Button>
-                    <Button type="button" variant="outline" onClick={printExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}>
-                      <Printer className="mr-2 h-4 w-4" /> Print Report
-                    </Button>
-                  </div>
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-muted/20">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div><CardTitle className="text-lg">Examinations</CardTitle><CardDescription>Select an exam to continue its workflow.</CardDescription></div>
+                  {canWrite && <Button size="sm" onClick={() => setExamDialog(true)}><Plus className="mr-2 h-4 w-4" /> New examination</Button>}
                 </div>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-5">
+                {!examsQuery.data?.length ? <EmptyState title="No examinations yet" description="Create an exam to configure subjects and begin entering marks." /> : <div className="grid gap-3 lg:grid-cols-2">{examsQuery.data.map(exam => {
+                  const selected = exam.id === examId
+                  return <button type="button" key={exam.id} onClick={() => { setExamId(exam.id); setSelectedStudentId(''); setShareUrl('') }} className={`group rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md ${selected ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'bg-card'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 gap-3"><div className={`rounded-lg p-2.5 ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}><CalendarDays className="h-5 w-5" /></div><div className="min-w-0"><p className="truncate font-semibold">{exam.title || exam.result_exam_types.name}</p><p className="mt-1 text-sm text-muted-foreground">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')} · {exam.academic_years.name}</p></div></div>
+                      <Badge variant={exam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{exam.status}</Badge>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between border-t pt-3 text-sm"><span className={selected ? 'font-medium text-primary' : 'text-muted-foreground'}>{selected ? 'Currently selected' : 'Select exam'}</span><ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
+                  </button>
+                })}</div>}
+              </CardContent>
+            </Card>
+
+            {selectedExam && <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Ready to continue</p><h3 className="mt-1 text-lg font-semibold">{selectedExam.title || selectedExam.result_exam_types.name}</h3><p className="text-sm text-muted-foreground">{examSubjectsQuery.data?.length ?? 0} configured subjects · {selectedExam.status === 'published' ? 'Results are published' : 'Draft in progress'}</p></div><Button onClick={() => setActiveTab('marks')}>Open marks workspace <ChevronRight className="ml-2 h-4 w-4" /></Button></CardContent></Card>}
+          </TabsContent>
+          <TabsContent value="marks" className="mt-0 space-y-5">
+            {selectedExam && <Card className="overflow-hidden"><div className="h-1 bg-gradient-to-r from-primary via-sky-500 to-emerald-500" /><CardContent className="p-5 sm:p-6"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-start gap-3"><div className="rounded-xl bg-primary/10 p-2.5 text-primary"><BookOpenCheck className="h-5 w-5" /></div><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">{selectedExam.title || selectedExam.result_exam_types.name}</h2><Badge variant={selectedExam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{selectedExam.status}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{selectedExam.classes.name} · {format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')} · {examSubjectsQuery.data?.length ?? 0} subjects</p></div></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam.status === 'draft' && <Button variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}{canWrite && <Button variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div></div>
+              <div className="mt-5 grid gap-3 border-t pt-5 sm:grid-cols-[1fr_auto] sm:items-center"><div><div className="mb-2 flex justify-between text-xs font-medium"><span>Result completion</span><span>{completedResults} of {examResultRows.length}</span></div><Progress value={examResultRows.length ? completedResults / examResultRows.length * 100 : 0} className="h-2" /></div><Button variant="ghost" size="sm" onClick={() => setActiveTab('results')}>Review all results <ChevronRight className="ml-1 h-4 w-4" /></Button></div></CardContent></Card>}
+
+            {!examSubjectsQuery.data?.length ? <Card><CardContent className="py-14"><EmptyState title="Configure subjects first" description="Add the subjects and component maximums for this examination." />{canWrite && <div className="mt-4 flex justify-center"><Button onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button></div>}</CardContent></Card> : <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+              <Card className="h-fit overflow-hidden xl:sticky xl:top-4">
+                <CardHeader className="border-b bg-muted/20 pb-4"><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" /> Student roster</CardTitle><CardDescription>{studentsQuery.data?.length ?? 0} students in this class</CardDescription><div className="relative pt-1"><Search className="absolute left-3 top-4 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="pl-9" /></div></CardHeader>
+                <ScrollArea className="h-[420px] xl:h-[600px]"><div className="space-y-1 p-2">{filteredStudents.map(student => {
+                  const result = examResultRows.find(row => row.id === student.id)
+                  const active = student.id === selectedStudentId
+                  const initials = `${student.first_name[0] ?? ''}${student.last_name[0] ?? ''}`.toUpperCase()
+                  return <button type="button" key={student.id} onClick={() => { setSelectedStudentId(student.id); setShareUrl('') }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Avatar className="h-9 w-9"><AvatarFallback className={active ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>{initials}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{student.first_name} {student.last_name}</span><span className={`block truncate text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>Roll {student.roll_number ?? '—'} · {student.admission_number}</span></span>{result?.complete ? <CheckCircle2 className={`h-4 w-4 ${active ? '' : 'text-emerald-600'}`} /> : <span className={`h-2 w-2 rounded-full ${active ? 'bg-primary-foreground/70' : 'bg-amber-500'}`} />}</button>
+                })}{filteredStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea>
+              </Card>
+
+              {!selectedStudentId ? <Card className="min-h-[420px]"><CardContent className="flex min-h-[420px] items-center justify-center"><div className="max-w-sm text-center"><div className="mx-auto mb-4 w-fit rounded-full bg-primary/10 p-4 text-primary"><ClipboardList className="h-7 w-7" /></div><h3 className="text-lg font-semibold">Select a student</h3><p className="mt-2 text-sm text-muted-foreground">Choose a student from the roster to enter marks across all configured subjects.</p></div></CardContent></Card> : <div className="space-y-4">
+                <Card><CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><Avatar className="h-11 w-11"><AvatarFallback>{`${selectedStudent?.first_name[0] ?? ''}${selectedStudent?.last_name[0] ?? ''}`}</AvatarFallback></Avatar><div><h3 className="font-semibold">{selectedStudent?.first_name} {selectedStudent?.last_name}</h3><p className="text-sm text-muted-foreground">Roll {selectedStudent?.roll_number ?? '—'} · {selectedStudent?.admission_number}</p></div></div><div className="flex items-center gap-2"><span className={`text-sm ${marksSaveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">{marksSaveStatus === 'saving' ? 'Saving changes…' : marksSaveStatus === 'saved' ? 'All changes saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Changes save automatically'}</span>{marksSaveStatus === 'saved' && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}</div></CardContent></Card>
+                <div className="grid gap-4 2xl:grid-cols-2">{examSubjectsQuery.data.map(examSubject => {
+                  const draft = drafts[examSubject.id] ?? { creative: '', written: '', practical: '', absent: false }
+                  const total = [draft.creative, draft.written, draft.practical].reduce((sum, value) => sum + (Number(value) || 0), 0)
+                  const maximum = examSubject.creative_max + examSubject.written_max + examSubject.practical_max
+                  const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
+                  return <Card key={examSubject.id} className={draft.absent ? 'border-amber-300 bg-amber-50/40 dark:bg-amber-950/10' : undefined}><CardHeader className="pb-3"><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-base">{examSubject.subjects.name}</CardTitle><CardDescription>{examSubject.subjects.code} · Pass mark {examSubject.pass_mark}</CardDescription></div><div className="text-right"><p className="text-2xl font-bold tabular-nums">{draft.absent ? '—' : total}</p><p className="text-xs text-muted-foreground">out of {maximum}</p></div></div></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 sm:grid-cols-3"><MarkInput label="Creative" value={draft.creative} max={examSubject.creative_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('creative', value)} /><MarkInput label="MCQ" value={draft.written} max={examSubject.written_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('written', value)} /><MarkInput label="Practical" value={draft.practical} max={examSubject.practical_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('practical', value)} /></div><div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5"><div><Label htmlFor={`absent-${examSubject.id}`} className="text-sm font-medium">Mark as absent</Label><p className="text-xs text-muted-foreground">Clears this subject from the total</p></div><Checkbox id={`absent-${examSubject.id}`} checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></div></CardContent></Card>
+                })}</div>
+                <Card className="border-dashed"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Ready to review?</p><p className="text-sm text-muted-foreground">Open this student’s report card or review the full class table.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setActiveTab('results')}><BarChart3 className="mr-2 h-4 w-4" /> All results</Button><Button onClick={() => setActiveTab('preview')}><Eye className="mr-2 h-4 w-4" /> Report card</Button></div></CardContent></Card>
+              </div>}
+            </div>}
+          </TabsContent>
+          <TabsContent value="results" className="mt-0">
+            <Card>
+              <CardHeader className="border-b bg-gradient-to-r from-primary/5 to-transparent p-5 sm:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Class performance</p><CardTitle className="mt-1 text-xl">All student results</CardTitle><CardDescription className="mt-1">{selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam && format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')}</CardDescription></div>
+                  <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={exportExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Download className="mr-2 h-4 w-4" /> Export CSV</Button><Button type="button" variant="outline" onClick={printExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Printer className="mr-2 h-4 w-4" /> Print report</Button></div>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 sm:grid-cols-4"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div><div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div><div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
               </CardHeader>
               <CardContent className="p-0">
                 {examMarksQuery.isLoading || studentsQuery.isLoading ? <LoadingState message="Loading all student results..." />
@@ -790,9 +836,12 @@ function StaffResults() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="preview" className="mt-4">{previewQuery.isLoading ? <LoadingState /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <><div className="mb-3 flex justify-end"><Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print</Button></div><ResultSheet result={previewQuery.data} /></> : null}</TabsContent>
-
-          {isAdmin && <TabsContent value="catalog" className="mt-4 grid gap-4 xl:grid-cols-2">
+          <TabsContent value="preview" className="mt-0 space-y-4">
+            <Card><CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="rounded-lg bg-primary/10 p-2 text-primary"><Eye className="h-5 w-5" /></div><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{selectedStudent?.first_name} {selectedStudent?.last_name} · {selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
+            {shareUrl && <Card className="border-primary/20 bg-primary/5"><CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-sm font-medium">Guardian link copied</p><p className="truncate text-xs text-muted-foreground">{shareUrl}</p></div><Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(shareUrl)}><Copy className="mr-2 h-4 w-4" /> Copy again</Button></CardContent></Card>}
+            {previewQuery.isLoading ? <LoadingState /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden rounded-xl border bg-card shadow-sm"><ResultSheet result={previewQuery.data} /></div> : null}
+          </TabsContent>
+          {isAdmin && <TabsContent value="catalog" className="mt-0 grid gap-4 xl:grid-cols-2">
             <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>Class subjects</CardTitle><CardDescription>{selectedClass?.name}: {subjectsQuery.data?.length ?? 0} subjects</CardDescription></div><Button size="sm" onClick={() => { setEditingSubjectId(null); setSubjectForm({ name: '', code: '' }); setSubjectDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add</Button></div></CardHeader><CardContent className="p-0">{!subjectsQuery.data?.length ? <EmptyState title="No subjects" /> : <Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{subjectsQuery.data.map(subject => <TableRow key={subject.id}><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></TableCell><TableCell><Badge variant={subject.is_active ? 'default' : 'secondary'}>{subject.is_active ? 'Active' : 'Inactive'}</Badge></TableCell><TableCell><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" title="Edit" onClick={() => { setEditingSubjectId(subject.id); setSubjectForm({ name: subject.name, code: subject.code }); setSubjectDialog(true) }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title={subject.is_active ? 'Deactivate' : 'Activate'} onClick={() => toggleSubject(subject)}><Power className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteSubject(subject)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
             <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>Exam types</CardTitle><CardDescription>Reusable examination categories for every class.</CardDescription></div><Button size="sm" onClick={() => { setEditingTypeId(null); setTypeForm({ name: '', sortOrder: '0', isActive: true }); setTypeDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add</Button></div></CardHeader><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Order</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{examTypesQuery.data?.map(type => <TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell>{type.sort_order}</TableCell><TableCell><Badge variant={type.is_active ? 'default' : 'secondary'}>{type.is_active ? 'Active' : 'Inactive'}</Badge></TableCell><TableCell><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" title="Edit" onClick={() => { setEditingTypeId(type.id); setTypeForm({ name: type.name, sortOrder: String(type.sort_order), isActive: type.is_active }); setTypeDialog(true) }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title={type.is_active ? 'Deactivate' : 'Activate'} onClick={() => toggleExamType(type)}><Power className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteExamType(type)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
           </TabsContent>}
@@ -803,9 +852,9 @@ function StaffResults() {
       <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) setEditingSubjectId(null) }} title={editingSubjectId ? 'Edit class subject' : 'Add class subject'} description="Only full administrators can maintain subjects." onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /></SimpleDialog>
       <SimpleDialog open={typeDialog} onOpenChange={open => { setTypeDialog(open); if (!open) setEditingTypeId(null) }} title={editingTypeId ? 'Edit exam type' : 'Add exam type'} description="Examples: Mid Term, Final, Test, Monthly Exam." onSave={saveExamType} saveLabel={editingTypeId ? 'Save changes' : 'Add type'}><Label>Name</Label><Input value={typeForm.name} onChange={event => setTypeForm(current => ({ ...current, name: event.target.value }))} placeholder="Practical Test" /><NumberField label="Display order" value={typeForm.sortOrder} onChange={value => setTypeForm(current => ({ ...current, sortOrder: value }))} /><div className="flex items-center gap-2"><Checkbox checked={typeForm.isActive} onCheckedChange={checked => setTypeForm(current => ({ ...current, isActive: Boolean(checked) }))} /><Label>Active and available for new exams</Label></div></SimpleDialog>
       <Dialog open={configDialog} onOpenChange={setConfigDialog}>
-        <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-5xl">
-          <DialogHeader><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select one or more subjects and keep separate creative, MCQ, practical, and pass marks for each.</DialogDescription></DialogHeader>
-          <div className="overflow-auto rounded-md border">
+        <DialogContent className="max-h-[90vh] overflow-hidden p-0 sm:max-w-5xl">
+          <DialogHeader className="border-b bg-muted/30 px-6 py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select subjects and define their creative, MCQ, practical, and pass marks.</DialogDescription></DialogHeader>
+          <div className="overflow-auto border-y">
             <Table>
               <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Pass mark</TableHead><TableHead className="w-32">Total max</TableHead></TableRow></TableHeader>
               <TableBody>{unusedSubjects.map(subject => {
@@ -836,7 +885,7 @@ function StaffResults() {
               })}</TableBody>
             </Table>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setConfigDialog(false)}>Cancel</Button><Button onClick={() => void attachSubjects()} disabled={!unusedSubjects.some(subject => configRows[subject.id]?.selected)}>Add {unusedSubjects.filter(subject => configRows[subject.id]?.selected).length || ''} selected subject{unusedSubjects.filter(subject => configRows[subject.id]?.selected).length === 1 ? '' : 's'}</Button></DialogFooter>
+          <DialogFooter className="bg-muted/20 px-6 py-4"><Button variant="outline" onClick={() => setConfigDialog(false)}>Cancel</Button><Button onClick={() => void attachSubjects()} disabled={!unusedSubjects.some(subject => configRows[subject.id]?.selected)}>Add {unusedSubjects.filter(subject => configRows[subject.id]?.selected).length || ''} selected subject{unusedSubjects.filter(subject => configRows[subject.id]?.selected).length === 1 ? '' : 's'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -871,7 +920,16 @@ function StaffResults() {
   )
 }
 
-function MarkInput({ value, max, disabled, onChange }: { value: string; max: number; disabled: boolean; onChange: (value: string) => void }) {
+function MiniStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div className="min-w-16 rounded-lg px-2 py-1 text-center"><p className="text-lg font-bold tabular-nums">{value}</p><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p></div>
+}
+
+function WorkspaceMetric({ icon: Icon, label, value, detail, tone = 'default' }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode; detail: string; tone?: 'default' | 'success' | 'warning' }) {
+  const toneClass = tone === 'success' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : tone === 'warning' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-primary/10 text-primary'
+  return <Card><CardContent className="flex items-center gap-4 p-4"><div className={`rounded-xl p-2.5 ${toneClass}`}><Icon className="h-5 w-5" /></div><div><p className="text-2xl font-bold tabular-nums">{value}</p><p className="text-sm font-medium">{label}</p><p className="text-xs text-muted-foreground">{detail}</p></div></CardContent></Card>
+}
+
+function MarkInput({ label, value, max, disabled, onChange }: { label: string; value: string; max: number; disabled: boolean; onChange: (value: string) => void }) {
   const normalizeMark = (input: string) => {
     const digitsAndDecimal = input.replace(/[^\d.]/g, '')
     const decimalIndex = digitsAndDecimal.indexOf('.')
@@ -886,7 +944,8 @@ function MarkInput({ value, max, disabled, onChange }: { value: string; max: num
   }
 
   return (
-    <TableCell>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2"><Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</Label><span className="text-[11px] text-muted-foreground">Max {max}</span></div>
       <Input
         type="number"
         inputMode="decimal"
@@ -895,7 +954,8 @@ function MarkInput({ value, max, disabled, onChange }: { value: string; max: num
         step={0.5}
         value={value}
         disabled={disabled || max <= 0}
-        placeholder={max <= 0 ? 'N/A' : `/${max}`}
+        className="h-11 text-base font-semibold tabular-nums"
+        placeholder={max <= 0 ? 'N/A' : '0'}
         onKeyDown={event => {
           if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1 && !/[0-9.]/.test(event.key)) event.preventDefault()
         }}
@@ -904,14 +964,13 @@ function MarkInput({ value, max, disabled, onChange }: { value: string; max: num
         }}
         onChange={event => onChange(normalizeMark(event.target.value))}
       />
-    </TableCell>
+    </div>
   )
 }
-
 function NumberField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <div><Label>{label}</Label><Input type="number" min={0} step="0.01" value={value} onChange={event => onChange(event.target.value)} /></div>
+  return <div className="space-y-1.5"><Label>{label}</Label><Input type="number" min={0} step="1" value={value} onChange={event => onChange(event.target.value)} /></div>
 }
 
 function SimpleDialog({ open, onOpenChange, title, description, onSave, saveLabel, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description: string; onSave: () => unknown | Promise<unknown>; saveLabel: string; children: React.ReactNode }) {
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader><div className="space-y-3">{children}</div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={() => void onSave()}>{saveLabel}</Button></DialogFooter></DialogContent></Dialog>
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="overflow-hidden p-0 sm:max-w-lg"><DialogHeader className="border-b bg-muted/30 px-6 py-5"><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader><div className="space-y-3 px-6 py-5 [&>label]:mt-2 [&>label]:block">{children}</div><DialogFooter className="border-t bg-muted/20 px-6 py-4"><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="button" onClick={() => void onSave()}>{saveLabel}</Button></DialogFooter></DialogContent></Dialog>
 }
