@@ -321,19 +321,25 @@ export function ReportsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" /> Student Attendance Report
-          </CardTitle>
-          <CardDescription>Individual student attendance summary by class and date range</CardDescription>
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-md border bg-background p-2 text-muted-foreground">
+              <BarChart3 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="text-lg">Student Attendance Report</CardTitle>
+              <CardDescription className="mt-1">Individual attendance summary by class and date range</CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="mb-3 grid grid-cols-2 gap-2 sm:mb-4 sm:flex sm:flex-wrap sm:gap-4">
-            <div className="col-span-2 min-w-0 space-y-1.5 sm:min-w-[200px]">
+        <CardContent className="p-4 sm:p-6">
+          <section aria-label="Report filters" className="mb-5 rounded-lg border bg-muted/15 p-4">
+          <div className="grid items-start gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(240px,1.2fr)_minmax(280px,1.25fr)_minmax(360px,1.5fr)_auto]">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs">Class</Label>
               <Select value={selectedClass} onValueChange={setSelectedClass}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select class" />
                 </SelectTrigger>
                 <SelectContent>
@@ -343,39 +349,29 @@ export function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2 min-w-0 space-y-1.5 sm:col-span-1 sm:min-w-[190px]">
-              <Label className="text-xs">Students</Label>
-              <Select value={studentScope} onValueChange={value => setStudentScope(value as 'all' | 'below')}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All students</SelectItem>
-                  <SelectItem value="below">Below attendance percentage</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {studentScope === 'below' && (
-              <div className="col-span-1 min-w-0 space-y-1.5 sm:w-36">
-                <Label className="text-xs" htmlFor="attendance-percentage-filter">Below percentage</Label>
-                <div className="relative">
-                  <Input
-                    id="attendance-percentage-filter"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    inputMode="decimal"
-                    value={percentageThreshold}
-                    onChange={event => setPercentageThreshold(event.target.value)}
-                    aria-invalid={!percentageFilterValid}
-                    className="pr-8"
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">%</span>
-                </div>
-                {!percentageFilterValid && <p className="text-xs text-destructive">Enter a value from 0 to 100.</p>}
+            <div className={studentScope === 'below' ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_8rem] gap-2' : 'min-w-0'}>
+              <div className="min-w-0 space-y-1.5">
+                <Label className="text-xs">Students</Label>
+                <Select value={studentScope} onValueChange={value => setStudentScope(value as 'all' | 'below')}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All students</SelectItem>
+                    <SelectItem value="below">Below attendance percentage</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+              {studentScope === 'below' && (
+                <div className="min-w-0 space-y-1.5">
+                  <Label className="text-xs" htmlFor="attendance-percentage-filter">Below</Label>
+                  <div className="relative">
+                    <Input id="attendance-percentage-filter" type="number" min="0" max="100" step="1" inputMode="decimal" value={percentageThreshold} onChange={event => setPercentageThreshold(event.target.value)} aria-invalid={!percentageFilterValid} className="pr-8" />
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
+              )}
+            </div>
             <DateFilter
               mode="range"
               startDate={startDate}
@@ -384,27 +380,31 @@ export function ReportsPage() {
                 setStartDate(start)
                 setEndDate(end)
               }}
-              className="col-span-2 sm:w-72"
+              className="min-w-0"
             />
-            <div className="col-span-2 flex items-end gap-2 sm:col-span-1">
+            <div className="flex flex-wrap items-end gap-2 self-end md:col-span-2 2xl:col-span-1 2xl:flex-nowrap 2xl:justify-end">
               <Button
                 type="button"
                 variant="outline"
+                className="whitespace-nowrap"
                 onClick={exportStudentReport}
                 disabled={!reportRows.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
               >
-                <Download /> Export CSV
+                <Download className="h-4 w-4" /> Export CSV
               </Button>
               <Button
                 type="button"
                 variant="outline"
+                className="whitespace-nowrap"
                 onClick={printStudentReport}
                 disabled={!reportRows.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
               >
-                <Printer /> Print Report
+                <Printer className="h-4 w-4" /> Print Report
               </Button>
             </div>
           </div>
+          {studentScope === 'below' && !percentageFilterValid && <p className="mt-2 text-xs text-destructive">Enter an attendance percentage from 0 to 100.</p>}
+          </section>
 
           {!selectedClass && (
             <div className="py-12 text-center text-muted-foreground text-sm">Select a class to view the report</div>
@@ -418,10 +418,18 @@ export function ReportsPage() {
           )}
 
           {reportRows.length > 0 && (
-            <div className="overflow-x-auto">
-              <Table>
+            <section aria-labelledby="attendance-summary-heading" className="space-y-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 id="attendance-summary-heading" className="font-semibold">Attendance Summary</h3>
+                  <p className="text-sm text-muted-foreground">{selectedClassName} · {formatDisplayDate(startDate)} to {formatDisplayDate(endDate)}</p>
+                </div>
+                <p className="text-sm text-muted-foreground">{reportRows.length} student{reportRows.length === 1 ? '' : 's'}</p>
+              </div>
+              <div className="overflow-x-auto rounded-lg border">
+              <Table className="min-w-[880px]">
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
                     <TableHead>Roll</TableHead>
                     <TableHead>Student</TableHead>
                     <TableHead>Admission No.</TableHead>
@@ -456,7 +464,8 @@ export function ReportsPage() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
+              </div>
+            </section>
           )}
 
           {reportRows.length > 0 && dailyStudentAttendance && (
