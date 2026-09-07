@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -19,6 +20,8 @@ export function VacationsPage() {
   const canWriteVacations = can('vacations', 'write')
   const today = format(new Date(), 'yyyy-MM-dd')
   const [date, setDate] = useState(today)
+  const [endDate, setEndDate] = useState(today)
+  const [useDateRange, setUseDateRange] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const { data: holidays = [], isLoading, error } = useHolidays()
@@ -28,13 +31,22 @@ export function VacationsPage() {
     () => [...holidays].sort((a, b) => b.date.localeCompare(a.date)),
     [holidays],
   )
-  const selectedDateIsWeekend = isWeekend(date)
+  const selectedDateIsWeekend = !useDateRange && isWeekend(date)
+  const effectiveEndDate = useDateRange ? endDate : date
+  const rangeOrderInvalid = useDateRange && Boolean(date && endDate && endDate < date)
+  const workingDayCount = countWorkingDays(date, effectiveEndDate)
+  const noWorkingDays = useDateRange && !rangeOrderInvalid && workingDayCount === 0
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    if (!date || !name.trim() || selectedDateIsWeekend) return
+    if (!date || !effectiveEndDate || !name.trim() || selectedDateIsWeekend || rangeOrderInvalid || noWorkingDays) return
     markVacation.mutate(
-      { date, name: name.trim(), description: description.trim() || undefined },
+      {
+        date,
+        endDate: useDateRange ? endDate : undefined,
+        name: name.trim(),
+        description: description.trim() || undefined,
+      },
       { onSuccess: () => { setName(''); setDescription('') } },
     )
   }
@@ -48,25 +60,60 @@ export function VacationsPage() {
             <CalendarOff className="h-5 w-5" /> Add Vacation
           </CardTitle>
           <CardDescription>
-            If attendance was already synchronized for the date, it will be removed automatically.
+            Add one day or an inclusive date range. Existing attendance for vacation dates is removed automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-[220px_1fr]">
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <Switch
+                id="vacation-date-range"
+                checked={useDateRange}
+                onCheckedChange={checked => {
+                  setUseDateRange(checked)
+                  if (checked && (!endDate || endDate < date)) setEndDate(date)
+                }}
+              />
+              <Label htmlFor="vacation-date-range" className="cursor-pointer">Add a date range</Label>
+            </div>
+            <div className={useDateRange
+              ? 'grid gap-3 sm:grid-cols-2 lg:grid-cols-[220px_220px_1fr]'
+              : 'grid gap-3 sm:grid-cols-[220px_1fr]'}>
               <div className="space-y-1.5">
-                <Label htmlFor="vacation-date">Date</Label>
+                <Label htmlFor="vacation-date">{useDateRange ? 'Start date' : 'Date'}</Label>
                 <DatePickerInput id="vacation-date" value={date} onChange={setDate} required />
                 {selectedDateIsWeekend && (
                   <p className="text-xs text-destructive">Friday and Saturday are already automatic weekends.</p>
                 )}
               </div>
+              {useDateRange && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="vacation-end-date">End date</Label>
+                  <DatePickerInput
+                    id="vacation-end-date"
+                    value={endDate}
+                    onChange={setEndDate}
+                    min={date}
+                    required
+                  />
+                  {rangeOrderInvalid && (
+                    <p className="text-xs text-destructive">End date must be on or after the start date.</p>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="vacation-name">Vacation name</Label>
                 <Input id="vacation-name" value={name} onChange={event => setName(event.target.value)}
                   maxLength={120} placeholder="e.g. Summer Vacation" required />
               </div>
             </div>
+            {useDateRange && !rangeOrderInvalid && (
+              <p className={noWorkingDays ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
+                {noWorkingDays
+                  ? 'This range only contains automatic weekend days.'
+                  : `${workingDayCount} working ${workingDayCount === 1 ? 'day' : 'days'} will be marked. Fridays and Saturdays are skipped.`}
+              </p>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="vacation-description">Description (optional)</Label>
               <Textarea id="vacation-description" value={description}
@@ -74,7 +121,7 @@ export function VacationsPage() {
                 maxLength={500} rows={3} placeholder="Reason or additional details" />
             </div>
             <Button type="submit"
-              disabled={!date || !name.trim() || selectedDateIsWeekend || markVacation.isPending}>
+              disabled={!date || !effectiveEndDate || !name.trim() || selectedDateIsWeekend || rangeOrderInvalid || noWorkingDays || markVacation.isPending}>
               {markVacation.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
               {markVacation.isPending ? 'Adding...' : 'Add Vacation'}
             </Button>
@@ -143,4 +190,25 @@ function isWeekend(value: string) {
   if (!match) return false
   const day = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getDay()
   return day === 5 || day === 6
+}
+
+function countWorkingDays(startValue: string, endValue: string) {
+  const start = parseDatabaseDate(startValue)
+  const end = parseDatabaseDate(endValue)
+  if (!start || !end || end < start) return 0
+
+  let count = 0
+  const date = new Date(start)
+  while (date <= end) {
+    if (date.getDay() !== 5 && date.getDay() !== 6) count += 1
+    date.setDate(date.getDate() + 1)
+  }
+  return count
+}
+
+function parseDatabaseDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return Number.isNaN(date.getTime()) ? null : date
 }

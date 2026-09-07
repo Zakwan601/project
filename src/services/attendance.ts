@@ -188,16 +188,20 @@ export const attendanceService = {
     }
   },
 
-  async markDateAsVacation(date: string, name: string, description?: string) {
-    const { data, error } = await db.rpc('mark_attendance_vacation', {
-      p_date: date,
+  async markDateAsVacation(startDate: string, name: string, description?: string, endDate = startDate) {
+    const { data, error } = await db.rpc('mark_attendance_vacation_range', {
+      p_start_date: startDate,
+      p_end_date: endDate,
       p_name: name,
       p_description: description || null,
     })
     if (error) throw error
     return data as {
-      date: string
-      holiday_id: string
+      start_date: string
+      end_date: string
+      days_added: number
+      existing_days: number
+      weekend_days_skipped: number
       sessions_removed: number
     }
   },

@@ -133,13 +133,15 @@ export function useMarkAttendanceVacation() {
   return useMutation({
     mutationFn: ({
       date,
+      endDate,
       name,
       description,
     }: {
       date: string
+      endDate?: string
       name: string
       description?: string
-    }) => attendanceService.markDateAsVacation(date, name, description),
+    }) => attendanceService.markDateAsVacation(date, name, description, endDate),
     onSuccess: data => {
       qc.invalidateQueries({ queryKey: [RECORDS_KEY] })
       qc.invalidateQueries({ queryKey: [SESSIONS_KEY] })
@@ -148,11 +150,18 @@ export function useMarkAttendanceVacation() {
       qc.invalidateQueries({ queryKey: ['student_weekly_attendance'] })
       qc.invalidateQueries({ queryKey: ['holidays'] })
       qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
-      toast.success(
-        data.sessions_removed > 0
-          ? `Vacation added and ${data.sessions_removed} attendance sheet${data.sessions_removed === 1 ? '' : 's'} removed`
-          : 'Vacation added',
-      )
+      const added = data.days_added === 0
+        ? 'No new vacation days added'
+        : data.days_added === 1
+          ? 'Vacation added'
+          : `${data.days_added} vacation days added`
+      const alreadyExisted = data.existing_days > 0
+        ? `; ${data.existing_days} already existed`
+        : ''
+      const sessionsRemoved = data.sessions_removed > 0
+        ? `; ${data.sessions_removed} attendance sheet${data.sessions_removed === 1 ? '' : 's'} removed`
+        : ''
+      toast.success(`${added}${alreadyExisted}${sessionsRemoved}`)
     },
     onError: (e: Error) => toast.error(e.message),
   })

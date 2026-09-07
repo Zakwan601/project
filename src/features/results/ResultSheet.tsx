@@ -15,7 +15,7 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
     <Card className="result-sheet mx-auto max-w-5xl overflow-hidden print:border-0 print:shadow-none">
       <CardContent className="p-4 sm:p-8">
         <div className="mb-6 text-center">
-          <p className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Axentra@Zuanshi</p>
+          <p className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">New Model Degree College (NMDC)</p>
           <h1 className="mt-1 text-2xl font-bold">Student Assessment Report</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {exam.title || exam.exam_type} · {exam.academic_year}
