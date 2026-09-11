@@ -23,22 +23,22 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
           {publicView && <Badge variant="outline" className="mt-2">Guardian copy</Badge>}
         </div>
 
-        <div className="mb-5 grid gap-3 rounded-lg border bg-muted/30 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div><span className="text-muted-foreground">Student</span><p className="font-semibold">{student.full_name}</p></div>
-          <div><span className="text-muted-foreground">Student ID</span><p className="font-semibold">{student.admission_number}</p></div>
-          <div><span className="text-muted-foreground">Class</span><p className="font-semibold">{exam.class_name} ({exam.grade}-{exam.section})</p></div>
-          <div><span className="text-muted-foreground">Roll</span><p className="font-semibold">{student.roll_number ?? '—'}</p></div>
-          <div><span className="text-muted-foreground">Exam</span><p className="font-semibold">{exam.exam_type}</p></div>
-          <div><span className="text-muted-foreground">Exam date</span><p className="font-semibold">{exam.exam_date}</p></div>
-          <div><span className="text-muted-foreground">Session</span><p className="font-semibold">{exam.academic_year}</p></div>
-          <div><span className="text-muted-foreground">Status</span><p className="font-semibold capitalize">{exam.status}</p></div>
+        <div className="mb-5 grid grid-cols-2 gap-x-3 gap-y-3 rounded-lg border bg-muted/30 p-3 text-sm sm:p-4 lg:grid-cols-4">
+          <div className="min-w-0"><span className="text-muted-foreground">Student</span><p className="break-words font-semibold">{student.full_name}</p></div>
+          <div className="min-w-0"><span className="text-muted-foreground">Student ID</span><p className="break-words font-semibold">{student.admission_number}</p></div>
+          <div className="min-w-0"><span className="text-muted-foreground">Class</span><p className="break-words font-semibold">{exam.class_name} ({exam.grade}-{exam.section})</p></div>
+          <div className="min-w-0"><span className="text-muted-foreground">Roll</span><p className="break-words font-semibold">{student.roll_number ?? '—'}</p></div>
+          <div className="min-w-0"><span className="text-muted-foreground">Exam</span><p className="break-words font-semibold">{exam.exam_type}</p></div>
+          <div className="min-w-0"><span className="text-muted-foreground">Exam date</span><p className="break-words font-semibold">{exam.exam_date}</p></div>
+          <div className="min-w-0"><span className="text-muted-foreground">Session</span><p className="break-words font-semibold">{exam.academic_year}</p></div>
+          <div className="min-w-0"><span className="text-muted-foreground">Status</span><p className="break-words font-semibold capitalize">{exam.status}</p></div>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
+        <div className="overflow-hidden rounded-lg border">
+          <Table className="min-w-[680px] text-xs sm:text-sm">
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-44">Subject</TableHead>
+                <TableHead className="sticky left-0 z-20 w-32 min-w-32 border-r bg-background text-xs sm:w-44 sm:min-w-44 sm:text-sm print:static print:border-r-0">Subject</TableHead>
                 <TableHead className="text-center">Creative</TableHead>
                 <TableHead className="text-center">MCQ</TableHead>
                 <TableHead className="text-center">Practical</TableHead>
@@ -50,9 +50,9 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
             <TableBody>
               {subjects.map(subject => (
                 <TableRow key={subject.id} className={subject.passed ? undefined : 'bg-destructive/5'}>
-                  <TableCell className="font-medium">
-                    {subject.name}
-                    <span className="ml-1 text-xs text-muted-foreground">({subject.code})</span>
+                  <TableCell className={`sticky left-0 z-10 w-32 min-w-32 whitespace-normal border-r text-[11px] font-medium leading-tight sm:w-44 sm:min-w-44 sm:text-sm print:static print:border-r-0 ${subject.passed ? 'bg-card' : 'bg-destructive/5'}`}>
+                    <span className="block">{subject.name}</span>
+                    <span className="mt-0.5 block text-[10px] text-muted-foreground sm:text-xs">{subject.code}</span>
                   </TableCell>
                   <TableCell className="text-center">{showMark(subject.creative_marks, subject.creative_max, subject.is_absent)}{subject.creative_max > 0 && !subject.is_absent ? ` / ${subject.creative_max}` : ''}</TableCell>
                   <TableCell className="text-center">{showMark(subject.written_marks, subject.written_max, subject.is_absent)}{subject.written_max > 0 && !subject.is_absent ? ` / ${subject.written_max}` : ''}</TableCell>
@@ -66,7 +66,7 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
           </Table>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
           <Summary label="Total" value={`${summary.total_obtained} / ${summary.total_max}`} />
           <Summary label="GPA" value={Number(summary.gpa).toFixed(2)} />
           <Summary label="Grade" value={summary.letter_grade} />
@@ -85,7 +85,7 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
 
 function Summary({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div className="rounded-lg border bg-card p-3 text-center">
+    <div className="rounded-lg border bg-card px-2 py-2.5 text-center">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={danger ? 'text-lg font-bold text-destructive' : 'text-lg font-bold'}>{value}</p>
     </div>

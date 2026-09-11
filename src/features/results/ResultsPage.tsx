@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BarChart3, BookOpenCheck, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, Eye, FilePlus2, GraduationCap, LayoutDashboard, Link2, Pencil, Plus, Power, Printer, Search, Send, Settings2, Trash2, Users } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Eye, Link2, Plus, Printer, Search, Send, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
@@ -18,7 +19,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Progress } from '@/components/ui/progress'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { ResultExam, ResultExamType, StudentResultPayload, Student } from '@/types/database'
@@ -203,12 +205,14 @@ function StudentResults() {
 }
 
 function StaffResults() {
-  const { profile, user, can } = useAuth()
+  const { examId: routeExamId } = useParams<{ examId: string }>()
+  const navigate = useNavigate()
+  const isExamPage = Boolean(routeExamId)
+  const { user, can } = useAuth()
   const canWrite = can('results', 'write')
-  const isAdmin = profile?.role === 'admin'
   const qc = useQueryClient()
   const { data: classes = [], isLoading: classesLoading } = useClasses()
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(isExamPage ? 'marks' : 'overview')
   const [classId, setClassId] = useState('')
   const [examId, setExamId] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState('')
@@ -229,10 +233,11 @@ function StaffResults() {
   const marksSaveTimerRef = useRef<number | null>(null)
   const [shareUrl, setShareUrl] = useState('')
   const [publishing, setPublishing] = useState(false)
+  const [mobileRosterOpen, setMobileRosterOpen] = useState(false)
 
   useEffect(() => {
-    if (!classId && classes[0]) setClassId(classes[0].id)
-  }, [classId, classes])
+    if (!routeExamId && !classId && classes[0]) setClassId(classes[0].id)
+  }, [classId, classes, routeExamId])
 
   const selectedClass = classes.find(item => item.id === classId)
 
@@ -244,6 +249,30 @@ function StaffResults() {
       return data as ResultExamType[]
     },
   })
+
+  const routeExamQuery = useQuery<ExamWithDetails>({
+    queryKey: ['result-exam', routeExamId],
+    enabled: Boolean(routeExamId),
+    queryFn: async () => {
+      const { data, error } = await db.from('result_exams')
+        .select('*, result_exam_types(name), academic_years(name), classes(name, grade, section)')
+        .eq('id', routeExamId).single()
+      if (error) throw error
+      return data as ExamWithDetails
+    },
+  })
+
+  useEffect(() => {
+    if (!routeExamId) {
+      setExamId('')
+      setActiveTab('overview')
+      return
+    }
+    if (!routeExamQuery.data) return
+    setClassId(routeExamQuery.data.class_id)
+    setExamId(routeExamId)
+    setActiveTab('marks')
+  }, [routeExamId, routeExamQuery.data])
 
   const subjectsQuery = useQuery<ClassSubject[]>({
     queryKey: ['result-subjects', classId], enabled: Boolean(classId),
@@ -457,7 +486,8 @@ function StaffResults() {
     }).select('id').single()
     if (error) return toast.error(error.message)
     await qc.invalidateQueries({ queryKey: ['result-exams', classId] })
-    setExamDialog(false); setExamForm({ typeId: '', title: '', date: '' }); setExamId(data.id); setActiveTab('overview')
+    setExamDialog(false); setExamForm({ typeId: '', title: '', date: '' }); setExamId(data.id); setActiveTab('marks')
+    navigate(`/results/${data.id}`)
     toast.success('Exam created')
   }
 
@@ -483,32 +513,6 @@ function StaffResults() {
     if (error) return toast.error(error.message)
     setTypeForm({ name: '', sortOrder: '0', isActive: true }); setEditingTypeId(null); setTypeDialog(false)
     await qc.invalidateQueries({ queryKey: ['result-exam-types'] }); toast.success(editingTypeId ? 'Exam type updated' : 'Exam type added')
-  }
-
-  const toggleSubject = async (subject: ClassSubject) => {
-    const { error } = await db.from('subjects').update({ is_active: !subject.is_active }).eq('id', subject.id)
-    if (error) return toast.error(error.message)
-    await qc.invalidateQueries({ queryKey: ['result-subjects', classId] })
-  }
-
-  const deleteSubject = async (subject: ClassSubject) => {
-    if (!window.confirm(`Delete ${subject.name}? Subjects already used in an exam cannot be deleted.`)) return
-    const { error } = await db.from('subjects').delete().eq('id', subject.id)
-    if (error) return toast.error(error.message)
-    await qc.invalidateQueries({ queryKey: ['result-subjects', classId] }); toast.success('Subject deleted')
-  }
-
-  const toggleExamType = async (type: ResultExamType) => {
-    const { error } = await db.from('result_exam_types').update({ is_active: !type.is_active }).eq('id', type.id)
-    if (error) return toast.error(error.message)
-    await qc.invalidateQueries({ queryKey: ['result-exam-types'] })
-  }
-
-  const deleteExamType = async (type: ResultExamType) => {
-    if (!window.confirm(`Delete ${type.name}? Types already used by an exam cannot be deleted.`)) return
-    const { error } = await db.from('result_exam_types').delete().eq('id', type.id)
-    if (error) return toast.error(error.message)
-    await qc.invalidateQueries({ queryKey: ['result-exam-types'] }); toast.success('Exam type deleted')
   }
 
   const openSubjectConfiguration = () => {
@@ -722,80 +726,61 @@ function StaffResults() {
   const unusedSubjects = useMemo(() => subjectsQuery.data?.filter(subject => subject.is_active && !examSubjectsQuery.data?.some(item => item.subject_id === subject.id)) ?? [], [subjectsQuery.data, examSubjectsQuery.data])
   const selectedStudent = studentsQuery.data?.find(student => student.id === selectedStudentId)
   const completedResults = examResultRows.filter(row => row.complete).length
-  const publishedExams = examsQuery.data?.filter(exam => exam.status === 'published').length ?? 0
   const filteredStudents = useMemo(() => {
     const query = studentSearch.trim().toLowerCase()
     if (!query) return studentsQuery.data ?? []
     return (studentsQuery.data ?? []).filter(student => `${student.first_name} ${student.last_name} ${student.admission_number} ${student.roll_number ?? ''}`.toLowerCase().includes(query))
   }, [studentSearch, studentsQuery.data])
-  if (classesLoading) return <LoadingState />
+  if (classesLoading || (isExamPage && routeExamQuery.isLoading)) return <LoadingState />
+  if (isExamPage && routeExamQuery.error) return <ErrorState message="This examination could not be found or you do not have access to it." />
 
   return (
-    <div className="student-report-screen">
-      <section className="mb-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-sky-500/5 shadow-sm">
-        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="space-y-5">
+    <div className="student-report-screen min-w-0 max-w-full overflow-x-hidden">
+      <section className="mb-3 ">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 lg:items-end">
+          <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-primary p-2.5 text-primary-foreground shadow-sm"><GraduationCap className="h-6 w-6" /></div>
-              <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Academic performance</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Results workspace</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Move from exam setup to marks, review, and publication without losing context.</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Academic performance</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{isExamPage ? routeExamQuery.data?.title || routeExamQuery.data?.result_exam_types.name : 'Examinations'}</h1><p className="mt-1 max-w-3xl text-sm text-muted-foreground">{isExamPage ? <>{routeExamQuery.data?.classes.name} · {routeExamQuery.data && format(new Date(`${routeExamQuery.data.exam_date}T00:00:00`), 'dd MMM yyyy')}{selectedExam && <> · <span className="capitalize">{selectedExam.status}</span> · {examSubjectsQuery.data?.length ?? 0} subjects · {completedResults}/{examResultRows.length} complete</>}</> : null}</p></div>
             </div>
-            <div className="max-w-xl"><Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Class and session</Label><Select value={classId} onValueChange={value => { setClassId(value); setExamId(''); setSelectedStudentId(''); setStudentSearch(''); setActiveTab('overview') }}><SelectTrigger className="mt-2 h-11 bg-background/90 shadow-sm"><SelectValue placeholder="Choose a class to begin" /></SelectTrigger><SelectContent>{classes.map(item => <SelectItem key={item.id} value={item.id}>{item.name} ({item.grade}-{item.section}) · {item.academic_years?.name}</SelectItem>)}</SelectContent></Select></div>
+            {!isExamPage && <div className="max-w-xl"><Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Class and session</Label><Select value={classId} onValueChange={value => { setClassId(value); setExamId(''); setSelectedStudentId(''); setStudentSearch('') }}><SelectTrigger className="mt-2 h-11"><SelectValue placeholder="Choose a class to begin" /></SelectTrigger><SelectContent>{classes.map(item => <SelectItem key={item.id} value={item.id}>{item.name} ({item.grade}-{item.section}) · {item.academic_years?.name}</SelectItem>)}</SelectContent></Select></div>}
           </div>
-          <div className="flex flex-wrap gap-3 lg:justify-end">
-            {classId && <div className="flex gap-2 rounded-xl border bg-background/80 p-2 shadow-sm"><MiniStat label="Students" value={studentsQuery.data?.length ?? '—'} /><MiniStat label="Exams" value={examsQuery.data?.length ?? '—'} /><MiniStat label="Published" value={examsQuery.data?.filter(exam => exam.status === 'published').length ?? '—'} /></div>}
-            {canWrite && <Button className="h-11 self-end shadow-sm" onClick={() => setExamDialog(true)} disabled={!classId}><FilePlus2 className="mr-2 h-4 w-4" /> Create exam</Button>}
-          </div>
+          {isExamPage && <><div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">{canWrite && selectedExam?.status === 'draft' && <Button size="sm" variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}<Button variant="outline" size="sm" onClick={() => navigate('/results')}><ArrowLeft className="mr-2 h-4 w-4" /> All examinations</Button>{canWrite && selectedExam && <Button size="sm" variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div><div className="sm:hidden"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" aria-label="Exam actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => navigate('/results')}><ArrowLeft /> All examinations</DropdownMenuItem>{canWrite && selectedExam && <><DropdownMenuSeparator />{selectedExam.status === 'draft' && <DropdownMenuItem disabled={!unusedSubjects.length || publishing} onSelect={openSubjectConfiguration}><Plus /> Add subjects</DropdownMenuItem>}<DropdownMenuItem disabled={publishing} onSelect={() => void setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</DropdownMenuItem></>}{activeTab === 'results' && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={exportExamResults}><Download /> Export CSV</DropdownMenuItem><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={printExamResults}><Printer /> Print report</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></>}
         </div>
       </section>
       {!classId ? <EmptyState title="Select a class" /> : examsQuery.isLoading ? <LoadingState /> : examsQuery.error ? <ErrorState message={(examsQuery.error as Error).message} /> : (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="mb-5 overflow-x-auto rounded-xl border bg-muted/30 p-1.5">
-            <TabsList className="h-auto min-w-max justify-start gap-1 bg-transparent p-0">
-              <TabsTrigger value="overview" className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><LayoutDashboard className="h-4 w-4" /> Overview</TabsTrigger>
-              <TabsTrigger value="marks" disabled={!selectedExam} className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><ClipboardList className="h-4 w-4" /> Enter marks</TabsTrigger>
-              <TabsTrigger value="results" disabled={!selectedExam} className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><BarChart3 className="h-4 w-4" /> All results</TabsTrigger>
-              <TabsTrigger value="preview" disabled={!selectedStudentId} className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><Eye className="h-4 w-4" /> Report card</TabsTrigger>
-              {isAdmin && <TabsTrigger value="catalog" className="gap-2 px-4 py-2.5 data-[state=active]:shadow-sm"><Settings2 className="h-4 w-4" /> Settings</TabsTrigger>}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 max-w-full">
+          {isExamPage && <div className="mb-3 ">
+            <TabsList className=" justify-start gap-1 bg-transparent p-0">
+              <TabsTrigger value="marks" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Enter marks</TabsTrigger>
+              <TabsTrigger value="results" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> All results</TabsTrigger>
+              <TabsTrigger value="preview" disabled={!selectedStudentId} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Report card</TabsTrigger>
             </TabsList>
-          </div>
+          </div>}
           <TabsContent value="overview" className="mt-0 space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <WorkspaceMetric icon={Users} label="Class roster" value={studentsQuery.data?.length ?? 0} detail="enrolled students" />
-              <WorkspaceMetric icon={BookOpenCheck} label="Examinations" value={examsQuery.data?.length ?? 0} detail="in this session" />
-              <WorkspaceMetric icon={CheckCircle2} label="Published" value={publishedExams} detail="visible results" tone="success" />
-              <WorkspaceMetric icon={ClipboardList} label="Drafts" value={(examsQuery.data?.length ?? 0) - publishedExams} detail="need attention" tone="warning" />
-            </div>
-
-            <Card className="overflow-hidden">
-              <CardHeader className="border-b bg-muted/20">
+            <Card className="border-0 bg-transparent shadow-none">
+              <CardHeader className="border-b px-0">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div><CardTitle className="text-lg">Examinations</CardTitle><CardDescription>Select an exam to continue its workflow.</CardDescription></div>
                   {canWrite && <Button size="sm" onClick={() => setExamDialog(true)}><Plus className="mr-2 h-4 w-4" /> New examination</Button>}
                 </div>
               </CardHeader>
-              <CardContent className="p-4 sm:p-5">
-                {!examsQuery.data?.length ? <EmptyState title="No examinations yet" description="Create an exam to configure subjects and begin entering marks." /> : <div className="grid gap-3 lg:grid-cols-2">{examsQuery.data.map(exam => {
-                  const selected = exam.id === examId
-                  return <button type="button" key={exam.id} onClick={() => { setExamId(exam.id); setSelectedStudentId(''); setShareUrl('') }} className={`group rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md ${selected ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'bg-card'}`}>
+              <CardContent className="px-0 py-2">
+                {!examsQuery.data?.length ? <EmptyState title="No examinations yet" description="Create an exam to configure subjects and begin entering marks." /> : <div className="divide-y">{examsQuery.data.map(exam => {
+                  return <button type="button" key={exam.id} onClick={() => navigate(`/results/${exam.id}`)} className="group w-full px-1 py-4 text-left transition-colors hover:bg-muted/40">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 gap-3"><div className={`rounded-lg p-2.5 ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}><CalendarDays className="h-5 w-5" /></div><div className="min-w-0"><p className="truncate font-semibold">{exam.title || exam.result_exam_types.name}</p><p className="mt-1 text-sm text-muted-foreground">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')} · {exam.academic_years.name}</p></div></div>
+                      <div className="flex min-w-0 gap-3"><CalendarDays className="mt-0.5 h-5 w-5 text-muted-foreground" /><div className="min-w-0"><p className="truncate font-semibold">{exam.title || exam.result_exam_types.name}</p><p className="mt-1 text-sm text-muted-foreground">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')} · {exam.academic_years.name}</p></div></div>
                       <Badge variant={exam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{exam.status}</Badge>
                     </div>
-                    <div className="mt-4 flex items-center justify-between border-t pt-3 text-sm"><span className={selected ? 'font-medium text-primary' : 'text-muted-foreground'}>{selected ? 'Currently selected' : 'Select exam'}</span><ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
+                    <div className="mt-2 flex items-center justify-end text-sm text-muted-foreground"><span>Manage</span><ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
                   </button>
                 })}</div>}
               </CardContent>
             </Card>
-
-            {selectedExam && <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Ready to continue</p><h3 className="mt-1 text-lg font-semibold">{selectedExam.title || selectedExam.result_exam_types.name}</h3><p className="text-sm text-muted-foreground">{examSubjectsQuery.data?.length ?? 0} configured subjects · {selectedExam.status === 'published' ? 'Results are published' : 'Draft in progress'}</p></div><Button onClick={() => setActiveTab('marks')}>Open marks workspace <ChevronRight className="ml-2 h-4 w-4" /></Button></CardContent></Card>}
           </TabsContent>
-          <TabsContent value="marks" className="mt-0 space-y-5">
-            {selectedExam && <Card className="overflow-hidden"><div className="h-1 bg-gradient-to-r from-primary via-sky-500 to-emerald-500" /><CardContent className="p-5 sm:p-6"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-start gap-3"><div className="rounded-xl bg-primary/10 p-2.5 text-primary"><BookOpenCheck className="h-5 w-5" /></div><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">{selectedExam.title || selectedExam.result_exam_types.name}</h2><Badge variant={selectedExam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{selectedExam.status}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{selectedExam.classes.name} · {format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')} · {examSubjectsQuery.data?.length ?? 0} subjects</p></div></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam.status === 'draft' && <Button variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}{canWrite && <Button variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div></div>
-              <div className="mt-5 grid gap-3 border-t pt-5 sm:grid-cols-[1fr_auto] sm:items-center"><div><div className="mb-2 flex justify-between text-xs font-medium"><span>Result completion</span><span>{completedResults} of {examResultRows.length}</span></div><Progress value={examResultRows.length ? completedResults / examResultRows.length * 100 : 0} className="h-2" /></div><Button variant="ghost" size="sm" onClick={() => setActiveTab('results')}>Review all results <ChevronRight className="ml-1 h-4 w-4" /></Button></div></CardContent></Card>}
-
-            {!examSubjectsQuery.data?.length ? <Card><CardContent className="py-14"><EmptyState title="Configure subjects first" description="Add the subjects and component maximums for this examination." />{canWrite && <div className="mt-4 flex justify-center"><Button onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button></div>}</CardContent></Card> : <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-              <Card className="h-fit overflow-hidden xl:sticky xl:top-4">
-                <CardHeader className="border-b bg-muted/20 pb-4"><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" /> Student roster</CardTitle><CardDescription>{studentsQuery.data?.length ?? 0} students in this class</CardDescription><div className="relative pt-1"><Search className="absolute left-3 top-4 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="pl-9" /></div></CardHeader>
+          <TabsContent value="marks" className="mt-0">
+            {!examSubjectsQuery.data?.length ? <Card className="border-0 bg-transparent shadow-none"><CardContent className="py-14"><EmptyState title="Configure subjects first" description="Add the subjects and component maximums for this examination." />{canWrite && <div className="mt-4 flex justify-center"><Button onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button></div>}</CardContent></Card> : <><div className="mb-3 xl:hidden"><Sheet open={mobileRosterOpen} onOpenChange={setMobileRosterOpen}><SheetTrigger asChild><Button variant="outline" className="w-full justify-between"><span className="flex items-center gap-2"><Users className="h-4 w-4" /> Students</span><span className="flex min-w-0 items-center gap-2 text-muted-foreground"><span className="max-w-48 truncate">{selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name}` : `${studentsQuery.data?.length ?? 0} available`}</span><ChevronRight className="h-4 w-4" /></span></Button></SheetTrigger><SheetContent side="left" className="w-[88%] gap-0 p-0"><SheetHeader className="border-b pr-12"><SheetTitle>Student roster</SheetTitle><SheetDescription>{studentsQuery.data?.length ?? 0} students in this class</SheetDescription><div className="relative pt-2"><Search className="absolute left-3 top-4.5 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="pl-9" /></div></SheetHeader><ScrollArea className="min-h-0 flex-1"><div className="space-y-1 p-2">{filteredStudents.map(student => { const result = examResultRows.find(row => row.id === student.id); const active = student.id === selectedStudentId; const initials = `${student.first_name[0] ?? ''}${student.last_name[0] ?? ''}`.toUpperCase(); return <button type="button" key={student.id} onClick={() => { setSelectedStudentId(student.id); setShareUrl(''); setMobileRosterOpen(false) }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Avatar className="h-9 w-9"><AvatarFallback className={active ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>{initials}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{student.first_name} {student.last_name}</span><span className={`block truncate text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>Roll {student.roll_number ?? '—'} · {student.admission_number}</span></span>{result?.complete && <CheckCircle2 className={`h-4 w-4 ${active ? '' : 'text-emerald-600'}`} />}</button> })}{filteredStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea></SheetContent></Sheet></div><div className="grid min-w-0 xl:grid-cols-[300px_minmax(0,1fr)]">
+              <Card className="hidden h-fit gap-0 rounded-none border-0 bg-transparent py-0 shadow-none xl:sticky xl:top-4 xl:flex xl:border-r xl:pr-5">
+                <CardHeader className="border-b px-0 pb-3"><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" /> Student roster</CardTitle><CardDescription>{studentsQuery.data?.length ?? 0} students in this class</CardDescription><div className="relative pt-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="h-9 pl-9" /></div></CardHeader>
                 <ScrollArea className="h-[420px] xl:h-[600px]"><div className="space-y-1 p-2">{filteredStudents.map(student => {
                   const result = examResultRows.find(row => row.id === student.id)
                   const active = student.id === selectedStudentId
@@ -804,47 +789,55 @@ function StaffResults() {
                 })}{filteredStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea>
               </Card>
 
-              {!selectedStudentId ? <Card className="min-h-[420px]"><CardContent className="flex min-h-[420px] items-center justify-center"><div className="max-w-sm text-center"><div className="mx-auto mb-4 w-fit rounded-full bg-primary/10 p-4 text-primary"><ClipboardList className="h-7 w-7" /></div><h3 className="text-lg font-semibold">Select a student</h3><p className="mt-2 text-sm text-muted-foreground">Choose a student from the roster to enter marks across all configured subjects.</p></div></CardContent></Card> : <div className="space-y-4">
-                <Card><CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><Avatar className="h-11 w-11"><AvatarFallback>{`${selectedStudent?.first_name[0] ?? ''}${selectedStudent?.last_name[0] ?? ''}`}</AvatarFallback></Avatar><div><h3 className="font-semibold">{selectedStudent?.first_name} {selectedStudent?.last_name}</h3><p className="text-sm text-muted-foreground">Roll {selectedStudent?.roll_number ?? '—'} · {selectedStudent?.admission_number}</p></div></div><div className="flex items-center gap-2"><span className={`text-sm ${marksSaveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">{marksSaveStatus === 'saving' ? 'Saving changes…' : marksSaveStatus === 'saved' ? 'All changes saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Changes save automatically'}</span>{marksSaveStatus === 'saved' && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}</div></CardContent></Card>
-                <div className="grid gap-4 2xl:grid-cols-2">{examSubjectsQuery.data.map(examSubject => {
-                  const draft = drafts[examSubject.id] ?? { creative: '', written: '', practical: '', absent: false }
-                  const total = [draft.creative, draft.written, draft.practical].reduce((sum, value) => sum + (Number(value) || 0), 0)
-                  const maximum = examSubject.creative_max + examSubject.written_max + examSubject.practical_max
-                  const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
-                  return <Card key={examSubject.id} className={draft.absent ? 'border-amber-300 bg-amber-50/40 dark:bg-amber-950/10' : undefined}><CardHeader className="pb-3"><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-base">{examSubject.subjects.name}</CardTitle><CardDescription>{examSubject.subjects.code} · Pass mark {examSubject.pass_mark}</CardDescription></div><div className="text-right"><p className="text-2xl font-bold tabular-nums">{draft.absent ? '—' : total}</p><p className="text-xs text-muted-foreground">out of {maximum}</p></div></div></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 sm:grid-cols-3"><MarkInput label="Creative" value={draft.creative} max={examSubject.creative_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('creative', value)} /><MarkInput label="MCQ" value={draft.written} max={examSubject.written_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('written', value)} /><MarkInput label="Practical" value={draft.practical} max={examSubject.practical_max} disabled={draft.absent || selectedExam?.status === 'published' || !canWrite} onChange={value => update('practical', value)} /></div><div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5"><div><Label htmlFor={`absent-${examSubject.id}`} className="text-sm font-medium">Mark as absent</Label><p className="text-xs text-muted-foreground">Clears this subject from the total</p></div><Checkbox id={`absent-${examSubject.id}`} checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></div></CardContent></Card>
-                })}</div>
-                <Card className="border-dashed"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Ready to review?</p><p className="text-sm text-muted-foreground">Open this student’s report card or review the full class table.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setActiveTab('results')}><BarChart3 className="mr-2 h-4 w-4" /> All results</Button><Button onClick={() => setActiveTab('preview')}><Eye className="mr-2 h-4 w-4" /> Report card</Button></div></CardContent></Card>
+              {!selectedStudentId ? <Card className="min-h-56 min-w-0 gap-0 rounded-none border-0 bg-transparent py-0 shadow-none xl:min-h-[420px]"><CardContent className="flex min-h-56 items-center justify-center xl:min-h-[420px]"><div className="max-w-sm text-center"><ClipboardList className="mx-auto mb-4 h-7 w-7 text-muted-foreground" /><h3 className="text-lg font-semibold">Select a student</h3><p className="mt-2 text-sm text-muted-foreground">Choose a student from the roster to enter marks across all configured subjects.</p></div></CardContent></Card> : <div className="min-w-0 space-y-2 pl-0 xl:pl-5">
+                <Card className="gap-0 rounded-none border-0 border-b bg-transparent py-0 shadow-none"><CardContent className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-0 pb-3 pt-0"><div className="flex min-w-0 items-center gap-2 sm:gap-3"><Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"><AvatarFallback>{`${selectedStudent?.first_name[0] ?? ''}${selectedStudent?.last_name[0] ?? ''}`}</AvatarFallback></Avatar><div className="min-w-0"><h3 className="truncate text-sm font-semibold sm:text-base">{selectedStudent?.first_name} {selectedStudent?.last_name}</h3><p className="truncate text-[10px] text-muted-foreground sm:text-xs">Roll {selectedStudent?.roll_number ?? '—'} · {selectedStudent?.admission_number}</p></div></div><div className="flex shrink-0 items-center gap-2"><div className="flex items-center gap-1"><span className={`whitespace-nowrap text-[10px] sm:text-xs ${marksSaveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite"><span className="sm:hidden">{marksSaveStatus === 'saving' ? 'Saving…' : marksSaveStatus === 'saved' ? 'Saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Auto-save on'}</span><span className="hidden sm:inline">{marksSaveStatus === 'saving' ? 'Saving changes…' : marksSaveStatus === 'saved' ? 'All changes saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Changes save automatically'}</span></span>{marksSaveStatus === 'saved' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}</div><Button size="sm" className="whitespace-nowrap px-2.5 sm:px-3" onClick={() => setActiveTab('preview')}><Eye className="mr-1.5 h-4 w-4" /> Report card</Button></div></CardContent></Card>
+                <div className="min-w-0 max-w-full overflow-hidden border-b">
+                  <Table className="min-w-[520px] text-[10px] [&_td]:p-1 [&_th]:h-8 [&_th]:px-1 sm:min-w-[720px] sm:text-sm">
+                    <TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-28 min-w-28 border-r bg-background text-[10px] sm:w-48 sm:min-w-48 sm:text-sm">Subject</TableHead><TableHead className="w-20">Creative</TableHead><TableHead className="w-20">MCQ</TableHead><TableHead className="w-20">Practical</TableHead><TableHead className="w-14 text-center sm:w-24">Total</TableHead><TableHead className="w-12 text-center sm:w-24">Absent</TableHead></TableRow></TableHeader>
+                    <TableBody>{examSubjectsQuery.data.map(examSubject => {
+                      const draft = drafts[examSubject.id] ?? { creative: '', written: '', practical: '', absent: false }
+                      const total = [draft.creative, draft.written, draft.practical].reduce((sum, value) => sum + (Number(value) || 0), 0)
+                      const maximum = examSubject.creative_max + examSubject.written_max + examSubject.practical_max
+                      const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
+                      const disabled = draft.absent || selectedExam?.status === 'published' || !canWrite
+                      return <TableRow key={examSubject.id} className={draft.absent ? 'opacity-60' : undefined}>
+                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><p className="font-medium">{examSubject.subjects.name}</p><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubject.subjects.code} · Pass {examSubject.pass_mark}</p></TableCell>
+                        <TableCell><MarkInput label={`${examSubject.subjects.name} creative marks`} value={draft.creative} max={examSubject.creative_max} disabled={disabled} onChange={value => update('creative', value)} /></TableCell>
+                        <TableCell><MarkInput label={`${examSubject.subjects.name} MCQ marks`} value={draft.written} max={examSubject.written_max} disabled={disabled} onChange={value => update('written', value)} /></TableCell>
+                        <TableCell><MarkInput label={`${examSubject.subjects.name} practical marks`} value={draft.practical} max={examSubject.practical_max} disabled={disabled} onChange={value => update('practical', value)} /></TableCell>
+                        <TableCell className="text-center text-[10px]"><span className="font-semibold tabular-nums">{draft.absent ? '—' : total}</span><span className="block text-[9px] text-muted-foreground sm:text-xs">/ {maximum}</span></TableCell>
+                        <TableCell className="text-center"><Checkbox aria-label={`Mark ${examSubject.subjects.name} as absent`} checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></TableCell>
+                      </TableRow>
+                    })}</TableBody>
+                  </Table>
+                </div>
               </div>}
-            </div>}
+            </div></>}
           </TabsContent>
-          <TabsContent value="results" className="mt-0">
-            <Card>
-              <CardHeader className="border-b bg-gradient-to-r from-primary/5 to-transparent p-5 sm:p-6">
+          <TabsContent value="results" className="mt-0 min-w-0 max-w-full overflow-hidden">
+            <Card className="min-w-0 max-w-full rounded-none border-0 bg-transparent shadow-none">
+              <CardHeader className="border-b px-0 pb-5 pt-0">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Class performance</p><CardTitle className="mt-1 text-xl">All student results</CardTitle><CardDescription className="mt-1">{selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam && format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')}</CardDescription></div>
-                  <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={exportExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Download className="mr-2 h-4 w-4" /> Export CSV</Button><Button type="button" variant="outline" onClick={printExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Printer className="mr-2 h-4 w-4" /> Print report</Button></div>
+                  <div className="hidden flex-wrap gap-2 sm:flex"><Button type="button" variant="outline" onClick={exportExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Download className="mr-2 h-4 w-4" /> Export CSV</Button><Button type="button" variant="outline" onClick={printExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Printer className="mr-2 h-4 w-4" /> Print report</Button></div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 sm:grid-cols-4"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div><div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div><div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="min-w-0 max-w-full p-0">
                 {examMarksQuery.isLoading || studentsQuery.isLoading ? <LoadingState message="Loading all student results..." />
                   : examMarksQuery.error ? <ErrorState message={(examMarksQuery.error as Error).message} />
                     : studentsQuery.error ? <ErrorState message={(studentsQuery.error as Error).message} />
                       : examResultRows.length === 0 ? <EmptyState title="No students found" description="No students belong to this exam roster." />
-                        : <div className="overflow-x-auto"><Table className="min-w-max"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 bg-background text-center">SN</TableHead><TableHead className="sticky left-12 z-20 w-16 bg-background">Roll</TableHead><TableHead className="sticky left-28 z-20 min-w-48 bg-background">Student</TableHead><TableHead className="min-w-32">Admission No.</TableHead>{examSubjectsQuery.data?.map(subject => <TableHead key={subject.id} className="min-w-28 text-center"><span className="block">{subject.subjects.code}</span><span className="block text-[10px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-24 text-center">Total</TableHead><TableHead className="min-w-20 text-center">GPA</TableHead><TableHead className="min-w-24 text-center">Grade</TableHead><TableHead className="min-w-20 text-center">Position</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map((row, index) => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card text-center text-muted-foreground">{index + 1}</TableCell><TableCell className="sticky left-12 z-10 bg-card">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-28 z-10 bg-card font-medium">{row.name}</TableCell><TableCell className="font-mono text-sm">{row.admission}</TableCell>{examSubjectsQuery.data?.map(subject => <TableCell key={subject.id} className="text-center">{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained} / ${row.totalMax}` : '—'}</TableCell><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell><TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
+                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{examSubjectsQuery.data?.map(subject => <TableHead key={subject.id} className="min-w-14 text-center"><span className="block">{subject.subjects.code}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead><TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{examSubjectsQuery.data?.map(subject => <TableCell key={subject.id} className="text-center text-[11px]">{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell><TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="preview" className="mt-0 space-y-4">
-            <Card><CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div className="rounded-lg bg-primary/10 p-2 text-primary"><Eye className="h-5 w-5" /></div><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{selectedStudent?.first_name} {selectedStudent?.last_name} · {selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
-            {shareUrl && <Card className="border-primary/20 bg-primary/5"><CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-sm font-medium">Guardian link copied</p><p className="truncate text-xs text-muted-foreground">{shareUrl}</p></div><Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(shareUrl)}><Copy className="mr-2 h-4 w-4" /> Copy again</Button></CardContent></Card>}
-            {previewQuery.isLoading ? <LoadingState /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden rounded-xl border bg-card shadow-sm"><ResultSheet result={previewQuery.data} /></div> : null}
+            <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-4 px-0 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><Eye className="h-5 w-5 text-muted-foreground" /><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{selectedStudent?.first_name} {selectedStudent?.last_name} · {selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
+            {shareUrl && <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-2 px-0 pb-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-sm font-medium">Guardian link copied</p><p className="truncate text-xs text-muted-foreground">{shareUrl}</p></div><Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(shareUrl)}><Copy className="mr-2 h-4 w-4" /> Copy again</Button></CardContent></Card>}
+            {previewQuery.isLoading ? <LoadingState /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden"><ResultSheet result={previewQuery.data} /></div> : null}
           </TabsContent>
-          {isAdmin && <TabsContent value="catalog" className="mt-0 grid gap-4 xl:grid-cols-2">
-            <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>Class subjects</CardTitle><CardDescription>{selectedClass?.name}: {subjectsQuery.data?.length ?? 0} subjects</CardDescription></div><Button size="sm" onClick={() => { setEditingSubjectId(null); setSubjectForm({ name: '', code: '' }); setSubjectDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add</Button></div></CardHeader><CardContent className="p-0">{!subjectsQuery.data?.length ? <EmptyState title="No subjects" /> : <Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{subjectsQuery.data.map(subject => <TableRow key={subject.id}><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></TableCell><TableCell><Badge variant={subject.is_active ? 'default' : 'secondary'}>{subject.is_active ? 'Active' : 'Inactive'}</Badge></TableCell><TableCell><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" title="Edit" onClick={() => { setEditingSubjectId(subject.id); setSubjectForm({ name: subject.name, code: subject.code }); setSubjectDialog(true) }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title={subject.is_active ? 'Deactivate' : 'Activate'} onClick={() => toggleSubject(subject)}><Power className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteSubject(subject)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
-            <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>Exam types</CardTitle><CardDescription>Reusable examination categories for every class.</CardDescription></div><Button size="sm" onClick={() => { setEditingTypeId(null); setTypeForm({ name: '', sortOrder: '0', isActive: true }); setTypeDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add</Button></div></CardHeader><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Order</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{examTypesQuery.data?.map(type => <TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell>{type.sort_order}</TableCell><TableCell><Badge variant={type.is_active ? 'default' : 'secondary'}>{type.is_active ? 'Active' : 'Inactive'}</Badge></TableCell><TableCell><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" title="Edit" onClick={() => { setEditingTypeId(type.id); setTypeForm({ name: type.name, sortOrder: String(type.sort_order), isActive: type.is_active }); setTypeDialog(true) }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title={type.is_active ? 'Deactivate' : 'Activate'} onClick={() => toggleExamType(type)}><Power className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteExamType(type)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
-          </TabsContent>}
         </Tabs>
       )}
 
@@ -920,15 +913,6 @@ function StaffResults() {
   )
 }
 
-function MiniStat({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div className="min-w-16 rounded-lg px-2 py-1 text-center"><p className="text-lg font-bold tabular-nums">{value}</p><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p></div>
-}
-
-function WorkspaceMetric({ icon: Icon, label, value, detail, tone = 'default' }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode; detail: string; tone?: 'default' | 'success' | 'warning' }) {
-  const toneClass = tone === 'success' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : tone === 'warning' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-primary/10 text-primary'
-  return <Card><CardContent className="flex items-center gap-4 p-4"><div className={`rounded-xl p-2.5 ${toneClass}`}><Icon className="h-5 w-5" /></div><div><p className="text-2xl font-bold tabular-nums">{value}</p><p className="text-sm font-medium">{label}</p><p className="text-xs text-muted-foreground">{detail}</p></div></CardContent></Card>
-}
-
 function MarkInput({ label, value, max, disabled, onChange }: { label: string; value: string; max: number; disabled: boolean; onChange: (value: string) => void }) {
   const normalizeMark = (input: string) => {
     const digitsAndDecimal = input.replace(/[^\d.]/g, '')
@@ -943,29 +927,26 @@ function MarkInput({ label, value, max, disabled, onChange }: { label: string; v
       : withLeadingZero
   }
 
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2"><Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</Label><span className="text-[11px] text-muted-foreground">Max {max}</span></div>
-      <Input
-        type="number"
-        inputMode="decimal"
-        min={0}
-        max={max}
-        step={0.5}
-        value={value}
-        disabled={disabled || max <= 0}
-        className="h-11 text-base font-semibold tabular-nums"
-        placeholder={max <= 0 ? 'N/A' : '0'}
-        onKeyDown={event => {
-          if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1 && !/[0-9.]/.test(event.key)) event.preventDefault()
-        }}
-        onPaste={event => {
-          if (!/^\d*\.?\d*$/.test(event.clipboardData.getData('text'))) event.preventDefault()
-        }}
-        onChange={event => onChange(normalizeMark(event.target.value))}
-      />
-    </div>
-  )
+  return <Input
+    aria-label={`${label}, maximum ${max}`}
+    title={`Maximum ${max}`}
+    type="number"
+    inputMode="decimal"
+    min={0}
+    max={max}
+    step={0.5}
+    value={value}
+    disabled={disabled || max <= 0}
+    className="h-8 w-16 min-w-16 px-2 text-xs font-semibold tabular-nums sm:h-9 sm:w-auto sm:min-w-24 sm:text-sm"
+    placeholder={max <= 0 ? 'N/A' : `0 / ${max}`}
+    onKeyDown={event => {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1 && !/[0-9.]/.test(event.key)) event.preventDefault()
+    }}
+    onPaste={event => {
+      if (!/^\d*\.?\d*$/.test(event.clipboardData.getData('text'))) event.preventDefault()
+    }}
+    onChange={event => onChange(normalizeMark(event.target.value))}
+  />
 }
 function NumberField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return <div className="space-y-1.5"><Label>{label}</Label><Input type="number" min={0} step="1" value={value} onChange={event => onChange(event.target.value)} /></div>

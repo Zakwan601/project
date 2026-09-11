@@ -62,6 +62,7 @@ function App() {
                 />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/results" element={<ResultsPage />} />
+                <Route path="/results/:examId" element={<ResultsPage />} />
                 <Route
                   path="/complaints"
                   element={(
