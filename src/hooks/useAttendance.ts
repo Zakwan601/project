@@ -136,12 +136,14 @@ export function useMarkAttendanceVacation() {
       endDate,
       name,
       description,
+      classIds,
     }: {
       date: string
       endDate?: string
       name: string
       description?: string
-    }) => attendanceService.markDateAsVacation(date, name, description, endDate),
+      classIds?: string[]
+    }) => attendanceService.markDateAsVacation(date, name, description, endDate, classIds),
     onSuccess: data => {
       qc.invalidateQueries({ queryKey: [RECORDS_KEY] })
       qc.invalidateQueries({ queryKey: [SESSIONS_KEY] })

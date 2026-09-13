@@ -5,10 +5,10 @@ import { toast } from 'sonner'
 
 export const HOLIDAYS_KEY = 'holidays'
 
-export function useHolidays(startDate?: string, endDate?: string) {
+export function useHolidays(startDate?: string, endDate?: string, classId?: string) {
   return useQuery({
-    queryKey: [HOLIDAYS_KEY, { startDate, endDate }],
-    queryFn: () => holidaysService.getAll(startDate, endDate),
+    queryKey: [HOLIDAYS_KEY, { startDate, endDate, classId }],
+    queryFn: () => holidaysService.getAll(startDate, endDate, classId),
   })
 }
 

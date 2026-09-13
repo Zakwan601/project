@@ -51,26 +51,18 @@ export function PunchHistoryCard({
   }
 
   return (
-    <Card>
-      <CardHeader className="border-b">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <ScanLine className="h-5 w-5" />
-              {title}
-            </CardTitle>
-            <CardDescription className="mt-1">{description}</CardDescription>
-          </div>
+    <>
+      {isTable && (
+        <section
+          aria-label="Punch history filters"
+          className="mb-3 flex flex-wrap items-end justify-between gap-3 sm:mb-4"
+        >
           {!isLoading && !error && (
-            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              {total} {variant === 'table'
-                ? (total === 1 ? 'record' : 'records')
-                : (dailyPunches.length === 1 ? 'day' : 'days')}
+            <span className="text-sm text-muted-foreground">
+              {total} {total === 1 ? 'record' : 'records'}
             </span>
           )}
-        </div>
-        {isTable && (
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-2 sm:mt-4 sm:gap-3">
+          <div className="flex flex-wrap items-end gap-2">
             <DateFilter
               mode="date"
               value={dateFilter}
@@ -94,8 +86,27 @@ export function PunchHistoryCard({
               </select>
             </label>
           </div>
+        </section>
+      )}
+      <Card className={isTable ? 'gap-0 overflow-hidden py-0' : undefined}>
+        {!isTable && (
+          <CardHeader className="border-b">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <ScanLine className="h-5 w-5" />
+                  {title}
+                </CardTitle>
+                <CardDescription className="mt-1">{description}</CardDescription>
+              </div>
+              {!isLoading && !error && (
+                <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  {dailyPunches.length} {dailyPunches.length === 1 ? 'day' : 'days'}
+                </span>
+              )}
+            </div>
+          </CardHeader>
         )}
-      </CardHeader>
       <CardContent className="p-0">
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
@@ -131,7 +142,8 @@ export function PunchHistoryCard({
           </ScrollArea>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </>
   )
 }
 

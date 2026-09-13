@@ -54,16 +54,16 @@ export function DashboardPage() {
   ]
 
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-card p-4 sm:p-8"
+        className="pb-1"
       >
         <p className="text-xs font-medium text-muted-foreground">
           {formatDisplayDate(new Date())}
         </p>
-        <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+        <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
           Good {getGreeting()}, {profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">

@@ -47,8 +47,10 @@ export function SmsMessagesPage() {
         )}
       />
 
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+      <section
+        aria-label="SMS filters"
+        className="mb-3 flex flex-wrap items-end justify-between gap-3 sm:mb-4"
+      >
           <p className="text-sm text-muted-foreground">
             {data ? `${data.total.toLocaleString()} message${data.total === 1 ? '' : 's'}` : 'SMS history'}
           </p>
@@ -82,8 +84,9 @@ export function SmsMessagesPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
+      </section>
 
+      <Card className="gap-0 overflow-hidden py-0">
         <CardContent className="p-0">
           {isLoading ? (
             <MessageState message="Loading SMS messages..." />

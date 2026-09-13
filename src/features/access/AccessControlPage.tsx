@@ -119,7 +119,7 @@ export function AccessControlPage() {
   })
 
   return (
-    <div className="max-w-4xl space-y-4 sm:space-y-6">
+    <div className="max-w-4xl space-y-3 sm:space-y-4">
       <PageHeader
         title="Access Control"
         description="Create sub-admin accounts and assign module-level read or write access."

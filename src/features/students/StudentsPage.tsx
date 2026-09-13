@@ -207,8 +207,7 @@ export function StudentsPage() {
         ) : undefined}
       />
 
-      <Card>
-        <div className="border-b p-3 sm:p-4">
+      <section aria-label="Student filters" className="mb-3 sm:mb-4">
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative w-full sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -234,8 +233,9 @@ export function StudentsPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
+      </section>
 
+      <Card className="gap-0 overflow-hidden py-0">
         {filtered.length === 0 ? (
           <EmptyState
             title="No students found"

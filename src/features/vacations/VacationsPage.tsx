@@ -5,10 +5,12 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { useMarkAttendanceVacation } from '@/hooks/useAttendance'
 import { useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
+import { useClasses } from '@/hooks/useClasses'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -24,7 +26,10 @@ export function VacationsPage() {
   const [useDateRange, setUseDateRange] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [allClasses, setAllClasses] = useState(true)
+  const [selectedClassIds, setSelectedClassIds] = useState<Set<string>>(new Set())
   const { data: holidays = [], isLoading, error } = useHolidays()
+  const { data: classes = [], isLoading: classesLoading } = useClasses()
   const markVacation = useMarkAttendanceVacation()
   const deleteHoliday = useDeleteHoliday()
   const sortedHolidays = useMemo(
@@ -36,23 +41,27 @@ export function VacationsPage() {
   const rangeOrderInvalid = useDateRange && Boolean(date && endDate && endDate < date)
   const workingDayCount = countWorkingDays(date, effectiveEndDate)
   const noWorkingDays = useDateRange && !rangeOrderInvalid && workingDayCount === 0
+  const activeClasses = classes.filter(classItem => classItem.is_active)
+  const classNames = new Map(activeClasses.map(classItem => [classItem.id, classItem.name]))
+  const classSelectionInvalid = !allClasses && selectedClassIds.size === 0
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    if (!date || !effectiveEndDate || !name.trim() || selectedDateIsWeekend || rangeOrderInvalid || noWorkingDays) return
+    if (!date || !effectiveEndDate || !name.trim() || selectedDateIsWeekend || rangeOrderInvalid || noWorkingDays || classSelectionInvalid) return
     markVacation.mutate(
       {
         date,
         endDate: useDateRange ? endDate : undefined,
         name: name.trim(),
         description: description.trim() || undefined,
+        classIds: allClasses ? undefined : [...selectedClassIds],
       },
       { onSuccess: () => { setName(''); setDescription('') } },
     )
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       <PageHeader title="Vacations" description="Add school vacations and exclude those dates from attendance." />
       {canWriteVacations && <Card>
         <CardHeader>
@@ -114,6 +123,57 @@ export function VacationsPage() {
                   : `${workingDayCount} working ${workingDayCount === 1 ? 'day' : 'days'} will be marked. Fridays and Saturdays are skipped.`}
               </p>
             )}
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="vacation-all-classes"
+                  checked={allClasses}
+                  onCheckedChange={setAllClasses}
+                />
+                <div>
+                  <Label htmlFor="vacation-all-classes" className="cursor-pointer">All classes</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Turn this off to choose only the classes that will be on vacation.
+                  </p>
+                </div>
+              </div>
+              {!allClasses && (
+                <div className="grid gap-2 border-t pt-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {classesLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading classes...</p>
+                  ) : activeClasses.length === 0 ? (
+                    <p className="text-sm text-destructive">No active classes are available.</p>
+                  ) : activeClasses.map(classItem => (
+                    <label
+                      key={classItem.id}
+                      className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5 hover:bg-muted/50"
+                    >
+                      <Checkbox
+                        checked={selectedClassIds.has(classItem.id)}
+                        onCheckedChange={checked => {
+                          setSelectedClassIds(current => {
+                            const next = new Set(current)
+                            if (checked) next.add(classItem.id)
+                            else next.delete(classItem.id)
+                            return next
+                          })
+                        }}
+                        aria-label={`Select ${classItem.name}`}
+                      />
+                      <span className="text-sm">
+                        <span className="block font-medium">{classItem.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Grade {classItem.grade} {classItem.section}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {classSelectionInvalid && (
+                <p className="text-xs text-destructive">Select at least one class.</p>
+              )}
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="vacation-description">Description (optional)</Label>
               <Textarea id="vacation-description" value={description}
@@ -121,7 +181,7 @@ export function VacationsPage() {
                 maxLength={500} rows={3} placeholder="Reason or additional details" />
             </div>
             <Button type="submit"
-              disabled={!date || !effectiveEndDate || !name.trim() || selectedDateIsWeekend || rangeOrderInvalid || noWorkingDays || markVacation.isPending}>
+              disabled={!date || !effectiveEndDate || !name.trim() || selectedDateIsWeekend || rangeOrderInvalid || noWorkingDays || classSelectionInvalid || markVacation.isPending}>
               {markVacation.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
               {markVacation.isPending ? 'Adding...' : 'Add Vacation'}
             </Button>
@@ -156,6 +216,13 @@ export function VacationsPage() {
                       </div>
                       <p className="mt-1 text-sm font-medium text-violet-700 dark:text-violet-300">
                         {formatDisplayDate(holiday.date)}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-muted-foreground">
+                        {holiday.class_ids == null
+                          ? 'All classes'
+                          : holiday.class_ids
+                            .map(classId => classNames.get(classId) ?? 'Unknown class')
+                            .join(', ')}
                       </p>
                       {holiday.description && (
                         <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">

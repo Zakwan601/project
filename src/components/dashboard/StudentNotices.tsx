@@ -5,12 +5,18 @@ import { useHolidays } from '@/hooks/useHolidays'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAuth } from '@/contexts/AuthContext'
 
 export function StudentNotices() {
+  const { student } = useAuth()
   const today = format(new Date(), 'yyyy-MM-dd')
   const endDate = format(addMonths(new Date(), 6), 'yyyy-MM-dd')
   const { data: announcements = [], isLoading: announcementsLoading } = useActiveAnnouncements()
-  const { data: holidays = [], isLoading: holidaysLoading } = useHolidays(today, endDate)
+  const { data: holidays = [], isLoading: holidaysLoading } = useHolidays(
+    today,
+    endDate,
+    student?.class_id ?? undefined,
+  )
 
   return (
     <div className="grid gap-3 lg:grid-cols-2 sm:gap-4">

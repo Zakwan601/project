@@ -291,7 +291,7 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="student-report-screen space-y-3 sm:space-y-6">
+    <div className="student-report-screen space-y-3 sm:space-y-4">
       <PageHeader
         title="Reports"
         description="Attendance analytics and insights"
@@ -334,7 +334,7 @@ export function ReportsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
-          <section aria-label="Report filters" className="mb-5 rounded-lg border bg-muted/15 p-4">
+          <section aria-label="Report filters" className="mb-4">
           <div className="grid items-start gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(240px,1.2fr)_minmax(280px,1.25fr)_minmax(360px,1.5fr)_auto]">
             <div className="min-w-0 space-y-1.5">
               <Label className="text-xs">Class</Label>

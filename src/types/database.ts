@@ -380,6 +380,8 @@ export interface Holiday {
   date: string
   name: string
   description: string | null
+  /** null applies to every class; otherwise only these classes are on vacation. */
+  class_ids: string[] | null
   created_by: string | null
   created_at: string
   updated_at: string

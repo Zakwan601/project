@@ -5,10 +5,11 @@ import type { Holiday } from '@/types/database'
 const db = supabase as any
 
 export const holidaysService = {
-  async getAll(startDate?: string, endDate?: string) {
+  async getAll(startDate?: string, endDate?: string, classId?: string) {
     let query = db.from('holidays').select('*').order('date', { ascending: true })
     if (startDate) query = query.gte('date', startDate)
     if (endDate) query = query.lte('date', endDate)
+    if (classId) query = query.or(`class_ids.is.null,class_ids.cs.{${classId}}`)
     const { data, error } = await query
     if (error) throw error
     return data as Holiday[]

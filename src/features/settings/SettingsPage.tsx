@@ -91,7 +91,7 @@ export function SettingsPage() {
   if (isLoading) return <LoadingState />
 
   return (
-    <div className="max-w-3xl space-y-3 sm:space-y-6">
+    <div className="max-w-3xl space-y-3 sm:space-y-4">
       <PageHeader title="Settings" description="Manage system configuration and academic years" />
 
       <Card>

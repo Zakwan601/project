@@ -59,7 +59,7 @@ export function DepartureAnomaliesPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       <PageHeader
         title="Departure Anomalies"
         description="Review probable missing or unusually early departure scans."

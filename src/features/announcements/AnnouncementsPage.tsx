@@ -38,7 +38,7 @@ export function AnnouncementsPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       <PageHeader title="Announcements" description="Post simple notices for students." />
 
       {canWriteAnnouncements && <Card>

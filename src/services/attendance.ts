@@ -188,12 +188,19 @@ export const attendanceService = {
     }
   },
 
-  async markDateAsVacation(startDate: string, name: string, description?: string, endDate = startDate) {
+  async markDateAsVacation(
+    startDate: string,
+    name: string,
+    description?: string,
+    endDate = startDate,
+    classIds?: string[],
+  ) {
     const { data, error } = await db.rpc('mark_attendance_vacation_range', {
       p_start_date: startDate,
       p_end_date: endDate,
       p_name: name,
       p_description: description || null,
+      p_class_ids: classIds ?? null,
     })
     if (error) throw error
     return data as {

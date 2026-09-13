@@ -89,11 +89,13 @@ function StaffDailyAttendance() {
   const classFilter = selectedClassId === 'all' ? undefined : selectedClassId
   const { data: sessions = [], isLoading, error } = useAttendanceSessions(classFilter, selectedDate)
   const { data: classes = [] } = useClasses()
-  const { data: holidays = [] } = useHolidays(selectedDate, selectedDate)
+  const { data: holidays = [] } = useHolidays(selectedDate, selectedDate, classFilter)
   const syncAttendance = useSyncDailyAttendance()
   const markVacation = useMarkAttendanceVacation()
   const deleteHoliday = useDeleteHoliday()
-  const selectedHoliday = holidays[0] ?? null
+  const selectedHoliday = selectedClassId === 'all'
+    ? holidays.find(holiday => holiday.class_ids == null) ?? null
+    : holidays[0] ?? null
   const selectedDateIsWeekend = isWeekend(selectedDate)
   const isNonSchoolDay = selectedDateIsWeekend || Boolean(selectedHoliday)
   const afterNotificationTime = canManuallySendAbsenceNotifications(selectedDate, now)
@@ -196,19 +198,25 @@ function StaffDailyAttendance() {
         ) : undefined}
       />
 
-      <Card className="mb-3 sm:mb-5">
-        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-4 lg:grid-cols-3">
-          <DateFilter mode="date" value={selectedDate} onChange={value => {
-            setSelectedDate(value)
-            updateUrlFilter('date', value)
-          }} />
-          <div className="min-w-0 space-y-1.5 sm:space-y-2">
-            <Label className="text-xs sm:text-sm">Class</Label>
+      <section
+        aria-label="Attendance filters"
+        className="mb-3 grid grid-cols-1 items-start gap-3 sm:mb-4 sm:grid-cols-2 sm:gap-4 lg:grid-cols-[minmax(260px,1.35fr)_minmax(200px,1fr)_minmax(180px,1fr)]"
+      >
+          <DateFilter
+            mode="date"
+            value={selectedDate}
+            onChange={value => {
+              setSelectedDate(value)
+              updateUrlFilter('date', value)
+            }}
+          />
+          <div className="min-w-0 space-y-2">
+            <Label className="text-xs">Class</Label>
             <Select value={selectedClassId} onValueChange={value => {
               setSelectedClassId(value)
               updateUrlFilter('class_id', value)
             }}>
-              <SelectTrigger><SelectValue placeholder="All classes" /></SelectTrigger>
+              <SelectTrigger className="w-full"><SelectValue placeholder="All classes" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
                 {classes.map(classItem => (
@@ -219,14 +227,14 @@ function StaffDailyAttendance() {
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-2 min-w-0 space-y-1.5 sm:space-y-2 lg:col-span-1">
-            <Label className="text-xs sm:text-sm">Status</Label>
+          <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-1">
+            <Label className="text-xs">Status</Label>
             <Select value={statusFilter} onValueChange={value => {
               const status = value as AttendanceStatus | 'all'
               setStatusFilter(status)
               updateUrlFilter('status', status)
             }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="present">Present</SelectItem>
@@ -236,8 +244,7 @@ function StaffDailyAttendance() {
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
+      </section>
 
       {isNonSchoolDay && (
         <div className="mb-3 flex flex-col gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 sm:mb-5 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
@@ -322,7 +329,9 @@ function StaffDailyAttendance() {
             <DialogTitle>Add Vacation</DialogTitle>
             <DialogDescription>
               Mark {databaseDate(selectedDate)} as a non-attendance day. Any attendance
-              already synchronized for this date will be removed.
+              already synchronized for {selectedClassId === 'all'
+                ? 'all classes'
+                : classes.find(classItem => classItem.id === selectedClassId)?.name ?? 'this class'} will be removed.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -361,6 +370,7 @@ function StaffDailyAttendance() {
                   date: selectedDate,
                   name: vacationName.trim(),
                   description: vacationDescription.trim() || undefined,
+                  classIds: selectedClassId === 'all' ? undefined : [selectedClassId],
                 },
                 {
                   onSuccess: () => {
@@ -566,45 +576,49 @@ function DailyAttendanceSheet({
 
   return (
     <>
-    <Card className="min-w-0 overflow-hidden">
-      <CardHeader className="border-b px-3 py-3 sm:px-6 sm:py-6">
-        <CardTitle className="text-lg sm:text-xl">{session.classes.name}</CardTitle>
+    <Card className="min-w-0 gap-0 overflow-hidden py-0">
+      <CardHeader className="border-b px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <CardTitle className="text-base sm:text-lg">{session.classes.name}</CardTitle>
         <CardDescription className="text-xs sm:text-sm">
           {databaseDate(session.date)} · Daily biometric attendance
         </CardDescription>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-3 p-2 sm:space-y-4 sm:p-5">
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-3">
+      <CardContent className="space-y-2 p-2 sm:p-3">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
           <Summary icon={Users} label="Students" value={students.length} />
           <Summary icon={CheckCircle} label="Present" value={presentCount} tone="present" />
           <Summary icon={UserX} label="Absent" value={absentCount} tone="absent" />
           <Summary icon={CalendarDays} label="Approved leave" value={approvedLeaveCount} />
         </div>
 
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
         <form
-          className={'flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-end'}
+          className="flex min-w-0 flex-1 gap-2"
           onSubmit={event => {
             event.preventDefault()
             setAppliedStudentSearch(studentSearch)
           }}
         >
-          <div className={'min-w-0 flex-1 space-y-1.5'}>
-            <Label htmlFor={'attendance-student-search'}>Search students</Label>
+          <div className="min-w-0 flex-1">
+            <Label htmlFor="attendance-student-search" className="sr-only">Search students</Label>
             <Input
-              id={'attendance-student-search'}
-              type={'search'}
+              id="attendance-student-search"
+              type="search"
               value={studentSearch}
               onChange={event => setStudentSearch(event.target.value)}
-              placeholder={'Student ID, roll number, or name'}
+              placeholder="Search by student ID, roll number, or name"
+              className="h-8"
             />
           </div>
-          <Button type={'submit'} variant={'outline'} className={'shrink-0'}>
+          <Button type="submit" size="sm" variant="outline" className="shrink-0">
             <Search /> Search
           </Button>
         </form>
 
         {isAdmin && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
               <Checkbox
                 checked={allSelected ? true : someSelected ? 'indeterminate' : false}
@@ -641,6 +655,7 @@ function DailyAttendanceSheet({
             </div>
           </div>
         )}
+        </div>
 
         {filteredStudents.length === 0 && (
           <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
@@ -879,7 +894,11 @@ function StudentDailyAttendance() {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
   const monthStart = `${month}-01`
   const monthEnd = format(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0), 'yyyy-MM-dd')
-  const { data: calendarHolidays = [] } = useHolidays(monthStart, monthEnd)
+  const { data: calendarHolidays = [] } = useHolidays(
+    monthStart,
+    monthEnd,
+    student?.class_id ?? undefined,
+  )
 
   useEffect(() => setSelectedCalendarDate(null), [month])
 
@@ -1116,11 +1135,11 @@ function Summary({
       ? 'text-red-600 bg-red-500/10'
       : 'text-primary bg-primary/10'
   return (
-    <div className="flex min-w-0 items-center gap-1.5 rounded-lg border p-2 sm:gap-3 sm:p-3">
-      <div className={`hidden rounded-lg p-2 sm:block ${color}`}><Icon className="h-4 w-4" /></div>
+    <div className="flex min-w-0 items-center gap-2 rounded-md bg-muted/35 px-2 py-1.5 sm:px-2.5">
+      <div className={`hidden rounded-md p-1.5 sm:block ${color}`}><Icon className="h-3.5 w-3.5" /></div>
       <div className="min-w-0">
-        <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{label}</p>
-        <p className="text-base font-semibold sm:text-xl">{value}</p>
+        <p className="truncate text-[10px] leading-tight text-muted-foreground sm:text-xs">{label}</p>
+        <p className="text-sm font-semibold leading-tight sm:text-base">{value}</p>
       </div>
     </div>
   )
