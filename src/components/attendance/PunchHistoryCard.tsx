@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound } from 'lucide-react'
 import { useDailyPunchesPage, useDashboardPunches } from '@/hooks/useDeviceLogs'
 import type { DashboardPunch } from '@/types/database'
@@ -29,12 +30,14 @@ export function PunchHistoryCard({
   const [dateFilter, setDateFilter] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
+  const [search, setSearch] = useState('')
   const punchQuery = useDashboardPunches(admissionNumber, !isTable)
   const tableQuery = useDailyPunchesPage({
     admissionNumber,
     date: dateFilter,
     page,
     pageSize,
+    search,
     enabled: isTable,
   })
   const dailyPunches = isTable
@@ -55,36 +58,42 @@ export function PunchHistoryCard({
       {isTable && (
         <section
           aria-label="Punch history filters"
-          className="mb-3 flex flex-wrap items-end justify-between gap-3 sm:mb-4"
+          className="mb-3 w-full"
         >
-          {!isLoading && !error && (
-            <span className="text-sm text-muted-foreground">
-              {total} {total === 1 ? 'record' : 'records'}
-            </span>
-          )}
-          <div className="flex flex-wrap items-end gap-2">
-            <DateFilter
-              mode="date"
-              value={dateFilter}
-              onChange={changeDate}
-              label="Filter by date"
-              allowClear
-            />
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              Rows per page
-              <select
-                value={pageSize}
-                onChange={event => {
-                  setPageSize(Number(event.target.value))
+          <div className="flex w-full flex-nowrap items-end gap-2">
+            {!admissionNumber && (
+              <StudentSearchInput
+                value={search}
+                onChange={value => {
+                  setSearch(value)
                   setPage(1)
                 }}
-                className="h-9 rounded-md border bg-background px-2 text-sm text-foreground shadow-xs outline-none focus:border-ring"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-            </label>
+                className="min-w-0 flex-1"
+              />
+            )}
+
+            <DateFilter
+    mode="date"
+    value={dateFilter}
+    onChange={changeDate}
+    allowClear
+  />
+
+  <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
+    Rows per page
+    <select
+      value={pageSize}
+      onChange={event => {
+        setPageSize(Number(event.target.value))
+        setPage(1)
+      }}
+      className="h-9 rounded-md border bg-background px-2 text-sm text-foreground shadow-xs outline-none focus:border-ring"
+    >
+      <option value={10}>10</option>
+      <option value={25}>25</option>
+      <option value={50}>50</option>
+    </select>
+  </label>
           </div>
         </section>
       )}
@@ -170,7 +179,7 @@ function AdminPunchTable({
     <div>
       <div className={`transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
         <Table className="min-w-[860px]">
-          <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
+          <TableHeader className="sticky top-0 z-10">
             <TableRow>
               <TableHead className="w-32">Date</TableHead>
               <TableHead>Student</TableHead>

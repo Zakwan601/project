@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, Clock3, Copy, Eye, EyeOff, GraduationCap, History, KeyRound, Pencil, RefreshCw, Search, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
+import { Check, Clock3, Copy, Eye, EyeOff, GraduationCap, History, KeyRound, Pencil, RefreshCw, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
+import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -29,6 +30,15 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { syncZktecoUsers, type ZktecoSyncSummary } from '@/services/zktecoUsers'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
+
+import { MoreHorizontal } from 'lucide-react'
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 // Database types are maintained manually in this project.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -208,16 +218,8 @@ export function StudentsPage() {
       />
 
       <section aria-label="Student filters" className="mb-3 sm:mb-4">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="relative w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search students..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+          <div className="flex  gap-2 flex-row">
+            <StudentSearchInput value={search} onChange={setSearch} className="sm:max-w-sm" />
             <Select value={classFilter} onValueChange={setClassFilter}>
               <SelectTrigger className="w-full sm:w-56" aria-label="Filter students by class">
                 <SelectValue placeholder="All classes" />
@@ -245,110 +247,249 @@ export function StudentsPage() {
           />
         ) : (
           <Table>
-            <TableHeader>
-              <TableRow>
-                {canWriteStudents && <TableHead className="w-10">
-                  <Checkbox
-                    checked={allFilteredSelected}
-                    onCheckedChange={checked => setSelectedStudentIds(
-                      checked ? filtered.map(student => student.id) : [],
-                    )}
-                    aria-label="Select all visible students"
-                  />
-                </TableHead>}
-                <TableHead>Name</TableHead>
-                <TableHead>Admission No.</TableHead>
-                <TableHead>Class</TableHead>
-                <TableHead>Roll No.</TableHead>
-                <TableHead>Guardian Phone</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((student, i) => (
-                <motion.tr
-                  key={student.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.02 }}
-                  className="border-b transition-colors hover:bg-muted/50"
+  <TableHeader>
+    <TableRow>
+      {canWriteStudents && (
+        <TableHead className="w-8 px-2 sm:w-10 sm:px-3">
+          <Checkbox
+            checked={allFilteredSelected}
+            onCheckedChange={checked =>
+              setSelectedStudentIds(
+                checked ? filtered.map(student => student.id) : [],
+              )
+            }
+            aria-label="Select all visible students"
+          />
+        </TableHead>
+      )}
+
+      <TableHead className="px-2 text-xs sm:px-3 sm:text-sm">
+        Name
+      </TableHead>
+
+      <TableHead className="px-2 text-xs sm:px-3 sm:text-sm">
+        Roll No.
+      </TableHead>
+
+      <TableHead className="px-2 text-xs sm:px-3 sm:text-sm">
+        Class
+      </TableHead>
+
+      <TableHead className="px-2 text-xs sm:px-3 sm:text-sm">
+        Guardian Phone
+      </TableHead>
+
+      <TableHead className="px-2 text-xs sm:px-3 sm:text-sm">
+        Status
+      </TableHead>
+
+      <TableHead className="px-2 text-right text-xs sm:px-3 sm:text-sm">
+        Actions
+      </TableHead>
+    </TableRow>
+  </TableHeader>
+
+  <TableBody>
+    {filtered.map((student, i) => (
+      <motion.tr
+        key={student.id}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: i * 0.02 }}
+        className="border-b transition-colors hover:bg-muted/50"
+      >
+        {canWriteStudents && (
+          <TableCell className="px-2 py-1.5 sm:px-3 sm:py-2">
+            <Checkbox
+              checked={selectedStudentIds.includes(student.id)}
+              onCheckedChange={checked =>
+                toggleStudent(student.id, checked === true)
+              }
+              aria-label={`Select ${student.first_name} ${student.last_name}`}
+            />
+          </TableCell>
+        )}
+
+        {/* Name */}
+        <TableCell className="px-2 py-1.5 sm:px-3 sm:py-2">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+            <UserCircle className="h-6 w-6 shrink-0 text-muted-foreground sm:h-8 sm:w-8" />
+
+            <div className="min-w-0">
+              <p className="max-w-[110px] truncate text-xs font-medium sm:max-w-none sm:text-sm">
+                {student.first_name} {student.last_name}
+              </p>
+            </div>
+          </div>
+        </TableCell>
+
+        {/* Roll */}
+        <TableCell className="px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm">
+          {student.roll_number ?? '—'}
+        </TableCell>
+
+        {/* Class */}
+        <TableCell className="px-2 py-1.5 sm:px-3 sm:py-2">
+          {student.classes ? (
+            <span className="block max-w-[80px] truncate text-[10px] sm:max-w-none sm:text-sm">
+              {student.classes.name}
+            </span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground sm:text-sm">
+              —
+            </span>
+          )}
+        </TableCell>
+
+        {/* Guardian Phone */}
+        <TableCell className="px-2 py-1.5 sm:px-3 sm:py-2">
+          <p className="max-w-[85px] truncate text-[10px] text-muted-foreground sm:max-w-none sm:text-xs">
+            {student.guardian_phone ?? '—'}
+          </p>
+        </TableCell>
+
+        {/* Status */}
+        <TableCell className="px-2 py-1.5 sm:px-3 sm:py-2">
+          <Badge
+            variant={student.is_active ? 'default' : 'secondary'}
+            className="px-1.5 py-0.5 text-[9px] sm:px-2 sm:py-0.5 sm:text-xs"
+          >
+            {student.is_active ? 'Active' : 'Inactive'}
+          </Badge>
+        </TableCell>
+
+        {/* Actions */}
+        <TableCell className="px-1 py-1.5 text-right sm:px-3 sm:py-2">
+          {/* Mobile: 3-dot menu */}
+          <div className="flex justify-end sm:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Actions for ${student.first_name} ${student.last_name}`}
                 >
-                  {canWriteStudents && <TableCell>
-                    <Checkbox
-                      checked={selectedStudentIds.includes(student.id)}
-                      onCheckedChange={checked => toggleStudent(student.id, checked === true)}
-                      aria-label={`Select ${student.first_name} ${student.last_name}`}
-                    />
-                  </TableCell>}
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <UserCircle className="h-8 w-8 text-muted-foreground shrink-0" />
-                      <div>
-                        <p className="font-medium">{student.first_name} {student.last_name}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{student.admission_number}</TableCell>
-                  <TableCell>
-                    {student.classes
-                      ? <span className="text-sm">{student.classes.name} ({student.classes.grade}-{student.classes.section})</span>
-                      : <span className="text-muted-foreground text-sm">—</span>}
-                  </TableCell>
-                  <TableCell>{student.roll_number ?? '—'}</TableCell>
-                  <TableCell>
-                    <p className="text-xs text-muted-foreground">{student.guardian_phone ?? ''}</p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={student.is_active ? 'default' : 'secondary'}>
-                      {student.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setHistoryStudent(student)}
-                        title="Academic history"
-                      >
-                        <History className="h-3.5 w-3.5" />
-                      </Button>
-                      {can('punches') && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setPunchStudent(student)}
-                          title="View punching data"
-                          className="text-emerald-600 hover:text-emerald-700"
-                        >
-                          <Clock3 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      {isFullAdmin && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setAccountStudent(student)}
-                          title={student.profile_id ? 'View or reset login credentials' : 'Set up login account'}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          <KeyRound className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      {canWriteStudents && <Button variant="ghost" size="icon-sm" onClick={() => openEdit(student)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>}
-                      {canWriteStudents && <Button variant="ghost" size="icon-sm" onClick={() => setDeleteId(student.id)}
-                        className="text-destructive hover:text-destructive">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>}
-                    </div>
-                  </TableCell>
-                </motion.tr>
-              ))}
-            </TableBody>
-          </Table>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setHistoryStudent(student)}
+                >
+                  <History className="mr-2 h-4 w-4" />
+                  Academic history
+                </DropdownMenuItem>
+
+                {can('punches') && (
+                  <DropdownMenuItem
+                    onClick={() => setPunchStudent(student)}
+                  >
+                    <Clock3 className="mr-2 h-4 w-4" />
+                    View punching data
+                  </DropdownMenuItem>
+                )}
+
+                {isFullAdmin && (
+                  <DropdownMenuItem
+                    onClick={() => setAccountStudent(student)}
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    {student.profile_id
+                      ? 'View / reset login'
+                      : 'Set up login account'}
+                  </DropdownMenuItem>
+                )}
+
+                {canWriteStudents && (
+                  <DropdownMenuItem
+                    onClick={() => openEdit(student)}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit student
+                  </DropdownMenuItem>
+                )}
+
+                {canWriteStudents && (
+                  <DropdownMenuItem
+                    onClick={() => setDeleteId(student.id)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete student
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Desktop: individual action buttons */}
+          <div className="hidden items-center justify-end gap-1 sm:flex">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setHistoryStudent(student)}
+              title="Academic history"
+            >
+              <History className="h-3.5 w-3.5" />
+            </Button>
+
+            {can('punches') && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setPunchStudent(student)}
+                title="View punching data"
+                className="text-emerald-600 hover:text-emerald-700"
+              >
+                <Clock3 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {isFullAdmin && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setAccountStudent(student)}
+                title={
+                  student.profile_id
+                    ? 'View or reset login credentials'
+                    : 'Set up login account'
+                }
+                className="text-blue-600 hover:text-blue-700"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {canWriteStudents && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => openEdit(student)}
+                title="Edit student"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {canWriteStudents && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setDeleteId(student.id)}
+                title="Delete student"
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </TableCell>
+      </motion.tr>
+    ))}
+  </TableBody>
+</Table>
         )}
       </Card>
 

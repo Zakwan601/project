@@ -25,7 +25,7 @@ import type { AttendanceStatus } from '@/types/database'
 
 const chartConfig: ChartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
-  absent: { label: 'Absent', color: 'var(--chart-5)' },
+  absent: { label: 'Absent', color: 'var(--chart-1)' },
   late: { label: 'Late', color: 'var(--chart-4)' },
 }
 
@@ -324,9 +324,7 @@ export function ReportsPage() {
       <Card className="overflow-hidden">
         <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-md border bg-background p-2 text-muted-foreground">
-              <BarChart3 className="h-4 w-4" />
-            </div>
+            
             <div className="min-w-0">
               <CardTitle className="text-lg">Student Attendance Report</CardTitle>
               <CardDescription className="mt-1">Individual attendance summary by class and date range</CardDescription>

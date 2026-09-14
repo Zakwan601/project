@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Eye, Link2, Plus, Printer, Search, Send, Users } from 'lucide-react'
+import { ArrowLeft,  CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Eye, Link2, Plus, Printer, Search, Send, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
@@ -26,8 +26,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { ResultExam, ResultExamType, StudentResultPayload, Student } from '@/types/database'
 import { downloadCsv } from '@/lib/csv'
 
-// Result tables/RPCs are introduced by the accompanying migration.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const db = supabase as any
 
 interface ExamWithDetails extends ResultExam {
@@ -768,7 +767,7 @@ function StaffResults() {
                 {!examsQuery.data?.length ? <EmptyState title="No examinations yet" description="Create an exam to configure subjects and begin entering marks." /> : <div className="divide-y">{examsQuery.data.map(exam => {
                   return <button type="button" key={exam.id} onClick={() => navigate(`/results/${exam.id}`)} className="group w-full px-1 py-4 text-left transition-colors hover:bg-muted/40">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 gap-3"><CalendarDays className="mt-0.5 h-5 w-5 text-muted-foreground" /><div className="min-w-0"><p className="truncate font-semibold">{exam.title || exam.result_exam_types.name}</p><p className="mt-1 text-sm text-muted-foreground">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')} · {exam.academic_years.name}</p></div></div>
+                      <div className="flex min-w-0 gap-3"><div className="min-w-0"><p className="truncate font-semibold">{exam.title || exam.result_exam_types.name}</p><p className="mt-1 text-sm text-muted-foreground">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')} · {exam.academic_years.name}</p></div></div>
                       <Badge variant={exam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{exam.status}</Badge>
                     </div>
                     <div className="mt-2 flex items-center justify-end text-sm text-muted-foreground"><span>Manage</span><ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" /></div>

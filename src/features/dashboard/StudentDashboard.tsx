@@ -12,7 +12,7 @@ import { StudentNotices } from '@/components/dashboard/StudentNotices'
 import { formatDisplayDate } from '@/lib/dateTime'
 const chartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
-  absent: { label: 'Absent', color: 'var(--chart-5)' },
+  absent: { label: 'Absent', color: 'var(--chart-1)' },
   late: { label: 'Late', color: 'var(--chart-4)' },
 } satisfies ChartConfig
 

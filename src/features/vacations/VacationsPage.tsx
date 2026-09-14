@@ -62,11 +62,11 @@ export function VacationsPage() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <PageHeader title="Vacations" description="Add school vacations and exclude those dates from attendance." />
+      <PageHeader title="Vacations" description="" />
       {canWriteVacations && <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <CalendarOff className="h-5 w-5" /> Add Vacation
+             Add Vacation
           </CardTitle>
           <CardDescription>
             Add one day or an inclusive date range. Existing attendance for vacation dates is removed automatically.

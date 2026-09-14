@@ -106,17 +106,20 @@ export const deviceLogsService = {
   },
 
   async getDailyPunchesPage({
+    search = '',
     admissionNumber,
     date,
     page,
     pageSize,
   }: {
+    search?: string
     admissionNumber?: string
     date?: string
     page: number
     pageSize: number
   }): Promise<DailyPunchPage> {
-    const { data, error } = await db.rpc('get_daily_punches_page', {
+    const { data, error } = await db.rpc('search_daily_punches_page', {
+      p_search: search.trim(),
       p_date: date || null,
       p_page: page,
       p_page_size: pageSize,

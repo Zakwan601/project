@@ -21,12 +21,14 @@ export function useDashboardPunches(admissionNumber?: string, enabled = true) {
 }
 
 export function useDailyPunchesPage({
+  search = '',
   admissionNumber,
   date,
   page,
   pageSize,
   enabled = true,
 }: {
+  search?: string
   admissionNumber?: string
   date?: string
   page: number
@@ -37,10 +39,12 @@ export function useDailyPunchesPage({
     queryKey: [DEVICE_LOGS_KEY, 'daily-page', {
       admissionNumber: admissionNumber ?? 'all',
       date: date || 'all',
+      search: search.trim(),
       page,
       pageSize,
     }],
     queryFn: () => deviceLogsService.getDailyPunchesPage({
+      search: search.trim(),
       admissionNumber,
       date,
       page,

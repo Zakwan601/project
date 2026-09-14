@@ -196,8 +196,8 @@ function dateValue(value: string | null) {
 function MessageState({ message, error = false }: { message: string; error?: boolean }) {
   return (
     <div className={`flex flex-col items-center justify-center gap-2 px-5 py-16 text-sm ${error ? 'text-destructive' : 'text-muted-foreground'}`}>
-      <MessageSquareText className="h-8 w-8 opacity-60" />
-      <p>{message}</p>
+      <MessageSquareText className="h-8 w-8 opacity-80 text-red-700" />
+      <p className="text-red-700">{message}</p>
     </div>
   )
 }
@@ -206,5 +206,5 @@ function emptyMessage(status: SmsMessageStatus | 'all', startDate: string, endDa
   if ((startDate || endDate) && status !== 'all') return `No ${status} SMS messages found in the selected period.`
   if (startDate || endDate) return 'No SMS messages found in the selected period.'
   if (status !== 'all') return `No ${status} SMS messages found.`
-  return 'No SMS messages have been sent yet.'
+  return 'Record of SMS sent are cleared frequently. Contact Admin (Zakwan) to get the full details regarding it.'
 }
