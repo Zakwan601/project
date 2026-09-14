@@ -97,8 +97,7 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <School className="h-5 w-5 text-muted-foreground" />
-            <div>
+             <div>
               <CardTitle>Academic Sessions</CardTitle>
               <CardDescription>Manage overlapping student cohort sessions</CardDescription>
             </div>
@@ -197,11 +196,11 @@ export function SettingsPage() {
         <CardContent className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">System</span>
-            <span className="font-medium">NMDC - Axentra@Zuanshi v1.0</span>
+            <span className="font-medium">NMDC - Axentra@Zuanshi v1.0 by Zakwan Masud</span>
           </div>
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">Database</span>
-            <span className="font-medium">Supabase PostgreSQL</span>
+            <span className="font-medium">Supabase PostgreSQL and Render PostgreSQL</span>
           </div>
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">Biometric Support</span>
@@ -209,7 +208,7 @@ export function SettingsPage() {
           </div>
           <div className="flex justify-between py-2">
             <span className="text-muted-foreground">Version</span>
-            <Badge variant="outline">1.0.0</Badge>
+            <Badge variant="outline">1.2.0</Badge>
           </div>
         </CardContent>
       </Card>

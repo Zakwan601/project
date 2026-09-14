@@ -26,6 +26,7 @@ export interface SubAdminPermission {
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
 export type SessionType = 'morning' | 'afternoon' | 'period' | 'full_day'
 export type AttendanceSource = 'manual' | 'biometric' | 'system'
+export type ClassGroup = 'humanities' | 'science' | 'business'
 
 export interface Database {
   public: {
@@ -136,6 +137,7 @@ export interface Class {
   name: string
   grade: string
   section: string
+  class_group: ClassGroup
   academic_year_id: string | null
   capacity: number
   room: string | null
@@ -196,6 +198,7 @@ export interface Subject {
   name: string
   code: string
   class_id: string | null
+  class_group: ClassGroup
   is_active: boolean
   created_at: string
 }
@@ -412,6 +415,7 @@ export interface ResultExamType {
 
 export interface ResultExam {
   id: string
+  exam_group_id: string
   class_id: string
   academic_year_id: string
   exam_type_id: string

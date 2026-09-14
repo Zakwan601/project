@@ -5,20 +5,30 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
-import { Eye, EyeOff, GraduationCap, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
+
 type LoginForm = z.infer<typeof loginSchema>
 
-const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
+const turnstileSiteKey =
+  (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() ||
+  undefined
+
 const TURNSTILE_WAIT_TIMEOUT = 30_000
 
 type LoginPhase = 'idle' | 'verifying' | 'signing-in'
@@ -33,31 +43,47 @@ function isTurnstileAuthError(error: Error) {
   const status = 'status' in error ? Number(error.status) : 0
   const code = 'code' in error ? String(error.code) : ''
   const message = error.message.toLowerCase()
-  return status === 403
-    || code === 'captcha_failed'
-    || message.includes('captcha')
-    || message.includes('turnstile')
-    || message.includes('security verification')
+
+  return (
+    status === 403 ||
+    code === 'captcha_failed' ||
+    message.includes('captcha') ||
+    message.includes('turnstile') ||
+    message.includes('security verification')
+  )
 }
 
 function loginErrorMessage(error: Error) {
   const status = 'status' in error ? Number(error.status) : 0
   const code = 'code' in error ? String(error.code) : ''
-  if (isTurnstileAuthError(error)) return 'Security verification failed. Please try again.'
-  if (code === 'profile_load_failed') return 'Signed in, but your profile could not be loaded. Please try again.'
-  if (status === 429) return 'Too many attempts. Wait a few minutes and try again.'
+
+  if (isTurnstileAuthError(error)) {
+    return 'Security verification failed. Please try again.'
+  }
+
+  if (code === 'profile_load_failed') {
+    return 'Signed in, but your profile could not be loaded. Please try again.'
+  }
+
+  if (status === 429) {
+    return 'Too many attempts. Wait a few minutes and try again.'
+  }
+
   if (/network|fetch|connection|timeout/i.test(error.message)) {
     return 'Unable to reach the sign-in service. Check your connection and try again.'
   }
+
   return 'Unable to sign in. Check your credentials and try again.'
 }
 
 export function LoginPage() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
+
   const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
   const [loginPhase, setLoginPhase] = useState<LoginPhase>('idle')
+
   const turnstileRef = useRef<TurnstileInstance>(null)
   const turnstileTokenRef = useRef<string | null>(null)
   const widgetReadyRef = useRef(false)
@@ -66,7 +92,11 @@ export function LoginPage() {
   const loginAttemptRef = useRef(0)
   const loginPhaseRef = useRef<LoginPhase>('idle')
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   })
 
@@ -80,6 +110,7 @@ export function LoginPage() {
       clearTimeout(waiter.timeoutId)
       waiter.reject(reason)
     }
+
     tokenWaitersRef.current.clear()
   }, [])
 
@@ -88,6 +119,7 @@ export function LoginPage() {
       clearTimeout(waiter.timeoutId)
       waiter.resolve(token)
     }
+
     tokenWaitersRef.current.clear()
   }, [])
 
@@ -102,8 +134,6 @@ export function LoginPage() {
     widgetFailedRef.current = true
     rejectTokenWaiters(new Error('Security verification failed'))
 
-    // Background expiry/timeouts are recoverable and should not alarm the user.
-    // During a login, the submit flow resets and retries with a fresh token.
     if (loginPhaseRef.current === 'idle') {
       window.setTimeout(() => resetTurnstile(), 0)
     }
@@ -111,19 +141,28 @@ export function LoginPage() {
 
   const waitForTurnstileToken = useCallback(() => {
     if (!turnstileSiteKey) {
-      return Promise.reject(new Error('Security verification is not configured'))
+      return Promise.reject(
+        new Error('Security verification is not configured')
+      )
     }
 
     const widget = turnstileRef.current
+
     if (widgetReadyRef.current && widget?.isExpired()) {
       resetTurnstile()
     }
 
-    const existingToken = turnstileTokenRef.current
-      || (widgetReadyRef.current ? widget?.getResponse() : undefined)
-    if (existingToken) return Promise.resolve(existingToken)
+    const existingToken =
+      turnstileTokenRef.current ||
+      (widgetReadyRef.current ? widget?.getResponse() : undefined)
 
-    if (widgetFailedRef.current) resetTurnstile()
+    if (existingToken) {
+      return Promise.resolve(existingToken)
+    }
+
+    if (widgetFailedRef.current) {
+      resetTurnstile()
+    }
 
     return new Promise<string>((resolve, reject) => {
       const waiter: TokenWaiter = {
@@ -134,46 +173,69 @@ export function LoginPage() {
           reject(new Error('Security verification timed out'))
         }, TURNSTILE_WAIT_TIMEOUT),
       }
+
       tokenWaitersRef.current.add(waiter)
     })
   }, [resetTurnstile])
 
-  useEffect(() => () => {
-    loginAttemptRef.current += 1
-    rejectTokenWaiters(new Error('Login page closed'))
-  }, [rejectTokenWaiters])
+  useEffect(
+    () => () => {
+      loginAttemptRef.current += 1
+      rejectTokenWaiters(new Error('Login page closed'))
+    },
+    [rejectTokenWaiters]
+  )
 
   const onSubmit = async (data: LoginForm) => {
     if (loginPhaseRef.current !== 'idle') return
 
     const attemptId = ++loginAttemptRef.current
+
     setError('')
+
     if (!turnstileSiteKey) {
-      setError('Security verification is not configured. Contact the administrator.')
+      setError(
+        'Security verification is not configured. Contact the administrator.'
+      )
       return
     }
 
     try {
-      for (let verificationAttempt = 0; verificationAttempt < 2; verificationAttempt += 1) {
+      for (
+        let verificationAttempt = 0;
+        verificationAttempt < 2;
+        verificationAttempt += 1
+      ) {
         updateLoginPhase('verifying')
 
         let token: string
+
         try {
           token = await waitForTurnstileToken()
         } catch (verificationError) {
           if (attemptId !== loginAttemptRef.current) return
+
           resetTurnstile()
+
           if (verificationAttempt === 0) continue
+
           throw verificationError
         }
 
         if (attemptId !== loginAttemptRef.current) return
+
         updateLoginPhase('signing-in')
-        const { error: signInError } = await signIn(data.email, data.password, token)
+
+        const { error: signInError } = await signIn(
+          data.email,
+          data.password,
+          token
+        )
+
         if (attemptId !== loginAttemptRef.current) return
 
-        // Turnstile tokens are single-use, including rejected authentication requests.
         resetTurnstile()
+
         if (!signInError) {
           navigate('/dashboard')
           return
@@ -190,50 +252,68 @@ export function LoginPage() {
       setError('Security verification failed. Please try again.')
     } catch (submissionError) {
       if (attemptId !== loginAttemptRef.current) return
+
       resetTurnstile()
-      setError(submissionError instanceof Error && submissionError.message.includes('not configured')
-        ? 'Security verification is not configured. Contact the administrator.'
-        : 'Security verification failed. Please try again.')
+
+      setError(
+        submissionError instanceof Error &&
+          submissionError.message.includes('not configured')
+          ? 'Security verification is not configured. Contact the administrator.'
+          : 'Security verification failed. Please try again.'
+      )
     } finally {
-      if (attemptId === loginAttemptRef.current) updateLoginPhase('idle')
+      if (attemptId === loginAttemptRef.current) {
+        updateLoginPhase('idle')
+      }
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted px-4 py-8">
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
         className="w-full max-w-md"
       >
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-              <GraduationCap className="h-7 w-7" />
-            </div>
-            <div>
-              <p className="text-xl font-bold tracking-tight">New Model Degree College (NMDC)</p>
-              <p className="text-xl font-bold tracking-tight">Axentra@Zuanshi</p>
-              <p className="text-xs text-muted-foreground">School Attendance System</p>
-            </div>
-          </div>
+        {/* College Header */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <img
+            src="https://scontent.fbzl5-1.fna.fbcdn.net/v/t39.30808-6/318431408_1809625186084070_8125449697042984644_n.jpg?stp=dst-jpg_tt6&cstp=mx449x449&ctp=s449x449&_nc_cat=111&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=W_5qXAmMAU8Q7kNvwF-yTEO&_nc_oc=Adp5K-M_Pw4MR5tCCqsZX_RKRemhWCYaFYBIh-H0KI90CM8R9Pnquk4nIMUgEsHMXFc&_nc_zt=23&_nc_ht=scontent.fbzl5-1.fna&_nc_gid=OnNzOssFyZeaRFa40lRCaT&_nc_ss=7b289&oh=00_AQJzW7r5kBOwUNoX6121TbH1lxvVO9ymnAN5jZ5AmySl2g&oe=6AADEF18"
+            alt="NMDC Logo"
+            className="mb-3 h-20 w-20 object-contain"
+          />
+
+          <p className="text-xl font-bold leading-tight tracking-tight">
+            New Model Degree College (NMDC)
+            <br />
+            Student Portal
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Powered by - Axentra@Zuanshi
+          </p>
         </div>
 
         <Card className="shadow-lg">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl">Sign in</CardTitle>
-            <CardDescription>Enter your credentials to access your account</CardDescription>
+          <CardHeader className="space-y-1 px-6 pb-5 pt-6">
+            <CardTitle className="text-xl">Sign in</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Enter your credentials to access your account
+            </p>
           </CardHeader>
+
           <form onSubmit={handleSubmit(onSubmit)}>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5 px-6">
               {error && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive border border-destructive/20">
+                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
+
                 <Input
                   id="email"
                   type="email"
@@ -242,19 +322,28 @@ export function LoginPage() {
                   {...register('email')}
                   aria-invalid={!!errors.email}
                 />
-                {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+
+                {errors.email && (
+                  <p className="text-xs text-destructive">
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
+
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPwd ? 'text' : 'password'}
                     placeholder="••••••••"
                     autoComplete="current-password"
+                    className="pr-10"
                     {...register('password')}
                     aria-invalid={!!errors.password}
                   />
+
                   <Button
                     type="button"
                     variant="ghost"
@@ -263,13 +352,23 @@ export function LoginPage() {
                     onClick={() => setShowPwd(v => !v)}
                     aria-label={showPwd ? 'Hide password' : 'Show password'}
                   >
-                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPwd ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
-                {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+
+                {errors.password && (
+                  <p className="text-xs text-destructive">
+                    {errors.password.message}
+                  </p>
+                )}
               </div>
+
               {turnstileSiteKey ? (
-                <div className="flex justify-center rounded-md border bg-background p-2">
+                <div className="flex justify-center overflow-hidden rounded-md border bg-background p-2">
                   <Turnstile
                     ref={turnstileRef}
                     siteKey={turnstileSiteKey}
@@ -304,17 +403,31 @@ export function LoginPage() {
                   />
                 </div>
               ) : (
-                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  Security verification is not configured. Add the Turnstile site key before deploying.
+                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+                  Security verification is not configured. Add the Turnstile
+                  site key before deploying.
                 </div>
               )}
             </CardContent>
-            <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={loginPhase !== 'idle'}>
-                {loginPhase !== 'idle' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {loginPhase === 'verifying' ? 'Verifying...' : loginPhase === 'signing-in' ? 'Signing in...' : 'Sign In'}
+
+            <CardFooter className="flex flex-col gap-3 px-6 pb-6 pt-5">
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loginPhase !== 'idle'}
+              >
+                {loginPhase !== 'idle' && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+
+                {loginPhase === 'verifying'
+                  ? 'Verifying...'
+                  : loginPhase === 'signing-in'
+                    ? 'Signing in...'
+                    : 'Sign In'}
               </Button>
-              <p className="text-xs text-muted-foreground text-center">
+
+              <p className="text-center text-xs text-muted-foreground">
                 Contact your administrator for account credentials.
               </p>
             </CardFooter>
@@ -324,3 +437,4 @@ export function LoginPage() {
     </div>
   )
 }
+

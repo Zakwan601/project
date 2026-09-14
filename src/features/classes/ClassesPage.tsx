@@ -18,7 +18,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { AcademicYear, Class, ClassWithDetails } from '@/types/database'
+import type { AcademicYear, Class, ClassGroup, ClassWithDetails } from '@/types/database'
 import { useAuth } from '@/contexts/AuthContext'
 
 const classSchema = z.object({
@@ -26,6 +26,7 @@ const classSchema = z.object({
   name: z.string().min(1, 'Required'),
   grade: z.string().min(1, 'Required'),
   section: z.string().min(1, 'Required'),
+  class_group: z.enum(['humanities', 'science', 'business'], { message: 'Class group is required' }),
   capacity: z.number().int().min(1),
   room: z.string().optional(),
 })
@@ -82,6 +83,7 @@ export function ClassesPage() {
       name: c.name,
       grade: c.grade,
       section: c.section,
+      class_group: c.class_group,
       capacity: c.capacity,
       room: c.room ?? undefined,
     })
@@ -95,6 +97,7 @@ export function ClassesPage() {
       name: data.name,
       grade: data.grade,
       section: data.section,
+      class_group: data.class_group,
       capacity: data.capacity,
       room: data.room || null,
       academic_year_id: data.academic_year_id,
@@ -177,6 +180,9 @@ export function ClassesPage() {
                     {cls.room && <p className="text-xs text-muted-foreground">Room: {cls.room}</p>}
 
                     <div className="flex items-center gap-2 mt-3">
+                      <Badge variant="outline" className="text-xs capitalize">
+                        {cls.class_group}
+                      </Badge>
                       <Badge variant={cls.is_active ? 'default' : 'secondary'} className="text-xs">
                         {cls.is_active ? 'Active' : 'Inactive'}
                       </Badge>
@@ -225,6 +231,23 @@ export function ClassesPage() {
                 <Label>Class Name *</Label>
                 <Input {...register('name')} placeholder="e.g. Class 10-A" aria-invalid={!!errors.name} />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label>Class Group *</Label>
+                <Select
+                  value={watch('class_group')}
+                  onValueChange={value => setValue('class_group', value as ClassGroup, { shouldValidate: true })}
+                >
+                  <SelectTrigger aria-invalid={!!errors.class_group}>
+                    <SelectValue placeholder="Select class group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="humanities">Humanities</SelectItem>
+                    <SelectItem value="science">Science</SelectItem>
+                    <SelectItem value="business">Business</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.class_group && <p className="text-xs text-destructive">{errors.class_group.message}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Grade *</Label>
