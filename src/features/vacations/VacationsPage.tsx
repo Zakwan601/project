@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { CalendarOff, Loader2, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { useMarkAttendanceVacation } from '@/hooks/useAttendance'

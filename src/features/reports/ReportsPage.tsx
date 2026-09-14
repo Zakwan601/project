@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
-import { BarChart3, Download, Printer } from 'lucide-react'
+import {  Download, Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any

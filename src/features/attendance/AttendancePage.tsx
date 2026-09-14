@@ -1006,14 +1006,7 @@ function Summary({
   )
 }
 
-function MobileAttendanceDetail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="truncate font-mono text-[11px] font-medium">{value}</p>
-    </div>
-  )
-}
+
 
 function databaseDate(value: string) {
   return formatDisplayDate(value)
