@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
-  BarChart3, CalendarOff, Cpu, Settings, User, GraduationCap, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog, FileSpreadsheet,
+  BarChart3, CalendarOff, Cpu, Settings, User, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog, FileSpreadsheet,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import type { PermissionKey, UserRole } from '@/types/database'
