@@ -1,29 +1,31 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { LoginPage } from '@/features/auth/LoginPage'
-import { DashboardPage } from '@/features/dashboard/DashboardPage'
-import { StudentsPage } from '@/features/students/StudentsPage'
-import { ClassesPage } from '@/features/classes/ClassesPage'
-import { AttendancePage } from '@/features/attendance/AttendancePage'
-import { ReportsPage } from '@/features/reports/ReportsPage'
-import { DevicesPage } from '@/features/devices/DevicesPage'
-import { SettingsPage } from '@/features/settings/SettingsPage'
-import { ProfilePage } from '@/features/profile/ProfilePage'
-import { RecentPunchesPage } from '@/features/punches/RecentPunchesPage'
-import { StudentReportsPage } from '@/features/reports/StudentReportsPage'
-import { ComplaintsPage } from '@/features/reports/ComplaintsPage'
-import { SmsMessagesPage } from '@/features/sms/SmsMessagesPage'
-import { AnnouncementsPage } from '@/features/announcements/AnnouncementsPage'
-import { DepartureAnomaliesPage } from '@/features/departure-anomalies/DepartureAnomaliesPage'
-import { VacationsPage } from '@/features/vacations/VacationsPage'
-import { AccessControlPage } from '@/features/access/AccessControlPage'
-import { ResultsPage } from '@/features/results/ResultsPage'
-import { SharedResultPage } from '@/features/results/SharedResultPage'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
+
+const LoginPage = lazy(() => import('@/features/auth/LoginPage').then(module => ({ default: module.LoginPage })))
+const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then(module => ({ default: module.DashboardPage })))
+const StudentsPage = lazy(() => import('@/features/students/StudentsPage').then(module => ({ default: module.StudentsPage })))
+const ClassesPage = lazy(() => import('@/features/classes/ClassesPage').then(module => ({ default: module.ClassesPage })))
+const AttendancePage = lazy(() => import('@/features/attendance/AttendancePage').then(module => ({ default: module.AttendancePage })))
+const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then(module => ({ default: module.ReportsPage })))
+const DevicesPage = lazy(() => import('@/features/devices/DevicesPage').then(module => ({ default: module.DevicesPage })))
+const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(module => ({ default: module.SettingsPage })))
+const ProfilePage = lazy(() => import('@/features/profile/ProfilePage').then(module => ({ default: module.ProfilePage })))
+const RecentPunchesPage = lazy(() => import('@/features/punches/RecentPunchesPage').then(module => ({ default: module.RecentPunchesPage })))
+const StudentReportsPage = lazy(() => import('@/features/reports/StudentReportsPage').then(module => ({ default: module.StudentReportsPage })))
+const ComplaintsPage = lazy(() => import('@/features/reports/ComplaintsPage').then(module => ({ default: module.ComplaintsPage })))
+const SmsMessagesPage = lazy(() => import('@/features/sms/SmsMessagesPage').then(module => ({ default: module.SmsMessagesPage })))
+const AnnouncementsPage = lazy(() => import('@/features/announcements/AnnouncementsPage').then(module => ({ default: module.AnnouncementsPage })))
+const DepartureAnomaliesPage = lazy(() => import('@/features/departure-anomalies/DepartureAnomaliesPage').then(module => ({ default: module.DepartureAnomaliesPage })))
+const VacationsPage = lazy(() => import('@/features/vacations/VacationsPage').then(module => ({ default: module.VacationsPage })))
+const AccessControlPage = lazy(() => import('@/features/access/AccessControlPage').then(module => ({ default: module.AccessControlPage })))
+const ResultsPage = lazy(() => import('@/features/results/ResultsPage').then(module => ({ default: module.ResultsPage })))
+const SharedResultPage = lazy(() => import('@/features/results/SharedResultPage').then(module => ({ default: module.SharedResultPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +43,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
+            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
@@ -128,6 +131,7 @@ function App() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
           <Toaster richColors position="top-right" />
         </AuthProvider>

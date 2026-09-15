@@ -80,7 +80,7 @@ export function PunchHistoryCard({
   />
 
   <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-    Rows per page
+    <span className="hidden md:block">Rows per page</span>
     <select
       value={pageSize}
       onChange={event => {

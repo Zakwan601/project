@@ -497,7 +497,7 @@ function DailyAttendanceSheet({
     <Card className="min-w-0 gap-0 overflow-hidden py-0">
       <CardHeader className=" ">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <CardTitle className="text-base sm:text-lg pt-4 md:pt-0">{session.classes.name} <br/><span className="text-xs sm:text-sm">Date: {databaseDate(session.date)}</span> </CardTitle>
+          <CardTitle className="text-base sm:text-lg pt-4">{session.classes.name} <br/><span className="text-xs sm:text-sm">Date: {databaseDate(session.date)}</span> </CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-2 p-2 sm:p-3">

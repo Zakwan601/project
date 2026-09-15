@@ -279,7 +279,7 @@ export function LoginPage() {
         {/* College Header */}
         <div className="mb-8 flex flex-col items-center text-center">
           <img
-            src="https://scontent.fbzl5-1.fna.fbcdn.net/v/t39.30808-6/318431408_1809625186084070_8125449697042984644_n.jpg?stp=dst-jpg_tt6&cstp=mx449x449&ctp=s449x449&_nc_cat=111&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=W_5qXAmMAU8Q7kNvwF-yTEO&_nc_oc=Adp5K-M_Pw4MR5tCCqsZX_RKRemhWCYaFYBIh-H0KI90CM8R9Pnquk4nIMUgEsHMXFc&_nc_zt=23&_nc_ht=scontent.fbzl5-1.fna&_nc_gid=OnNzOssFyZeaRFa40lRCaT&_nc_ss=7b289&oh=00_AQJzW7r5kBOwUNoX6121TbH1lxvVO9ymnAN5jZ5AmySl2g&oe=6AADEF18"
+            src="https://ik.imagekit.io/nmdc/nmdc_logo.jpg"
             alt="NMDC Logo"
             className="mb-3 h-20 w-20 object-contain"
           />

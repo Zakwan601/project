@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Eye, Link2, Pencil, Plus, Printer, Search, Send, Settings, Users } from 'lucide-react'
@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useClasses } from '@/hooks/useClasses'
-import { PageHeader, EmptyState, ErrorState, LoadingState } from '@/components/shared/PageHeader'
+import { EmptyState, ErrorState, LoadingState } from '@/components/shared/PageHeader'
 import { ResultSheet } from '@/features/results/ResultSheet'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,185 +23,34 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import type { ClassGroup, ResultExam, ResultExamType, StudentResultPayload, Student } from '@/types/database'
+import type { ClassGroup, ResultExamType, StudentResultPayload, Student } from '@/types/database'
 import { downloadCsv } from '@/lib/csv'
+import { MarkInput, SimpleDialog } from '@/features/results/ResultControls'
+import {
+  examSubjectTotal,
+  gradeSubject,
+  overallGrade,
+  type ClassSubject,
+  type ExamResultReportRow,
+  type ExamResultSubjectCell,
+  type ExamSubject,
+  type ExamSubjectConfigDraft,
+  type ExamWithDetails,
+  type MarkDraft,
+  type MarkRow,
+  type ResultShareLink,
+  type ResultSmsSummary,
+} from '@/features/results/result-model'
 
 
 const db = supabase as any
-
-interface ExamWithDetails extends ResultExam {
-  result_exam_types: { name: string }
-  academic_years: { name: string }
-  classes: { name: string; grade: string; section: string; class_group: ClassGroup }
-}
-
-interface ExamSubject {
-  id: string
-  exam_id: string
-  subject_id: string
-  creative_max: number
-  written_max: number
-  practical_max: number
-  pass_mark: number
-  sort_order: number
-  subjects: { id: string; name: string; code: string }
-}
-
-interface MarkRow {
-  id: string
-  exam_subject_id: string
-  student_id: string
-  creative_marks: number | null
-  written_marks: number | null
-  practical_marks: number | null
-  is_absent: boolean
-  remarks: string | null
-}
-
-interface ExamResultSubjectCell {
-  obtained: number
-  totalMax: number
-  absent: boolean
-  complete: boolean
-  passed: boolean
-  gradePoint: number
-}
-
-interface ExamResultReportRow {
-  id: string
-  name: string
-  admission: string
-  roll: number | null
-  subjects: Record<string, ExamResultSubjectCell>
-  totalObtained: number
-  totalMax: number
-  failedSubjects: number
-  gpa: number | null
-  grade: string
-  complete: boolean
-  position: number | null
-}
-
-interface MarkDraft {
-  creative: string
-  written: string
-  practical: string
-  absent: boolean
-}
-
-interface ClassSubject {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  class_group: ClassGroup
-}
-
-interface ExamSubjectConfigDraft {
-  selected: boolean
-  creative: string
-  written: string
-  practical: string
-  pass: string
-  total: string
-}
-
-interface ResultSmsSummary {
-  submitted: number
-  skipped: number
-  failed: number
-  missingPhone: number
-}
-
-interface ResultShareLink {
-  id: string
-  token: string
-  expires_at: string | null
-}
-
-function gradeSubject(obtained: number, totalMax: number, passMark: number, absent: boolean) {
-  if (absent || obtained < passMark) return { passed: false, gradePoint: 0 }
-  const percentage = totalMax > 0 ? obtained * 100 / totalMax : 0
-  if (percentage >= 80) return { passed: true, gradePoint: 5 }
-  if (percentage >= 70) return { passed: true, gradePoint: 4 }
-  if (percentage >= 60) return { passed: true, gradePoint: 3.5 }
-  if (percentage >= 50) return { passed: true, gradePoint: 3 }
-  if (percentage >= 40) return { passed: true, gradePoint: 2 }
-  if (percentage >= 33) return { passed: true, gradePoint: 1 }
-  return { passed: false, gradePoint: 0 }
-}
-
-function overallGrade(gpa: number, failedSubjects: number) {
-  if (failedSubjects > 0 || gpa < 1) return 'F'
-  if (gpa >= 5) return 'A+'
-  if (gpa >= 4) return 'A'
-  if (gpa >= 3.5) return 'A-'
-  if (gpa >= 3) return 'B'
-  if (gpa >= 2) return 'C'
-  return 'D'
-}
-
-function examSubjectTotal(subject: ExamSubject) {
-  return subject.creative_max + subject.written_max + subject.practical_max
-}
+const StudentResultsPage = lazy(() => import('@/features/results/StudentResultsPage').then(module => ({ default: module.StudentResultsPage })))
 
 export function ResultsPage() {
   const { role } = useAuth()
-  return role === 'student' ? <StudentResults /> : <StaffResults />
-}
-
-function StudentResults() {
-  const { student } = useAuth()
-  const [examId, setExamId] = useState('')
-  const examsQuery = useQuery<ExamWithDetails[]>({
-    queryKey: ['student-result-exams', student?.id],
-    enabled: Boolean(student?.id),
-    queryFn: async () => {
-      const { data, error } = await db.from('result_exams')
-        .select('*, result_exam_types(name), academic_years(name), classes(name, grade, section)')
-        .eq('status', 'published').order('exam_date', { ascending: false })
-      if (error) throw error
-      return data as ExamWithDetails[]
-    },
-  })
-
-  useEffect(() => {
-    if (!examId && examsQuery.data?.[0]) setExamId(examsQuery.data[0].id)
-  }, [examId, examsQuery.data])
-
-  const resultQuery = useQuery<StudentResultPayload>({
-    queryKey: ['student-result', examId, student?.id],
-    enabled: Boolean(examId && student?.id),
-    queryFn: async () => {
-      const { data, error } = await db.rpc('get_student_result', { p_exam_id: examId, p_student_id: student!.id })
-      if (error) throw error
-      return data as StudentResultPayload
-    },
-  })
-
-  if (examsQuery.isLoading) return <LoadingState />
-  if (examsQuery.error) return <ErrorState message={(examsQuery.error as Error).message} />
-  return (
-    <div>
-      <PageHeader title="My Results" description="Published examination results are read-only." action={resultQuery.data ? (
-        <Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print</Button>
-      ) : undefined} />
-      {!examsQuery.data?.length ? <EmptyState title="No published results" description="Your results will appear here after publication." /> : (
-        <>
-          <div className="mb-5 max-w-md">
-            <Label>Examination</Label>
-            <Select value={examId} onValueChange={setExamId}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>{examsQuery.data.map(exam => (
-                <SelectItem key={exam.id} value={exam.id}>{exam.result_exam_types.name} · {exam.classes.name} · {exam.exam_date}</SelectItem>
-              ))}</SelectContent>
-            </Select>
-          </div>
-          {resultQuery.isLoading ? <LoadingState /> : resultQuery.error ? <ErrorState message={(resultQuery.error as Error).message} /> : resultQuery.data ? <ResultSheet result={resultQuery.data} /> : null}
-        </>
-      )}
-    </div>
-  )
+  return role === 'student'
+    ? <Suspense fallback={<LoadingState />}><StudentResultsPage /></Suspense>
+    : <StaffResults />
 }
 
 function StaffResults() {
@@ -222,13 +71,10 @@ function StaffResults() {
   const [settingsDialog, setSettingsDialog] = useState(false)
   const [configDialog, setConfigDialog] = useState(false)
   const [configureAfterCreateExamId, setConfigureAfterCreateExamId] = useState<string | null>(null)
-  const [typeDialog, setTypeDialog] = useState(false)
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null)
-  const [editingTypeId, setEditingTypeId] = useState<string | null>(null)
   const [examForm, setExamForm] = useState({ classIds: [] as string[], typeId: '', title: '', date: '' })
   const [subjectForm, setSubjectForm] = useState({ name: '', code: '' })
   const [settingsGroup, setSettingsGroup] = useState<ClassGroup>('science')
-  const [typeForm, setTypeForm] = useState({ name: '', sortOrder: '0', isActive: true })
   const [configRows, setConfigRows] = useState<Record<string, ExamSubjectConfigDraft>>({})
   const [drafts, setDrafts] = useState<Record<string, MarkDraft>>({})
   const [marksSaveStatus, setMarksSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -237,6 +83,7 @@ function StaffResults() {
   const [shareUrl, setShareUrl] = useState('')
   const [publishing, setPublishing] = useState(false)
   const [mobileRosterOpen, setMobileRosterOpen] = useState(false)
+  const activeExamId = routeExamId || examId
 
   const examClasses = useMemo(
     () => classes.filter(item => item.is_active && item.academic_year_id),
@@ -257,6 +104,7 @@ function StaffResults() {
 
   const examTypesQuery = useQuery<ResultExamType[]>({
     queryKey: ['result-exam-types'],
+    enabled: examDialog,
     queryFn: async () => {
       const { data, error } = await db.from('result_exam_types').select('*').order('sort_order').order('name')
       if (error) throw error
@@ -291,7 +139,7 @@ function StaffResults() {
   const selectedClassGroup = classes.find(item => item.id === classId)?.class_group
   const subjectGroup = isExamPage ? selectedClassGroup : settingsGroup
   const subjectsQuery = useQuery<ClassSubject[]>({
-    queryKey: ['result-subjects', subjectGroup], enabled: Boolean(subjectGroup),
+    queryKey: ['result-subjects', subjectGroup], enabled: Boolean(subjectGroup && (isExamPage || settingsDialog)),
     queryFn: async () => {
       const { data, error } = await db.from('subjects').select('id,name,code,is_active,class_group').eq('class_group', subjectGroup).order('name')
       if (error) throw error
@@ -313,14 +161,14 @@ function StaffResults() {
   })
 
   useEffect(() => {
-    if (examId && !examsQuery.data?.some(item => item.id === examId)) setExamId('')
+    if (examId && examsQuery.data && !examsQuery.data.some(item => item.id === examId)) setExamId('')
   }, [examId, examsQuery.data])
 
-  const selectedExam = examsQuery.data?.find(item => item.id === examId)
+  const selectedExam = routeExamQuery.data ?? examsQuery.data?.find(item => item.id === activeExamId)
   const examSubjectsQuery = useQuery<ExamSubject[]>({
-    queryKey: ['result-exam-subjects', examId], enabled: Boolean(examId),
+    queryKey: ['result-exam-subjects', activeExamId], enabled: Boolean(activeExamId),
     queryFn: async () => {
-      const { data, error } = await db.from('result_exam_subjects').select('*, subjects(id,name,code)').eq('exam_id', examId).order('sort_order')
+      const { data, error } = await db.from('result_exam_subjects').select('*, subjects(id,name,code)').eq('exam_id', activeExamId).order('sort_order')
       if (error) throw error
       return data as ExamSubject[]
     },
@@ -547,18 +395,6 @@ function StaffResults() {
     if (error) return toast.error(error.message)
     await qc.invalidateQueries({ queryKey: ['result-subjects', settingsGroup] })
     toast.success(subject.is_active ? 'Subject disabled for new exams' : 'Subject enabled')
-  }
-
-  const saveExamType = async () => {
-    if (!typeForm.name.trim()) return toast.error('Exam type name is required')
-    const payload = { name: typeForm.name.trim(), sort_order: Number(typeForm.sortOrder) || 0, is_active: typeForm.isActive }
-    const request = editingTypeId
-      ? db.from('result_exam_types').update(payload).eq('id', editingTypeId)
-      : db.from('result_exam_types').insert({ ...payload, created_by: user?.id })
-    const { error } = await request
-    if (error) return toast.error(error.message)
-    setTypeForm({ name: '', sortOrder: '0', isActive: true }); setEditingTypeId(null); setTypeDialog(false)
-    await qc.invalidateQueries({ queryKey: ['result-exam-types'] }); toast.success(editingTypeId ? 'Exam type updated' : 'Exam type added')
   }
 
   const openSubjectConfiguration = () => {
@@ -851,6 +687,9 @@ function StaffResults() {
             </Card>
           </TabsContent>
           <TabsContent value="marks" className="mt-0">
+            {examSubjectsQuery.isLoading && <LoadingState message="Loading configured subjects..." />}
+            {examSubjectsQuery.error && <ErrorState message={(examSubjectsQuery.error as Error).message} />}
+            <div className={examSubjectsQuery.isLoading || examSubjectsQuery.error ? 'hidden' : undefined}>
             {!examSubjectsQuery.data?.length ? <Card className="border-0 bg-transparent shadow-none"><CardContent className="py-14"><EmptyState title="Configure subjects first" description="Add the subjects and component maximums for this examination." />{canWrite && <div className="mt-4 flex justify-center"><Button onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button></div>}</CardContent></Card> : <><div className="mb-3 xl:hidden"><Sheet open={mobileRosterOpen} onOpenChange={setMobileRosterOpen}><SheetTrigger asChild><Button variant="outline" className="w-full justify-between"><span className="flex items-center gap-2"><Users className="h-4 w-4" /> Students</span><span className="flex min-w-0 items-center gap-2 text-muted-foreground"><span className="max-w-48 truncate">{selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name}` : `${studentsQuery.data?.length ?? 0} available`}</span><ChevronRight className="h-4 w-4" /></span></Button></SheetTrigger><SheetContent side="left" className="w-[88%] gap-0 p-0"><SheetHeader className="border-b pr-12"><SheetTitle>Student roster</SheetTitle><SheetDescription>{studentsQuery.data?.length ?? 0} students in this class</SheetDescription><div className="relative pt-2"><Search className="absolute left-3 top-4.5 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="pl-9" /></div></SheetHeader><ScrollArea className="min-h-0 flex-1"><div className="space-y-1 p-2">{filteredStudents.map(student => { const result = examResultRows.find(row => row.id === student.id); const active = student.id === selectedStudentId; const initials = `${student.first_name[0] ?? ''}${student.last_name[0] ?? ''}`.toUpperCase(); return <button type="button" key={student.id} onClick={() => { setSelectedStudentId(student.id); setShareUrl(''); setMobileRosterOpen(false) }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Avatar className="h-9 w-9"><AvatarFallback className={active ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>{initials}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{student.first_name} {student.last_name}</span><span className={`block truncate text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>Roll {student.roll_number ?? '—'} · {student.admission_number}</span></span>{result?.complete && <CheckCircle2 className={`h-4 w-4 ${active ? '' : 'text-emerald-600'}`} />}</button> })}{filteredStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea></SheetContent></Sheet></div><div className="grid min-w-0 xl:grid-cols-[300px_minmax(0,1fr)]">
               <Card className="hidden h-fit gap-0 rounded-none border-0 bg-transparent py-0 shadow-none xl:sticky xl:top-4 xl:flex xl:border-r xl:pr-5">
                 <CardHeader className="border-b px-0 pb-3"><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" /> Student roster</CardTitle><CardDescription>{studentsQuery.data?.length ?? 0} students in this class</CardDescription><div className="relative pt-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="h-9 pl-9" /></div></CardHeader>
@@ -886,6 +725,7 @@ function StaffResults() {
                 </div>
               </div>}
             </div></>}
+            </div>
           </TabsContent>
           <TabsContent value="results" className="mt-0 min-w-0 max-w-full overflow-hidden">
             <Card className="min-w-0 max-w-full rounded-none border-0 bg-transparent shadow-none">
@@ -922,7 +762,7 @@ function StaffResults() {
           <label className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm font-medium">
             <Checkbox checked={examClasses.length > 0 && examForm.classIds.length === examClasses.length} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? examClasses.map(item => item.id) : [] }))} /> Select all classes</label>{examClasses.map(item => <label key={item.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm last:border-b-0"><Checkbox checked={examForm.classIds.includes(item.id)} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? [...new Set([...current.classIds, item.id])] : current.classIds.filter(id => id !== item.id) }))} /><span className="min-w-0"><span className="block truncate font-medium">{item.name} ({item.grade}-{item.section})</span><span className="block text-xs text-muted-foreground">{item.academic_years?.name}</span></span></label>)}</div><p className="text-xs text-muted-foreground">{examForm.classIds.length} class{examForm.classIds.length === 1 ? '' : 'es'} selected</p><Label>Exam type</Label><Select value={examForm.typeId} onValueChange={value => setExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select><Label>Custom title (optional)</Label><Input value={examForm.title} onChange={event => setExamForm(current => ({ ...current, title: event.target.value }))} placeholder="e.g. First Monthly Exam" /><Label>Exam date</Label><Input type="date" value={examForm.date} min={examDateMin} max={examDateMax} onChange={event => setExamForm(current => ({ ...current, date: event.target.value }))} /></SimpleDialog>
       <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}>
-        <DialogContent className="max-h-[90vh] overflow-hidden p-0 sm:max-w-2xl">
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className=" px-5 pt-4"><DialogTitle>Subject Settings</DialogTitle>
             <DialogDescription>
                 Define the subjects available to each academic group.
@@ -932,17 +772,16 @@ function StaffResults() {
             {(['humanities', 'science', 'business'] as ClassGroup[]).map(group => <Button key={group} type="button" size="sm" variant={settingsGroup === group ? 'default' : 'ghost'} className="capitalize" onClick={() => setSettingsGroup(group)}>{group}</Button>)}
           </div>
           <div className="flex items-center justify-between px-5 pt-2"><div><p className="font-semibold capitalize">{settingsGroup} subjects</p><p className="text-xs text-muted-foreground">Used by all {settingsGroup} classes and exams.</p></div><Button size="sm" onClick={() => { setEditingSubjectId(null); setSubjectForm({ name: '', code: '' }); setSubjectDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add subject</Button></div>
-          <div className="min-h-0 overflow-y-auto px-5 pb-5 pt-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3">
             {subjectsQuery.isLoading ? <LoadingState message="Loading subjects..." /> : !subjectsQuery.data?.length ? <EmptyState title="No subjects defined" description={`Add the first subject for ${settingsGroup}.`} /> : <div className="divide-y rounded-md border">{subjectsQuery.data.map(subject => <div key={subject.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></div><Badge variant={subject.is_active ? 'secondary' : 'outline'}>{subject.is_active ? 'Active' : 'Disabled'}</Badge><Button type="button" variant="ghost" size="icon-sm" onClick={() => editSubject(subject)} aria-label={`Edit ${subject.name}`}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" onClick={() => void toggleSubject(subject)}>{subject.is_active ? 'Disable' : 'Enable'}</Button></div>)}</div>}
           </div>
         </DialogContent>
       </Dialog>
       <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) { setEditingSubjectId(null); setSubjectForm({ name: '', code: '' }) } }} title={editingSubjectId ? 'Edit group subject' : 'Add group subject'} description={`This subject belongs to the ${settingsGroup} group and will be available to all its exams.`} onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /></SimpleDialog>
-      <SimpleDialog open={typeDialog} onOpenChange={open => { setTypeDialog(open); if (!open) setEditingTypeId(null) }} title={editingTypeId ? 'Edit exam type' : 'Add exam type'} description="Examples: Mid Term, Final, Test, Monthly Exam." onSave={saveExamType} saveLabel={editingTypeId ? 'Save changes' : 'Add type'}><Label>Name</Label><Input value={typeForm.name} onChange={event => setTypeForm(current => ({ ...current, name: event.target.value }))} placeholder="Practical Test" /><NumberField label="Display order" value={typeForm.sortOrder} onChange={value => setTypeForm(current => ({ ...current, sortOrder: value }))} /><div className="flex items-center gap-2"><Checkbox checked={typeForm.isActive} onCheckedChange={checked => setTypeForm(current => ({ ...current, isActive: Boolean(checked) }))} /><Label>Active and available for new exams</Label></div></SimpleDialog>
       <Dialog open={configDialog} onOpenChange={setConfigDialog}>
-        <DialogContent className="max-h-[90vh] overflow-hidden p-0 sm:max-w-5xl">
-          <DialogHeader className="border-b bg-muted/30 px-6 py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select subjects and define their creative, MCQ, practical, and pass marks.</DialogDescription></DialogHeader>
-          <div className="overflow-auto border-y">
+        <DialogContent className="flex h-[90dvh] max-h-[90dvh] flex-col overflow-hidden p-0 sm:h-auto sm:max-w-5xl">
+          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select subjects and define their creative, MCQ, practical, and pass marks.</DialogDescription></DialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto">
             <Table>
               <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Pass mark</TableHead><TableHead className="w-32">Total max</TableHead></TableRow></TableHeader>
               <TableBody>{unusedSubjects.map(subject => {
@@ -973,7 +812,7 @@ function StaffResults() {
               })}</TableBody>
             </Table>
           </div>
-          <DialogFooter className="bg-muted/20 px-6 py-4"><Button variant="outline" onClick={() => setConfigDialog(false)}>Cancel</Button><Button onClick={() => void attachSubjects()} disabled={!unusedSubjects.some(subject => configRows[subject.id]?.selected)}>Add {unusedSubjects.filter(subject => configRows[subject.id]?.selected).length || ''} selected subject{unusedSubjects.filter(subject => configRows[subject.id]?.selected).length === 1 ? '' : 's'}</Button></DialogFooter>
+          <DialogFooter className="shrink-0 flex-row justify-end gap-2 border-t bg-background px-4 py-3 sm:px-6 sm:py-4"><Button variant="outline" onClick={() => setConfigDialog(false)}>Cancel</Button><Button onClick={() => void attachSubjects()} disabled={!unusedSubjects.some(subject => configRows[subject.id]?.selected)}>Save configuration</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1006,51 +845,4 @@ function StaffResults() {
       )}
     </div>
   )
-}
-
-function MarkInput({ label, value, max, disabled, onChange }: { label: string; value: string; max: number; disabled: boolean; onChange: (value: string) => void }) {
-  const normalizeMark = (input: string) => {
-    const digitsAndDecimal = input.replace(/[^\d.]/g, '')
-    const decimalIndex = digitsAndDecimal.indexOf('.')
-    const normalized = decimalIndex < 0
-      ? digitsAndDecimal
-      : `${digitsAndDecimal.slice(0, decimalIndex)}.${digitsAndDecimal.slice(decimalIndex + 1).replace(/\./g, '').slice(0, 2)}`
-    const withLeadingZero = normalized.startsWith('.') ? `0${normalized}` : normalized
-    const numericValue = Number(withLeadingZero)
-    return withLeadingZero !== '' && Number.isFinite(numericValue) && numericValue > max
-      ? String(max)
-      : withLeadingZero
-  }
-
-  return <Input
-    aria-label={`${label}, maximum ${max}`}
-    title={`Maximum ${max}`}
-    type="number"
-    inputMode="decimal"
-    min={0}
-    max={max}
-    step={0.5}
-    value={value}
-    disabled={disabled || max <= 0}
-    className="h-8 w-16 min-w-16 px-2 text-xs font-semibold tabular-nums sm:h-9 sm:w-auto sm:min-w-24 sm:text-sm"
-    placeholder={max <= 0 ? 'N/A' : `0 / ${max}`}
-    onKeyDown={event => {
-      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1 && !/[0-9.]/.test(event.key)) event.preventDefault()
-    }}
-    onPaste={event => {
-      if (!/^\d*\.?\d*$/.test(event.clipboardData.getData('text'))) event.preventDefault()
-    }}
-    onChange={event => onChange(normalizeMark(event.target.value))}
-  />
-}
-function NumberField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <div className="space-y-1.5"><Label>{label}</Label><Input type="number" min={0} step="1" value={value} onChange={event => onChange(event.target.value)} /></div>
-}
-
-function SimpleDialog({ open, onOpenChange, title, description, onSave, saveLabel, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description: string; onSave: () => unknown | Promise<unknown>; saveLabel: string; children: React.ReactNode }) {
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="overflow-hidden p-0 sm:max-w-lg"><DialogHeader className="border-b bg-muted/30 px-6 py-3">
-    <DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader><div className="space-y-3 px-6 py-2  [&>label]:block">{children}</div>
-    <DialogFooter className=" bg-muted/20 px-6 py-4"><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-    <Button type="button" onClick={() => void onSave()}>{saveLabel}</Button></DialogFooter></DialogContent>
-    </Dialog>
 }
