@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { CheckCircle, UserX, Clock, TrendingUp, GraduationCap, Sparkles } from 'lucide-react'
+import { CheckCircle, UserX, Clock, TrendingUp } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '@/contexts/AuthContext'
 import { useStudentDashboardStats, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'

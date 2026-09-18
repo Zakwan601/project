@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MessageSquareWarning, Send } from 'lucide-react'
+import { Send } from 'lucide-react'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { PageHeader, ErrorState } from '@/components/shared/PageHeader'
 import { useMyStudentReports, useSubmitStudentReport } from '@/hooks/useStudentReports'
