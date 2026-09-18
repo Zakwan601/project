@@ -61,11 +61,6 @@ export function StudentReportsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquareWarning className="h-5 w-5" />
-            New Report
-          </CardTitle>
-          <CardDescription>Administrators will receive this report in their dashboard and Discord.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
@@ -82,7 +77,7 @@ export function StudentReportsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="report-subject">Subject</Label>
+                <Label htmlFor="report-subject">Subject*</Label>
                 <Input
                   id="report-subject"
                   value={subject}
@@ -92,7 +87,6 @@ export function StudentReportsPage() {
                   placeholder="Brief summary"
                   required
                 />
-                <p className="text-xs text-muted-foreground">Minimum 3 characters</p>
               </div>
             </div>
             <div className="space-y-2">

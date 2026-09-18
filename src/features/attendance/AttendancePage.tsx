@@ -862,7 +862,7 @@ function StudentDailyAttendance() {
           </CardHeader>
           <CardContent>
             {!selectedCalendarDate ? (
-              <p className="py-5 text-sm text-muted-foreground">Choose a colored day to see arrival and departure information.</p>
+              <p className="py-5 text-sm text-muted-foreground md:px-3">Choose a colored day to see arrival and departure information.</p>
             ) : selectedHoliday ? (
               <div className="space-y-3">
                 <Badge className="bg-violet-500/15 text-violet-800 dark:text-violet-300">Vacation</Badge>

@@ -311,7 +311,10 @@ export function ProfilePage() {
         <CardContent className="pt-3 sm:pt-6">
           <form onSubmit={handleProfile(saveProfile)} className="space-y-3 sm:space-y-4">
             <div className="space-y-2">
-              <Label>Full Name</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Full Name</Label>
+                {role === 'student' && <Badge variant="outline">Managed by admin</Badge>}
+              </div>
               <Input
                 {...regProfile('full_name')}
                 readOnly={role === 'student'}
@@ -319,7 +322,6 @@ export function ProfilePage() {
                 aria-invalid={!!profileErrors.full_name}
               />
               {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
-              {role === 'student' && <p className="text-xs text-muted-foreground">This name is maintained in the admin panel.</p>}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
@@ -343,7 +345,6 @@ export function ProfilePage() {
                     <Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number
                   </p>
                 )}
-                {phoneManagedByAdmin && <p className="text-xs text-muted-foreground">This is the guardian phone maintained in the admin panel.</p>}
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
@@ -362,7 +363,6 @@ export function ProfilePage() {
         <Card>
           <CardHeader>
             <CardTitle>Academic History</CardTitle>
-            <CardDescription>Your class assignments by academic year</CardDescription>
           </CardHeader>
           <CardContent>
             {historyLoading ? (
@@ -399,7 +399,6 @@ export function ProfilePage() {
       <Card>
         <CardHeader>
           <CardTitle>Change Password</CardTitle>
-          <CardDescription>Update your account password</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handlePwd(changePassword)} className="space-y-3 sm:space-y-4">

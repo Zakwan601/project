@@ -73,7 +73,7 @@ function StaffResults() {
   const [configureAfterCreateExamId, setConfigureAfterCreateExamId] = useState<string | null>(null)
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null)
   const [examForm, setExamForm] = useState({ classIds: [] as string[], typeId: '', title: '', date: '' })
-  const [subjectForm, setSubjectForm] = useState({ name: '', code: '' })
+  const [subjectForm, setSubjectForm] = useState({ name: '', code: '', isFourthSubject: false })
   const [settingsGroup, setSettingsGroup] = useState<ClassGroup>('science')
   const [configRows, setConfigRows] = useState<Record<string, ExamSubjectConfigDraft>>({})
   const [drafts, setDrafts] = useState<Record<string, MarkDraft>>({})
@@ -141,7 +141,7 @@ function StaffResults() {
   const subjectsQuery = useQuery<ClassSubject[]>({
     queryKey: ['result-subjects', subjectGroup], enabled: Boolean(subjectGroup && (isExamPage || settingsDialog)),
     queryFn: async () => {
-      const { data, error } = await db.from('subjects').select('id,name,code,is_active,class_group').eq('class_group', subjectGroup).order('name')
+      const { data, error } = await db.from('subjects').select('id,name,code,is_active,class_group,is_fourth_subject').eq('class_group', subjectGroup).order('name')
       if (error) throw error
       return data
     },
@@ -168,7 +168,7 @@ function StaffResults() {
   const examSubjectsQuery = useQuery<ExamSubject[]>({
     queryKey: ['result-exam-subjects', activeExamId], enabled: Boolean(activeExamId),
     queryFn: async () => {
-      const { data, error } = await db.from('result_exam_subjects').select('*, subjects(id,name,code)').eq('exam_id', activeExamId).order('sort_order')
+      const { data, error } = await db.from('result_exam_subjects').select('*, subjects(id,name,code,is_fourth_subject)').eq('exam_id', activeExamId).order('sort_order')
       if (error) throw error
       return data as ExamSubject[]
     },
@@ -374,19 +374,19 @@ function StaffResults() {
 
   const saveSubject = async () => {
     if (!subjectForm.name.trim() || !subjectForm.code.trim()) return toast.error('Subject name and code are required')
-    const payload = { name: subjectForm.name.trim(), code: subjectForm.code.trim().toUpperCase(), class_id: null, class_group: settingsGroup, is_active: true }
+    const payload = { name: subjectForm.name.trim(), code: subjectForm.code.trim().toUpperCase(), class_id: null, class_group: settingsGroup, is_active: true, is_fourth_subject: subjectForm.isFourthSubject }
     const request = editingSubjectId
-      ? db.from('subjects').update({ name: payload.name, code: payload.code }).eq('id', editingSubjectId)
+      ? db.from('subjects').update({ name: payload.name, code: payload.code, is_fourth_subject: payload.is_fourth_subject }).eq('id', editingSubjectId)
       : db.from('subjects').insert(payload)
     const { error } = await request
     if (error) return toast.error(error.message)
-    setSubjectDialog(false); setSubjectForm({ name: '', code: '' }); setEditingSubjectId(null)
+    setSubjectDialog(false); setSubjectForm({ name: '', code: '', isFourthSubject: false }); setEditingSubjectId(null)
     await qc.invalidateQueries({ queryKey: ['result-subjects', settingsGroup] }); toast.success(editingSubjectId ? 'Subject updated' : 'Subject added')
   }
 
   const editSubject = (subject: ClassSubject) => {
     setEditingSubjectId(subject.id)
-    setSubjectForm({ name: subject.name, code: subject.code })
+    setSubjectForm({ name: subject.name, code: subject.code, isFourthSubject: subject.is_fourth_subject })
     setSubjectDialog(true)
   }
 
@@ -771,13 +771,13 @@ function StaffResults() {
           <div className="flex gap-1 px-5 pt-2">
             {(['humanities', 'science', 'business'] as ClassGroup[]).map(group => <Button key={group} type="button" size="sm" variant={settingsGroup === group ? 'default' : 'ghost'} className="capitalize" onClick={() => setSettingsGroup(group)}>{group}</Button>)}
           </div>
-          <div className="flex items-center justify-between px-5 pt-2"><div><p className="font-semibold capitalize">{settingsGroup} subjects</p><p className="text-xs text-muted-foreground">Used by all {settingsGroup} classes and exams.</p></div><Button size="sm" onClick={() => { setEditingSubjectId(null); setSubjectForm({ name: '', code: '' }); setSubjectDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add subject</Button></div>
+          <div className="flex items-center justify-between px-5 pt-2"><div><p className="font-semibold capitalize">{settingsGroup} subjects</p><p className="text-xs text-muted-foreground">Used by all {settingsGroup} classes and exams.</p></div><Button size="sm" onClick={() => { setEditingSubjectId(null); setSubjectForm({ name: '', code: '', isFourthSubject: false }); setSubjectDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add subject</Button></div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3">
-            {subjectsQuery.isLoading ? <LoadingState message="Loading subjects..." /> : !subjectsQuery.data?.length ? <EmptyState title="No subjects defined" description={`Add the first subject for ${settingsGroup}.`} /> : <div className="divide-y rounded-md border">{subjectsQuery.data.map(subject => <div key={subject.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></div><Badge variant={subject.is_active ? 'secondary' : 'outline'}>{subject.is_active ? 'Active' : 'Disabled'}</Badge><Button type="button" variant="ghost" size="icon-sm" onClick={() => editSubject(subject)} aria-label={`Edit ${subject.name}`}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" onClick={() => void toggleSubject(subject)}>{subject.is_active ? 'Disable' : 'Enable'}</Button></div>)}</div>}
+            {subjectsQuery.isLoading ? <LoadingState message="Loading subjects..." /> : !subjectsQuery.data?.length ? <EmptyState title="No subjects defined" description={`Add the first subject for ${settingsGroup}.`} /> : <div className="divide-y rounded-md border">{subjectsQuery.data.map(subject => <div key={subject.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></div>{subject.is_fourth_subject && <Badge variant="outline">Optional subject</Badge>}<Badge variant={subject.is_active ? 'secondary' : 'outline'}>{subject.is_active ? 'Active' : 'Disabled'}</Badge><Button type="button" variant="ghost" size="icon-sm" onClick={() => editSubject(subject)} aria-label={`Edit ${subject.name}`}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" onClick={() => void toggleSubject(subject)}>{subject.is_active ? 'Disable' : 'Enable'}</Button></div>)}</div>}
           </div>
         </DialogContent>
       </Dialog>
-      <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) { setEditingSubjectId(null); setSubjectForm({ name: '', code: '' }) } }} title={editingSubjectId ? 'Edit group subject' : 'Add group subject'} description={`This subject belongs to the ${settingsGroup} group and will be available to all its exams.`} onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /></SimpleDialog>
+      <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) { setEditingSubjectId(null); setSubjectForm({ name: '', code: '', isFourthSubject: false }) } }} title={editingSubjectId ? 'Edit group subject' : 'Add group subject'} description={`This subject belongs to the ${settingsGroup} group and will be available to all its exams.`} onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /><label className="flex items-center gap-2 text-sm"><Checkbox checked={subjectForm.isFourthSubject} onCheckedChange={checked => setSubjectForm(current => ({ ...current, isFourthSubject: checked === true }))} /><span> Available as optional subject</span></label></SimpleDialog>
       <Dialog open={configDialog} onOpenChange={setConfigDialog}>
         <DialogContent className="flex h-[90dvh] max-h-[90dvh] flex-col overflow-hidden p-0 sm:h-auto sm:max-w-5xl">
           <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select subjects and define their creative, MCQ, practical, and pass marks.</DialogDescription></DialogHeader>
@@ -808,7 +808,7 @@ function StaffResults() {
                     ...row, total: value, creative: String(creative), written: String(written), practical: String(practical), pass: String(pass),
                   } }))
                 }
-                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => updateComponent('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => updateComponent('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => updateComponent('practical', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} max={row.total} step="0.01" value={row.pass} disabled={!row.selected} onChange={event => update('pass', event.target.value)} /></TableCell><TableCell><Input type="number" min={0.01} step="0.01" value={row.total} disabled={!row.selected} onChange={event => updateTotal(event.target.value)} /></TableCell></TableRow>
+                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}{subject.is_fourth_subject ? ' · Fourth subject' : ''}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => updateComponent('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => updateComponent('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => updateComponent('practical', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} max={row.total} step="0.01" value={row.pass} disabled={!row.selected} onChange={event => update('pass', event.target.value)} /></TableCell><TableCell><Input type="number" min={0.01} step="0.01" value={row.total} disabled={!row.selected} onChange={event => updateTotal(event.target.value)} /></TableCell></TableRow>
               })}</TableBody>
             </Table>
           </div>

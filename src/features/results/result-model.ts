@@ -15,7 +15,7 @@ export interface ExamSubject {
   practical_max: number
   pass_mark: number
   sort_order: number
-  subjects: { id: string; name: string; code: string }
+  subjects: { id: string; name: string; code: string; is_fourth_subject: boolean }
 }
 
 export interface MarkRow {
@@ -66,6 +66,7 @@ export interface ClassSubject {
   code: string
   is_active: boolean
   class_group: ClassGroup
+  is_fourth_subject: boolean
 }
 
 export interface ExamSubjectConfigDraft {

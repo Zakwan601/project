@@ -79,27 +79,11 @@ export function StudentDashboard() {
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/5 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-purple-500/5 blur-3xl" />
         <div className="relative flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5" />
           {formatDisplayDate(new Date())}
         </div>
         <h2 className="relative mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
           Good {getGreeting()}, {student?.first_name ?? profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
-        {dashboardLoading ? (
-          <Skeleton className="relative mt-3 h-14 w-52 rounded-xl" />
-        ) : stats?.className && (
-          <div className="relative mt-2 inline-flex items-center gap-2 rounded-lg border bg-background/60 px-3 py-2 backdrop-blur sm:mt-4 sm:gap-3 sm:rounded-xl sm:px-4 sm:py-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-              <GraduationCap className="h-4.5 w-4.5" />
-            </div>
-            <div>
-              <p className="text-sm font-medium leading-tight">{stats.className}</p>
-              <p className="text-xs text-muted-foreground">
-                Grade {stats.classGrade}-{stats.classSection}
-              </p>
-            </div>
-          </div>
-        )}
       </motion.div>
 
       {/* Personal attendance stats */}
@@ -158,7 +142,7 @@ export function StudentDashboard() {
       >
         <Card>
           <CardHeader>
-            <CardTitle>My Weekly Attendance</CardTitle>
+            <CardTitle>Weekly Attendance</CardTitle>
             <CardDescription>Last 7 days attendance overview</CardDescription>
           </CardHeader>
           <CardContent>

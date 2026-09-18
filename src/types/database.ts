@@ -156,6 +156,9 @@ export interface Student {
   profile_id: string | null
   admission_number: string
   class_id: string | null
+  class_group: ClassGroup
+  fourth_subject_id: string | null
+  optional_subject_2_id: string | null
   roll_number: number | null
   first_name: string
   last_name: string
@@ -199,6 +202,7 @@ export interface Subject {
   code: string
   class_id: string | null
   class_group: ClassGroup
+  is_fourth_subject: boolean
   is_active: boolean
   created_at: string
 }

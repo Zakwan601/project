@@ -47,7 +47,7 @@ export function StudentResultsPage() {
   if (examsQuery.error) return <ErrorState message={(examsQuery.error as Error).message} />
 
   return <div>
-    <PageHeader title="My Results" description="Published examination results are read-only." action={resultQuery.data ? <Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print</Button> : undefined} />
+    <PageHeader title="My Results" description="Incase of any discrepency, contact teacher." action={resultQuery.data ? <Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print</Button> : undefined} />
     {!examsQuery.data?.length ? <EmptyState title="No published results" description="Your results will appear here after publication." /> : <>
       <div className="mb-5 max-w-md">
         <Label>Examination</Label>

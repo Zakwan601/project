@@ -38,6 +38,14 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
           <div className="min-w-0"><span className="text-muted-foreground">Status</span><p className="break-words font-semibold capitalize">{exam.status}</p></div>
         </div>
 
+        <div className="my-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
+          <Summary label="Total" value={`${summary.total_obtained} / ${summary.total_max}`} />
+          <Summary label="GPA" value={Number(summary.gpa).toFixed(2)} />
+          <Summary label="Grade" value={summary.letter_grade} />
+          <Summary label="Position" value={summary.position ? `${summary.position} of ${summary.total_students}` : '—'} />
+          <Summary label="Failed subjects" value={String(summary.failed_subjects)} danger={summary.failed_subjects > 0} />
+        </div>
+
         <div className="overflow-hidden rounded-lg border">
           <Table className="min-w-[680px] text-xs sm:text-sm">
             <TableHeader>
@@ -70,13 +78,7 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
           </Table>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
-          <Summary label="Total" value={`${summary.total_obtained} / ${summary.total_max}`} />
-          <Summary label="GPA" value={Number(summary.gpa).toFixed(2)} />
-          <Summary label="Grade" value={summary.letter_grade} />
-          <Summary label="Position" value={summary.position ? `${summary.position} of ${summary.total_students}` : '—'} />
-          <Summary label="Failed subjects" value={String(summary.failed_subjects)} danger={summary.failed_subjects > 0} />
-        </div>
+        
 
         <div className="mt-12 hidden grid-cols-2 gap-20 text-center text-sm print:grid">
           <div className="border-t pt-2">Guardian signature</div>
