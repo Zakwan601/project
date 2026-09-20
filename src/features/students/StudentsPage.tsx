@@ -21,7 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
-import type { ClassGroup, Student, StudentWithClass, Subject } from '@/types/database'
+import type { ClassGroup, Student, StudentWithClass, Subject, SubjectCourseOption } from '@/types/database'
 import { formatBangladeshDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { isValidBangladeshMobile } from '@/lib/profile'
@@ -53,6 +53,7 @@ const studentSchema = z.object({
   class_group: z.enum(['science', 'humanities', 'business']),
   fourth_subject_id: z.string().optional(),
   optional_subject_2_id: z.string().optional(),
+  group_fourth_option_id: z.string().optional(),
   roll_number: z.number().optional(),
   guardian_phone: z.string().optional().refine(
     value => !value?.trim() || isValidBangladeshMobile(value),
@@ -62,9 +63,24 @@ const studentSchema = z.object({
   father_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
   mother_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
   religion: z.string().trim().max(80, 'Use 80 characters or fewer').optional(),
+  humanities_main_option_1_id: z.string().optional(),
+  humanities_main_option_2_id: z.string().optional(),
+  humanities_main_option_3_id: z.string().optional(),
+  humanities_fourth_option_id: z.string().optional(),
 }).refine(data => !data.fourth_subject_id || data.fourth_subject_id !== data.optional_subject_2_id, {
   message: 'Choose two different optional subjects',
   path: ['optional_subject_2_id'],
+}).superRefine((data, context) => {
+  if (data.class_group === 'humanities') {
+    const fields = ['humanities_main_option_1_id', 'humanities_main_option_2_id', 'humanities_main_option_3_id', 'humanities_fourth_option_id'] as const
+    for (const field of fields) {
+      if (!data[field]) context.addIssue({ code: 'custom', message: 'Required for humanities', path: [field] })
+    }
+    return
+  }
+  if (!data.group_fourth_option_id) {
+    context.addIssue({ code: 'custom', message: 'Choose a fourth subject', path: ['group_fourth_option_id'] })
+  }
 })
 type StudentForm = z.infer<typeof studentSchema>
 
@@ -81,6 +97,15 @@ export function StudentsPage() {
         .order('name')
       if (error) throw error
       return data
+    },
+  })
+  const { data: courseOptions = [] } = useQuery<SubjectCourseOption[]>({
+    queryKey: ['subject-course-options'],
+    queryFn: async () => {
+      const { data, error } = await db.from('subject_course_options').select('*')
+        .eq('is_active', true).order('name')
+      if (error) throw error
+      return data as SubjectCourseOption[]
     },
   })
   const updateStudent = useUpdateStudent()
@@ -114,9 +139,14 @@ export function StudentsPage() {
 
   const classId = watch('class_id')
   const classGroup = watch('class_group')
-  const groupFourthSubjects = fourthSubjects.filter(subject => subject.class_group === classGroup)
-  const firstOptionalId = watch('fourth_subject_id')
-  const secondOptionalId = watch('optional_subject_2_id')
+  const humanitiesOptions = courseOptions.filter(option => option.class_group === 'humanities')
+  const groupFourthOptions = courseOptions.filter(option => option.class_group === classGroup)
+  const groupFourthOptionId = watch('group_fourth_option_id')
+  const humanitiesMain1 = watch('humanities_main_option_1_id')
+  const humanitiesMain2 = watch('humanities_main_option_2_id')
+  const humanitiesMain3 = watch('humanities_main_option_3_id')
+  const humanitiesFourth = watch('humanities_fourth_option_id')
+  const humanitiesSelectionIds = [humanitiesMain1, humanitiesMain2, humanitiesMain3, humanitiesFourth].filter(Boolean)
   const guardianPhone = watch('guardian_phone')
 
   const filtered = students?.filter(student => {
@@ -209,6 +239,11 @@ export function StudentsPage() {
       class_group: s.class_group,
       fourth_subject_id: s.fourth_subject_id ?? undefined,
       optional_subject_2_id: s.optional_subject_2_id ?? undefined,
+      group_fourth_option_id: s.group_fourth_option_id ?? undefined,
+      humanities_main_option_1_id: s.humanities_main_option_1_id ?? undefined,
+      humanities_main_option_2_id: s.humanities_main_option_2_id ?? undefined,
+      humanities_main_option_3_id: s.humanities_main_option_3_id ?? undefined,
+      humanities_fourth_option_id: s.humanities_fourth_option_id ?? undefined,
       roll_number: s.roll_number ?? undefined,
       guardian_phone: s.guardian_phone ?? undefined,
       biometric_id: s.biometric_id ?? undefined,
@@ -226,8 +261,13 @@ export function StudentsPage() {
       admission_number: data.admission_number,
       class_id: data.class_id || null,
       class_group: data.class_group,
-      fourth_subject_id: data.fourth_subject_id || null,
-      optional_subject_2_id: data.optional_subject_2_id || null,
+      fourth_subject_id: null,
+      optional_subject_2_id: null,
+      group_fourth_option_id: data.class_group === 'humanities' ? null : data.group_fourth_option_id || null,
+      humanities_main_option_1_id: data.class_group === 'humanities' ? data.humanities_main_option_1_id || null : null,
+      humanities_main_option_2_id: data.class_group === 'humanities' ? data.humanities_main_option_2_id || null : null,
+      humanities_main_option_3_id: data.class_group === 'humanities' ? data.humanities_main_option_3_id || null : null,
+      humanities_fourth_option_id: data.class_group === 'humanities' ? data.humanities_fourth_option_id || null : null,
       roll_number: data.roll_number ?? null,
       guardian_phone: data.guardian_phone?.trim() || null,
       biometric_id: data.biometric_id || null,
@@ -685,6 +725,11 @@ export function StudentsPage() {
                     setValue('class_group', nextGroup)
                     setValue('fourth_subject_id', '')
                     setValue('optional_subject_2_id', '')
+                    setValue('group_fourth_option_id', '')
+                    setValue('humanities_main_option_1_id', '')
+                    setValue('humanities_main_option_2_id', '')
+                    setValue('humanities_main_option_3_id', '')
+                    setValue('humanities_fourth_option_id', '')
                   }
                 }}>
                   <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
@@ -704,6 +749,11 @@ export function StudentsPage() {
                     setValue('class_group', value as ClassGroup, { shouldValidate: true })
                     setValue('fourth_subject_id', '')
                     setValue('optional_subject_2_id', '')
+                    setValue('group_fourth_option_id', '')
+                    setValue('humanities_main_option_1_id', '')
+                    setValue('humanities_main_option_2_id', '')
+                    setValue('humanities_main_option_3_id', '')
+                    setValue('humanities_fourth_option_id', '')
                   }}
                 >
                   <SelectTrigger aria-invalid={!!errors.class_group}><SelectValue placeholder="Select group" /></SelectTrigger>
@@ -716,38 +766,48 @@ export function StudentsPage() {
                 {classId && <p className="text-xs text-muted-foreground">Group follows the assigned class.</p>}
                 {errors.class_group && <p className="text-xs text-destructive">{errors.class_group.message}</p>}
               </div>
-              <div className="space-y-2">
-                <Label>Optional subject 1</Label>
-                <Select
-                  value={firstOptionalId || 'none'}
-                  onValueChange={value => setValue('fourth_subject_id', value === 'none' ? '' : value, { shouldValidate: true })}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select optional subject" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Not assigned</SelectItem>
-                    {groupFourthSubjects.filter(subject => subject.id !== secondOptionalId).map(subject => (
-                      <SelectItem key={subject.id} value={subject.id}>{subject.name} ({subject.code})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {groupFourthSubjects.length === 0 && <p className="text-xs text-muted-foreground">No optional-subject options are configured for this group.</p>}
-              </div>
-              <div className="space-y-2">
-                <Label>Optional subject 2</Label>
-                <Select
-                  value={secondOptionalId || 'none'}
-                  onValueChange={value => setValue('optional_subject_2_id', value === 'none' ? '' : value, { shouldValidate: true })}
-                >
-                  <SelectTrigger aria-invalid={!!errors.optional_subject_2_id}><SelectValue placeholder="Select optional subject" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Not assigned</SelectItem>
-                    {groupFourthSubjects.filter(subject => subject.id !== firstOptionalId).map(subject => (
-                      <SelectItem key={subject.id} value={subject.id}>{subject.name} ({subject.code})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.optional_subject_2_id && <p className="text-xs text-destructive">{errors.optional_subject_2_id.message}</p>}
-              </div>
+              {classGroup === 'humanities' ? (
+                <div className="col-span-2 space-y-4">
+                  <div>
+                    <p className="text-sm font-medium">Humanities elective subjects</p>
+                    <p className="text-xs text-muted-foreground">Choose three main electives and one different fourth subject. Alternative pairs cannot be combined.</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {([
+                      ['humanities_main_option_1_id', 'Main elective 1', humanitiesMain1],
+                      ['humanities_main_option_2_id', 'Main elective 2', humanitiesMain2],
+                      ['humanities_main_option_3_id', 'Main elective 3', humanitiesMain3],
+                      ['humanities_fourth_option_id', 'Fourth / optional subject', humanitiesFourth],
+                    ] as const).map(([field, label, current]) => {
+                      const excludedGroups = humanitiesOptions.filter(option => humanitiesSelectionIds.includes(option.id) && option.id !== current).map(option => option.exclusive_group).filter(Boolean)
+                      const available = humanitiesOptions.filter(option => option.id === current || (!humanitiesSelectionIds.includes(option.id) && (!option.exclusive_group || !excludedGroups.includes(option.exclusive_group))))
+                      return (
+                        <div key={field} className="space-y-2">
+                          <Label>{label} *</Label>
+                          <Select value={current || ''} onValueChange={value => setValue(field, value, { shouldValidate: true })}>
+                            <SelectTrigger aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
+                            <SelectContent>{available.map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                          {errors[field] && <p className="text-xs text-destructive">{errors[field]?.message}</p>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="col-span-2 space-y-2">
+                  <Label>Fourth / optional subject *</Label>
+                  <Select value={groupFourthOptionId || ''} onValueChange={value => setValue('group_fourth_option_id', value, { shouldValidate: true })}>
+                    <SelectTrigger aria-invalid={!!errors.group_fourth_option_id}><SelectValue placeholder="Select subject" /></SelectTrigger>
+                    <SelectContent>
+                      {groupFourthOptions.map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Both papers are assigned automatically from this choice.</p>
+                  {groupFourthOptions.length === 0 && <p className="text-xs text-destructive">No fourth-subject options are configured for this group.</p>}
+                  {errors.group_fourth_option_id && <p className="text-xs text-destructive">{errors.group_fourth_option_id.message}</p>}
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Roll Number</Label>
                 <Input type="number" {...register('roll_number', { valueAsNumber: true })} />

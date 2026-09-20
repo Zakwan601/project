@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { ProfileUploads } from './ProfileUploads'
+import { StudentSubjects } from './StudentSubjects'
 
 const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
 
@@ -395,6 +396,8 @@ export function ProfilePage() {
             </Button>
         </form>
       </section>
+
+      {role === 'student' && student && <StudentSubjects student={student} />}
 
       {role === 'student' && (
         <section className="border-t pt-6">

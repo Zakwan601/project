@@ -56,6 +56,11 @@ export interface Database {
         Insert: Omit<Student, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Student, 'id' | 'created_at'>>
       }
+      subject_course_options: {
+        Row: SubjectCourseOption
+        Insert: Omit<SubjectCourseOption, 'id' | 'created_at'>
+        Update: Partial<Omit<SubjectCourseOption, 'id' | 'created_at'>>
+      }
       student_enrollments: {
         Row: StudentEnrollment
         Insert: Omit<StudentEnrollment, 'id' | 'created_at' | 'updated_at'>
@@ -163,6 +168,11 @@ export interface Student {
   class_group: ClassGroup
   fourth_subject_id: string | null
   optional_subject_2_id: string | null
+  group_fourth_option_id: string | null
+  humanities_main_option_1_id: string | null
+  humanities_main_option_2_id: string | null
+  humanities_main_option_3_id: string | null
+  humanities_fourth_option_id: string | null
   roll_number: number | null
   first_name: string
   last_name: string
@@ -211,6 +221,17 @@ export interface Subject {
   class_id: string | null
   class_group: ClassGroup
   is_fourth_subject: boolean
+  is_active: boolean
+  created_at: string
+}
+
+export interface SubjectCourseOption {
+  id: string
+  class_group: ClassGroup
+  name: string
+  first_paper_subject_id: string
+  second_paper_subject_id: string
+  exclusive_group: string | null
   is_active: boolean
   created_at: string
 }
