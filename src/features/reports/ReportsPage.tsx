@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { Label } from '@/components/ui/label'
@@ -146,7 +146,7 @@ function useDailyStudentAttendance(classId: string, startDate: string, endDate: 
   })
 }
 
-interface DailyPoint { date: string; present: number; absent: number; late: number }
+interface DailyPoint { date: string; shortDate: string; present: number; absent: number; late: number }
 
 interface DailyAttendanceSummary {
   attendance_date: string
@@ -176,6 +176,7 @@ function useDailyReport(startDate: string, endDate: string) {
 
       const resultsByDate = new Map<string, DailyPoint>(days.map(date => [date, {
         date: formatDisplayDate(date),
+        shortDate: format(new Date(date + 'T00:00:00'), 'dd MMM'),
         present: 0,
         absent: 0,
         late: 0,
@@ -225,7 +226,7 @@ export function ReportsPage() {
       ? 'Attendance below ' + parsedPercentageThreshold + '%'
       : 'Invalid percentage filter'
   const { data: dailyData, isLoading: dailyLoading } = useDailyReport(
-    format(subDays(new Date(), 14), 'yyyy-MM-dd'),
+    format(subDays(new Date(), 13), 'yyyy-MM-dd'),
     format(new Date(), 'yyyy-MM-dd')
   )
 
@@ -298,23 +299,24 @@ export function ReportsPage() {
       />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 pb-3 sm:px-6">
           <CardTitle>14-Day Attendance Trend</CardTitle>
           <CardDescription>Daily attendance breakdown over the last 2 weeks</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2 pb-4 sm:px-6 sm:pb-6">
           {dailyLoading ? (
             <LoadingState />
           ) : (
-            <ChartContainer config={chartConfig} className="h-[190px] w-full aspect-auto sm:h-[280px]">
-              <BarChart accessibilityLayer data={dailyData}>
+            <ChartContainer config={chartConfig} className="h-[240px] w-full aspect-auto sm:h-[280px]">
+              <BarChart accessibilityLayer data={dailyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <CartesianGrid vertical={false} />
-                <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 11 }} />
-                <YAxis tickLine={false} axisLine={false} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="present" fill="var(--color-present)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="absent" fill="var(--color-absent)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="late" fill="var(--color-late)" radius={[4, 4, 0, 0]} />
+                <XAxis dataKey="shortDate" tickLine={false} axisLine={false} tickMargin={8} minTickGap={18} tick={{ fontSize: 10 }} />
+                <YAxis tickLine={false} axisLine={false} width={38} tick={{ fontSize: 10 }} />
+                <ChartTooltip content={<ChartTooltipContent labelFormatter={(_value, payload) => payload[0]?.payload.date ?? ''} />} />
+                <ChartLegend content={<ChartLegendContent className="flex-wrap gap-x-4 gap-y-1 pt-2" />} />
+                <Bar dataKey="present" stackId="attendance" fill="var(--color-present)" maxBarSize={22} />
+                <Bar dataKey="absent" stackId="attendance" fill="var(--color-absent)" maxBarSize={22} />
+                <Bar dataKey="late" stackId="attendance" fill="var(--color-late)" radius={[3, 3, 0, 0]} maxBarSize={22} />
               </BarChart>
             </ChartContainer>
           )}

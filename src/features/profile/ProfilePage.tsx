@@ -15,9 +15,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { ProfileUploads } from './ProfileUploads'
@@ -297,291 +297,243 @@ export function ProfilePage() {
     )
   }
   return (
-    <div className="max-w-3xl space-y-3 sm:space-y-6">
-      <PageHeader title="Profile" description="Manage your personal information and security" />
-
-      <section className="space-y-6">
-        <div className="flex items-center gap-4 py-2">
-            <Avatar className="h-12 w-12 sm:h-16 sm:w-16">
-              {profile.avatar_url && <AvatarImage src={profile.avatar_url} alt={`${displayName}'s profile`} />}
-              <AvatarFallback className="text-xl bg-muted">{initials}</AvatarFallback>
-            </Avatar>
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">{displayName}</h2>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
-              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>
-                  Last sign in:{' '}
-                  {user?.last_sign_in_at
-                    ? formatDisplayDateTime(user.last_sign_in_at)
-                    : 'Not available'}
-                </span>
-              </p>
+    <div className="w-full max-w-6xl">
+      <Tabs defaultValue="personal" className="w-full">
+        <header className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7 sm:py-6">
+          <Avatar className="h-16 w-16 border-2 border-background shadow-sm sm:h-20 sm:w-20">
+            {profile.avatar_url && <AvatarImage src={profile.avatar_url} alt={displayName + "'s profile"} />}
+            <AvatarFallback className="bg-muted text-xl font-semibold">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{displayName}</h1>
               {role && (
-                <Badge className={`mt-2 text-xs capitalize ${roleColors[role] ?? ''}`}>
+                <Badge className={'text-[11px] capitalize ' + (roleColors[role] ?? '')}>
                   {role === 'sub_admin' ? 'Sub-admin' : role}
                 </Badge>
               )}
             </div>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{user?.email}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>Joined - {formatDisplayDate(profile.created_at)}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Active
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5" />
+                {user?.last_sign_in_at ? 'Last sign in ' + formatDisplayDateTime(user.last_sign_in_at) : 'Last sign in unavailable'}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        <div className="border-b px-5 sm:px-7">
+          <TabsList className="h-12 w-full justify-start gap-6 rounded-none bg-transparent p-0">
+            <TabsTrigger value="personal" className="h-12 rounded-none border-b-2 border-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Personal</TabsTrigger>
+            {role === 'student' && (
+              <TabsTrigger value="academics" className="h-12 rounded-none border-b-2 border-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Academics</TabsTrigger>
+            )}
+            <TabsTrigger value="security" className="h-12 rounded-none border-b-2 border-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Security</TabsTrigger>
+          </TabsList>
         </div>
-        <Separator />
-        <div>
-          <h2 className="text-base font-semibold">Personal information</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Update your personal details and documents.</p>
-        </div>
-        <form onSubmit={handleProfile(saveProfile)} className="space-y-4">
-            {user && <ProfileUploads profile={profile} userId={user.id} refreshProfile={refreshProfile} />}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label>Full Name</Label>
-                {role === 'student' && <Badge variant="outline">Managed by admin</Badge>}
-              </div>
-              <Input
-                {...regProfile('full_name')}
-                readOnly={role === 'student'}
-                className={role === 'student' ? 'bg-muted' : undefined}
-                aria-invalid={!!profileErrors.full_name}
-              />
-              {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-              <div className="space-y-2">
-                <Label>Father's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                <Input {...regProfile('father_name')} aria-invalid={!!profileErrors.father_name} />
-                {profileErrors.father_name && <p className="text-xs text-destructive">{profileErrors.father_name.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label>Mother's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                <Input {...regProfile('mother_name')} aria-invalid={!!profileErrors.mother_name} />
-                {profileErrors.mother_name && <p className="text-xs text-destructive">{profileErrors.mother_name.message}</p>}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Religion <span className="font-normal text-muted-foreground">(optional)</span></Label>
-              <Input {...regProfile('religion')} aria-invalid={!!profileErrors.religion} />
-              {profileErrors.religion && <p className="text-xs text-destructive">{profileErrors.religion.message}</p>}
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label>{role === 'student' ? 'Guardian Phone' : 'Phone'}</Label>
-                  {role === 'student' && <Badge variant="outline">Managed by admin</Badge>}
+
+        <TabsContent value="personal" className="m-0">
+          <form onSubmit={handleProfile(saveProfile)}>
+            <div className="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
+              <section className="p-5 sm:p-7 lg:border-r">
+                <div className="mb-6">
+                  <h2 className="text-base font-semibold">Personal information</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Your identity and family details.</p>
                 </div>
-                <Input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="01XXXXXXXXX"
-                  readOnly={phoneManagedByAdmin}
-                  className={phoneManagedByAdmin ? 'bg-muted' : undefined}
-                  {...regProfile('phone')}
-                  aria-invalid={!!profileErrors.phone}
-                />
-                {profileErrors.phone && <p className="text-xs text-destructive">{profileErrors.phone.message}</p>}
-                {!phoneManagedByAdmin && parentPhone && !profileErrors.phone && parentPhoneIsValid && (
-                  <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                    <Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number
-                  </p>
+                <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>Full name</Label>
+                      {role === 'student' && <span className="text-xs text-muted-foreground">Managed by admin</span>}
+                    </div>
+                    <Input {...regProfile('full_name')} readOnly={role === 'student'} className={role === 'student' ? 'bg-muted/40' : undefined} aria-invalid={!!profileErrors.full_name} />
+                    {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Father's name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                    <Input {...regProfile('father_name')} aria-invalid={!!profileErrors.father_name} />
+                    {profileErrors.father_name && <p className="text-xs text-destructive">{profileErrors.father_name.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Mother's name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                    <Input {...regProfile('mother_name')} aria-invalid={!!profileErrors.mother_name} />
+                    {profileErrors.mother_name && <p className="text-xs text-destructive">{profileErrors.mother_name.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Religion <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                    <Input {...regProfile('religion')} aria-invalid={!!profileErrors.religion} />
+                    {profileErrors.religion && <p className="text-xs text-destructive">{profileErrors.religion.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>{role === 'student' ? 'Guardian phone' : 'Phone'}</Label>
+                      {role === 'student' && <span className="text-xs text-muted-foreground">Managed by admin</span>}
+                    </div>
+                    <Input type="tel" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" readOnly={phoneManagedByAdmin} className={phoneManagedByAdmin ? 'bg-muted/40' : undefined} {...regProfile('phone')} aria-invalid={!!profileErrors.phone} />
+                    {profileErrors.phone && <p className="text-xs text-destructive">{profileErrors.phone.message}</p>}
+                    {!phoneManagedByAdmin && parentPhone && !profileErrors.phone && parentPhoneIsValid && (
+                      <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number</p>
+                    )}
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Email</Label>
+                    <Input value={user?.email ?? ''} disabled className="bg-muted/40" />
+                  </div>
+                </div>
+              </section>
+
+              <section className="border-t p-5 sm:p-7 lg:border-t-0">
+                <div className="mb-6">
+                  <h2 className="text-base font-semibold">Documents & photo</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Optional files linked to your profile.</p>
+                </div>
+                {user && <ProfileUploads profile={profile} userId={user.id} refreshProfile={refreshProfile} stacked />}
+              </section>
+            </div>
+            <div className="flex justify-end bg-muted/15 px-5 py-4 sm:px-7">
+              <Button type="submit" disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save changes
+              </Button>
+            </div>
+          </form>
+        </TabsContent>
+
+        {role === 'student' && student && (
+          <TabsContent value="academics" className="m-0">
+            <div className="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+              <div className="p-5 sm:p-7 lg:border-r [&_section]:border-0 [&_section]:pt-0">
+                <StudentSubjects student={student} />
+              </div>
+              <section className="border-t p-5 sm:p-7 lg:border-t-0">
+                <div className="mb-5">
+                  <h2 className="text-base font-semibold">Academic history</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Classes and academic sessions.</p>
+                </div>
+                {historyLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading history...</div>
+                ) : enrollmentHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No academic history is available yet.</p>
+                ) : (
+                  <div className="divide-y">
+                    {enrollmentHistory.map(enrollment => (
+                      <div key={enrollment.id} className="py-4 first:pt-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium">{enrollment.classes.name} ({enrollment.classes.grade}-{enrollment.classes.section})</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{enrollment.academic_years.name}</p>
+                          </div>
+                          <Badge variant={enrollment.ended_on ? 'secondary' : 'default'} className="capitalize">{enrollment.status}</Badge>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">{formatDisplayDate(enrollment.started_on)} – {enrollment.ended_on ? formatDisplayDate(enrollment.ended_on) : 'Current'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </TabsContent>
+        )}
+
+        <TabsContent value="security" className="m-0">
+          <section className="max-w-2xl p-5 sm:p-7">
+            <div className="mb-6">
+              <h2 className="text-base font-semibold">Password & security</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Use a strong password you do not use elsewhere.</p>
+            </div>
+            <form onSubmit={handlePwd(changePassword)} className="space-y-5">
+              <div className="space-y-2">
+                <Label>Current password</Label>
+                <div className="relative">
+                  <Input type={visiblePasswords.old ? 'text' : 'password'} className="pr-10" autoComplete="current-password" {...regPwd('oldPassword')} aria-invalid={!!pwdErrors.oldPassword} />
+                  <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full w-10 text-muted-foreground" onClick={() => togglePasswordVisibility('old')} aria-label={visiblePasswords.old ? 'Hide current password' : 'Show current password'}>
+                    {visiblePasswords.old ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {pwdErrors.oldPassword && <p className="text-xs text-destructive">{pwdErrors.oldPassword.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>New password</Label>
+                <div className="relative">
+                  <Input type={visiblePasswords.new ? 'text' : 'password'} className="pr-10" autoComplete="new-password" {...regPwd('newPassword')} aria-invalid={!!pwdErrors.newPassword} />
+                  <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full w-10 text-muted-foreground" onClick={() => togglePasswordVisibility('new')} aria-label={visiblePasswords.new ? 'Hide new password' : 'Show new password'}>
+                    {visiblePasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {pwdErrors.newPassword && <p className="text-xs text-destructive">{pwdErrors.newPassword.message}</p>}
+                {newPassword && (
+                  <div className="space-y-3 rounded-lg bg-muted/35 p-4" aria-live="polite">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Password strength</span>
+                      <span className={'font-medium ' + passwordStrength.text}>{passwordStrength.label}</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className={'h-full rounded-full transition-all ' + passwordStrength.color} style={{ width: String((metRequirements / passwordRequirements.length) * 100) + '%' }} />
+                    </div>
+                    <div className="grid gap-1.5 sm:grid-cols-2">
+                      {passwordRequirements.map(requirement => {
+                        const met = requirement.test(newPassword)
+                        const RequirementIcon = met ? Check : Circle
+                        return (
+                          <div key={requirement.label} className={'flex items-center gap-1.5 text-xs ' + (met ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
+                            <RequirementIcon className="h-3.5 w-3.5 shrink-0" /><span>{requirement.label}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
-                <Input value={user?.email ?? ''} disabled />
-              </div>
-            </div>
-            <Button type="submit" disabled={saving}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Save Changes
-            </Button>
-        </form>
-      </section>
-
-      {role === 'student' && student && <StudentSubjects student={student} />}
-
-      {role === 'student' && (
-        <section className="border-t pt-6">
-          <h2 className="text-base font-semibold">Academic history</h2>
-          <div className="mt-4">
-            {historyLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
-              </div>
-            ) : enrollmentHistory.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No academic history is available yet.</p>
-            ) : (
-              <div className="divide-y">
-                {enrollmentHistory.map(enrollment => (
-                  <div key={enrollment.id} className="flex items-start justify-between gap-3 py-3">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {enrollment.classes.name} ({enrollment.classes.grade}-{enrollment.classes.section})
-                      </p>
-                      <p className="text-xs text-muted-foreground">{enrollment.academic_years.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDisplayDate(enrollment.started_on)} – {enrollment.ended_on ? formatDisplayDate(enrollment.ended_on) : 'Current'}
-                      </p>
-                    </div>
-                    <Badge variant={enrollment.ended_on ? 'secondary' : 'default'} className="capitalize">
-                      {enrollment.status}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      <section className="border-t pt-6">
-        <div>
-          <h2 className="text-base font-semibold">Change password</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Use a strong password you do not use elsewhere.</p>
-        </div>
-        <form onSubmit={handlePwd(changePassword)} className="mt-4 max-w-xl space-y-4">
-            <div className="space-y-2">
-              <Label>Current Password</Label>
-              <div className="relative">
-                <Input
-                  type={visiblePasswords.old ? 'text' : 'password'}
-                  className="pr-10"
-                  autoComplete="current-password"
-                  {...regPwd('oldPassword')}
-                  aria-invalid={!!pwdErrors.oldPassword}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full w-10 text-muted-foreground"
-                  onClick={() => togglePasswordVisibility('old')}
-                  aria-label={visiblePasswords.old ? 'Hide current password' : 'Show current password'}
-                >
-                  {visiblePasswords.old ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-              {pwdErrors.oldPassword && <p className="text-xs text-destructive">{pwdErrors.oldPassword.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label>New Password</Label>
-              <div className="relative">
-                <Input
-                  type={visiblePasswords.new ? 'text' : 'password'}
-                  className="pr-10"
-                  autoComplete="new-password"
-                  {...regPwd('newPassword')}
-                  aria-invalid={!!pwdErrors.newPassword}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full w-10 text-muted-foreground"
-                  onClick={() => togglePasswordVisibility('new')}
-                  aria-label={visiblePasswords.new ? 'Hide new password' : 'Show new password'}
-                >
-                  {visiblePasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-              {pwdErrors.newPassword && <p className="text-xs text-destructive">{pwdErrors.newPassword.message}</p>}
-              {newPassword && (
-                <div className="space-y-3 py-2" aria-live="polite">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Password strength</span>
-                    <span className={`font-medium ${passwordStrength.text}`}>{passwordStrength.label}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full rounded-full transition-all ${passwordStrength.color}`}
-                      style={{ width: `${(metRequirements / passwordRequirements.length) * 100}%` }}
-                    />
-                  </div>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
-                    {passwordRequirements.map(requirement => {
-                      const met = requirement.test(newPassword)
-                      const RequirementIcon = met ? Check : Circle
-                      return (
-                        <div
-                          key={requirement.label}
-                          className={`flex items-center gap-1.5 text-xs ${met ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}
-                        >
-                          <RequirementIcon className="h-3.5 w-3.5 shrink-0" />
-                          <span>{requirement.label}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Avoid names, common phrases, and passwords used on other accounts.
-                  </p>
+                <Label>Confirm new password</Label>
+                <div className="relative">
+                  <Input type={visiblePasswords.confirm ? 'text' : 'password'} className="pr-10" autoComplete="new-password" {...regPwd('confirmPassword')} aria-invalid={!!pwdErrors.confirmPassword || (confirmPassword.length > 0 && !passwordsMatch)} />
+                  <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full w-10 text-muted-foreground" onClick={() => togglePasswordVisibility('confirm')} aria-label={visiblePasswords.confirm ? 'Hide confirmation password' : 'Show confirmation password'}>
+                    {visiblePasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                 </div>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label>Confirm New Password</Label>
-              <div className="relative">
-                <Input
-                  type={visiblePasswords.confirm ? 'text' : 'password'}
-                  className="pr-10"
-                  autoComplete="new-password"
-                  {...regPwd('confirmPassword')}
-                  aria-invalid={!!pwdErrors.confirmPassword || (confirmPassword.length > 0 && !passwordsMatch)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full w-10 text-muted-foreground"
-                  onClick={() => togglePasswordVisibility('confirm')}
-                  aria-label={visiblePasswords.confirm ? 'Hide confirmation password' : 'Show confirmation password'}
-                >
-                  {visiblePasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
+                {confirmPassword && (
+                  <p className={'flex items-center gap-1.5 text-xs ' + (passwordsMatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')} aria-live="polite">
+                    {passwordsMatch ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                    {passwordsMatch ? 'Passwords match' : 'Passwords do not match yet'}
+                  </p>
+                )}
+                {pwdErrors.confirmPassword && <p className="text-xs text-destructive">{pwdErrors.confirmPassword.message}</p>}
               </div>
-              {confirmPassword && (
-                <p
-                  className={`flex items-center gap-1.5 text-xs ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}
-                  aria-live="polite"
-                >
-                  {passwordsMatch ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                  {passwordsMatch ? 'Passwords match' : 'Passwords do not match yet'}
-                </p>
+              {turnstileSiteKey ? (
+                <div className="flex justify-start py-1">
+                  <Turnstile
+                    ref={passwordTurnstileRef}
+                    siteKey={turnstileSiteKey}
+                    options={{ action: 'change_password', appearance: 'interaction-only', refreshExpired: 'manual', refreshTimeout: 'manual', size: 'flexible', theme: 'auto' }}
+                    onSuccess={() => {
+                      passwordTurnstileFailedRef.current = false
+                      passwordTurnstileResetAttemptedRef.current = false
+                    }}
+                    onExpire={() => passwordTurnstileRef.current?.reset()}
+                    onTimeout={handlePasswordTurnstileFailure}
+                    onUnsupported={handlePasswordTurnstileFailure}
+                    onError={handlePasswordTurnstileFailure}
+                    scriptOptions={{ onError: handlePasswordTurnstileFailure }}
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-destructive">Security verification is not configured.</p>
               )}
-              {pwdErrors.confirmPassword && <p className="text-xs text-destructive">{pwdErrors.confirmPassword.message}</p>}
-            </div>
-            {turnstileSiteKey ? (
-              <div className="flex justify-start py-1">
-                <Turnstile
-                  ref={passwordTurnstileRef}
-                  siteKey={turnstileSiteKey}
-                  options={{
-                    action: 'change_password',
-                    appearance: 'interaction-only',
-                    refreshExpired: 'manual',
-                    refreshTimeout: 'manual',
-                    size: 'flexible',
-                    theme: 'auto',
-                  }}
-                  onSuccess={() => {
-                    passwordTurnstileFailedRef.current = false
-                    passwordTurnstileResetAttemptedRef.current = false
-                  }}
-                  onExpire={() => passwordTurnstileRef.current?.reset()}
-                  onTimeout={handlePasswordTurnstileFailure}
-                  onUnsupported={handlePasswordTurnstileFailure}
-                  onError={handlePasswordTurnstileFailure}
-                  scriptOptions={{ onError: handlePasswordTurnstileFailure }}
-                />
-              </div>
-            ) : (
-              <p className="text-xs text-destructive">Security verification is not configured.</p>
-            )}
-            <Button type="submit" variant="outline" disabled={changingPwd}>
-              {changingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update Password
-            </Button>
-        </form>
-      </section>
+              <Button type="submit" disabled={changingPwd}>
+                {changingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update password
+              </Button>
+            </form>
+          </section>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

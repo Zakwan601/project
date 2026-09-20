@@ -56,7 +56,7 @@ function CourseList({ title, options, subjects, emptyText }: {
               <div key={option.id}>
                 <p className="text-sm">{option.name}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {papers.map(paper => `${paper.name} (${paper.code})`).join(' · ')}
+                  {papers.map(paper => `${paper.name} (${paper.code})`).join(' ï¿½ ')}
                 </p>
               </div>
             )
@@ -134,7 +134,7 @@ export function StudentSubjects({ student }: StudentSubjectsProps) {
       <section className="space-y-5 border-t pt-6">
         <div>
           <h2 className="text-base font-semibold">Subjects</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Humanities · Read only</p>
+          <p className="mt-1 text-sm text-muted-foreground">Humanities - Read only</p>
         </div>
         <SubjectList title="Compulsory subjects" subjects={compulsory} emptyText="No compulsory subjects found." />
         <CourseList title="Main electives (Group A)" options={mainOptions} subjects={subjects} emptyText="Main electives have not been assigned." />
@@ -152,7 +152,7 @@ export function StudentSubjects({ student }: StudentSubjectsProps) {
       <div>
         <h2 className="text-base font-semibold">Subjects</h2>
         <p className="mt-1 text-sm capitalize text-muted-foreground">
-          {student.class_group === 'business' ? 'Business studies' : student.class_group} · Read only
+          {student.class_group === 'business' ? 'Business studies' : student.class_group} - Read only
         </p>
       </div>
       <SubjectList title="Compulsory subjects" subjects={compulsory} emptyText="No compulsory subjects found." />

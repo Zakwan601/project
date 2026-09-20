@@ -35,9 +35,10 @@ interface ProfileUploadsProps {
   student?: Student
   userId: string
   refreshProfile: () => Promise<void>
+  stacked?: boolean
 }
 
-export function ProfileUploads({ profile, student, userId, refreshProfile }: ProfileUploadsProps) {
+export function ProfileUploads({ profile, student, userId, refreshProfile, stacked = false }: ProfileUploadsProps) {
   if (!profile && !student) throw new Error('A profile or student record is required')
 
   const avatarUrl = student?.photo_url ?? profile?.avatar_url ?? null
@@ -189,7 +190,7 @@ export function ProfileUploads({ profile, student, userId, refreshProfile }: Pro
   }
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2">
+    <div className={stacked ? "grid gap-7" : "grid gap-6 sm:grid-cols-2"}>
       <div className="space-y-2">
         <Label>Profile Image <span className="font-normal text-muted-foreground">(optional)</span></Label>
         <div className="flex flex-wrap items-center gap-2">
