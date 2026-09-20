@@ -17,9 +17,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
+import { ProfileUploads } from './ProfileUploads'
 
 const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
 
@@ -29,6 +30,12 @@ const profileSchema = z.object({
     .trim()
     .min(1, 'Phone is required')
     .refine(isValidBangladeshMobile, 'Enter a valid Bangladesh mobile number'),
+  father_name: z.string().trim().max(120, 'Use 120 characters or fewer'),
+  mother_name: z.string().trim().max(120, 'Use 120 characters or fewer'),
+  religion: z.string().trim().max(80, 'Use 80 characters or fewer'),
+})
+const studentProfileSchema = profileSchema.extend({
+  phone: z.string(),
 })
 type ProfileForm = z.infer<typeof profileSchema>
 
@@ -76,13 +83,16 @@ export function ProfilePage() {
     watch: watchProfile,
     formState: { errors: profileErrors },
   } = useForm<ProfileForm>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(role === 'student' ? studentProfileSchema : profileSchema),
     mode: 'onChange',
     defaultValues: {
       full_name: role === 'student' && student
         ? `${student.first_name} ${student.last_name}`.trim()
         : profile?.full_name ?? '',
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
+      father_name: profile?.father_name ?? '',
+      mother_name: profile?.mother_name ?? '',
+      religion: profile?.religion ?? '',
     },
   })
 
@@ -92,6 +102,9 @@ export function ProfilePage() {
         ? `${student.first_name} ${student.last_name}`.trim()
         : profile?.full_name ?? '',
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
+      father_name: profile?.father_name ?? '',
+      mother_name: profile?.mother_name ?? '',
+      religion: profile?.religion ?? '',
     })
   }, [profile, resetProfile, role, student])
 
@@ -164,11 +177,17 @@ export function ProfilePage() {
     try {
       if (!profile) throw new Error('Your profile record could not be found. Please contact an administrator.')
 
+      const personalDetails = {
+        father_name: data.father_name.trim() || null,
+        mother_name: data.mother_name.trim() || null,
+        religion: data.religion.trim() || null,
+      }
       const updates = role === 'student'
-        ? { full_name: data.full_name.trim() }
+        ? personalDetails
         : {
             full_name: data.full_name.trim(),
             phone: normalizeBangladeshMobile(data.phone),
+            ...personalDetails,
           }
 
       const { error } = await db
@@ -242,7 +261,7 @@ export function ProfilePage() {
 
   if (loading || (!profile && !profileError)) {
     return (
-      <div className="max-w-2xl space-y-3 sm:space-y-6">
+      <div className="max-w-3xl space-y-3 sm:space-y-6">
         <PageHeader title="Profile" description="Loading your account information" />
         <Card>
           <CardContent>
@@ -255,7 +274,7 @@ export function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="max-w-2xl space-y-3 sm:space-y-6">
+      <div className="max-w-3xl space-y-3 sm:space-y-6">
         <PageHeader title="Profile" description="Manage your personal information and security" />
         <Card>
           <CardHeader>
@@ -277,19 +296,18 @@ export function ProfilePage() {
     )
   }
   return (
-    <div className="max-w-2xl space-y-3 sm:space-y-6">
+    <div className="max-w-3xl space-y-3 sm:space-y-6">
       <PageHeader title="Profile" description="Manage your personal information and security" />
 
-      {/* Profile Info */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3 sm:gap-4">
+      <section className="space-y-6">
+        <div className="flex items-center gap-4 py-2">
             <Avatar className="h-12 w-12 sm:h-16 sm:w-16">
+              {profile.avatar_url && <AvatarImage src={profile.avatar_url} alt={`${displayName}'s profile`} />}
               <AvatarFallback className="text-xl bg-muted">{initials}</AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle>{displayName}</CardTitle>
-              <CardDescription>{user?.email}</CardDescription>
+              <h2 className="text-xl font-semibold tracking-tight">{displayName}</h2>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
               <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>
@@ -305,11 +323,14 @@ export function ProfilePage() {
                 </Badge>
               )}
             </div>
-          </div>
-        </CardHeader>
+        </div>
         <Separator />
-        <CardContent className="pt-3 sm:pt-6">
-          <form onSubmit={handleProfile(saveProfile)} className="space-y-3 sm:space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Personal information</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Update your personal details and documents.</p>
+        </div>
+        <form onSubmit={handleProfile(saveProfile)} className="space-y-4">
+            {user && <ProfileUploads profile={profile} userId={user.id} refreshProfile={refreshProfile} />}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label>Full Name</Label>
@@ -322,6 +343,23 @@ export function ProfilePage() {
                 aria-invalid={!!profileErrors.full_name}
               />
               {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="space-y-2">
+                <Label>Father's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input {...regProfile('father_name')} aria-invalid={!!profileErrors.father_name} />
+                {profileErrors.father_name && <p className="text-xs text-destructive">{profileErrors.father_name.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Mother's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input {...regProfile('mother_name')} aria-invalid={!!profileErrors.mother_name} />
+                {profileErrors.mother_name && <p className="text-xs text-destructive">{profileErrors.mother_name.message}</p>}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Religion <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <Input {...regProfile('religion')} aria-invalid={!!profileErrors.religion} />
+              {profileErrors.religion && <p className="text-xs text-destructive">{profileErrors.religion.message}</p>}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
@@ -351,20 +389,17 @@ export function ProfilePage() {
                 <Input value={user?.email ?? ''} disabled />
               </div>
             </div>
-            {role !== 'student' && <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save Changes
-            </Button>}
-          </form>
-        </CardContent>
-      </Card>
+            </Button>
+        </form>
+      </section>
 
       {role === 'student' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Academic History</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section className="border-t pt-6">
+          <h2 className="text-base font-semibold">Academic history</h2>
+          <div className="mt-4">
             {historyLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
@@ -372,9 +407,9 @@ export function ProfilePage() {
             ) : enrollmentHistory.length === 0 ? (
               <p className="text-sm text-muted-foreground">No academic history is available yet.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y">
                 {enrollmentHistory.map(enrollment => (
-                  <div key={enrollment.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                  <div key={enrollment.id} className="flex items-start justify-between gap-3 py-3">
                     <div>
                       <p className="text-sm font-medium">
                         {enrollment.classes.name} ({enrollment.classes.grade}-{enrollment.classes.section})
@@ -391,17 +426,16 @@ export function ProfilePage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
-      {/* Change Password */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Change Password</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handlePwd(changePassword)} className="space-y-3 sm:space-y-4">
+      <section className="border-t pt-6">
+        <div>
+          <h2 className="text-base font-semibold">Change password</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Use a strong password you do not use elsewhere.</p>
+        </div>
+        <form onSubmit={handlePwd(changePassword)} className="mt-4 max-w-xl space-y-4">
             <div className="space-y-2">
               <Label>Current Password</Label>
               <div className="relative">
@@ -448,7 +482,7 @@ export function ProfilePage() {
               </div>
               {pwdErrors.newPassword && <p className="text-xs text-destructive">{pwdErrors.newPassword.message}</p>}
               {newPassword && (
-                <div className="space-y-3 rounded-lg border bg-muted/20 p-3" aria-live="polite">
+                <div className="space-y-3 py-2" aria-live="polite">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Password strength</span>
                     <span className={`font-medium ${passwordStrength.text}`}>{passwordStrength.label}</span>
@@ -513,7 +547,7 @@ export function ProfilePage() {
               {pwdErrors.confirmPassword && <p className="text-xs text-destructive">{pwdErrors.confirmPassword.message}</p>}
             </div>
             {turnstileSiteKey ? (
-              <div className="flex justify-center rounded-md border bg-background p-2">
+              <div className="flex justify-start py-1">
                 <Turnstile
                   ref={passwordTurnstileRef}
                   siteKey={turnstileSiteKey}
@@ -543,9 +577,8 @@ export function ProfilePage() {
               {changingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Update Password
             </Button>
-          </form>
-        </CardContent>
-      </Card>
+        </form>
+      </section>
     </div>
   )
 }

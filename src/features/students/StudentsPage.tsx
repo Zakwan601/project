@@ -30,6 +30,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { syncZktecoUsers, type ZktecoSyncSummary } from '@/services/zktecoUsers'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
+import { ProfileUploads } from '@/features/profile/ProfileUploads'
 
 import { MoreHorizontal } from 'lucide-react'
 
@@ -58,6 +59,9 @@ const studentSchema = z.object({
     'Enter a valid Bangladesh mobile number',
   ),
   biometric_id: z.string().optional(),
+  father_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
+  mother_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
+  religion: z.string().trim().max(80, 'Use 80 characters or fewer').optional(),
 }).refine(data => !data.fourth_subject_id || data.fourth_subject_id !== data.optional_subject_2_id, {
   message: 'Choose two different optional subjects',
   path: ['optional_subject_2_id'],
@@ -184,6 +188,17 @@ export function StudentsPage() {
     }
   }
 
+  const refreshEditingStudent = async (studentId: string) => {
+    const { data, error } = await db
+      .from('students')
+      .select('*, classes(id, name, grade, section)')
+      .eq('id', studentId)
+      .single()
+    if (error) throw error
+    setEditing(data as StudentWithClass)
+    await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+  }
+
   const openEdit = (s: StudentWithClass) => {
     setEditing(s)
     reset({
@@ -197,6 +212,9 @@ export function StudentsPage() {
       roll_number: s.roll_number ?? undefined,
       guardian_phone: s.guardian_phone ?? undefined,
       biometric_id: s.biometric_id ?? undefined,
+      father_name: s.father_name ?? '',
+      mother_name: s.mother_name ?? '',
+      religion: s.religion ?? '',
     })
     setDialogOpen(true)
   }
@@ -213,9 +231,27 @@ export function StudentsPage() {
       roll_number: data.roll_number ?? null,
       guardian_phone: data.guardian_phone?.trim() || null,
       biometric_id: data.biometric_id || null,
+      father_name: data.father_name?.trim() || null,
+      mother_name: data.mother_name?.trim() || null,
+      religion: data.religion?.trim() || null,
     }
 
     if (!editing) return
+    if (isFullAdmin && editing.profile_id) {
+      const { error } = await db
+        .from('profiles')
+        .update({
+          full_name: `${data.first_name.trim()} ${data.last_name.trim()}`.trim(),
+          father_name: data.father_name?.trim() || null,
+          mother_name: data.mother_name?.trim() || null,
+          religion: data.religion?.trim() || null,
+        })
+        .eq('id', editing.profile_id)
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+    }
     await updateStudent.mutateAsync({ id: editing.id, updates: payload })
     setDialogOpen(false)
     reset({})
@@ -737,6 +773,40 @@ export function StudentsPage() {
                 )}
               </div>
             </div>
+            {isFullAdmin && (
+              <div className="space-y-4 border-t py-4">
+                <div>
+                  <h3 className="text-sm font-semibold">Personal profile</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Optional family details and identity documents.</p>
+                </div>
+                {editing && (
+                  <>
+                    <ProfileUploads
+                      student={editing}
+                      userId={editing.profile_id ?? editing.id}
+                      refreshProfile={() => refreshEditingStudent(editing.id)}
+                    />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Father's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                        <Input {...register('father_name')} aria-invalid={!!errors.father_name} />
+                        {errors.father_name && <p className="text-xs text-destructive">{errors.father_name.message}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Mother's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                        <Input {...register('mother_name')} aria-invalid={!!errors.mother_name} />
+                        {errors.mother_name && <p className="text-xs text-destructive">{errors.mother_name.message}</p>}
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label>Religion <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                        <Input {...register('religion')} aria-invalid={!!errors.religion} />
+                        {errors.religion && <p className="text-xs text-destructive">{errors.religion.message}</p>}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={isSubmitting}>

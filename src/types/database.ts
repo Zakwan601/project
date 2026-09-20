@@ -116,6 +116,10 @@ export interface Profile {
   role: UserRole
   full_name: string
   avatar_url: string | null
+  birth_certificate_path: string | null
+  father_name: string | null
+  mother_name: string | null
+  religion: string | null
   phone: string | null
   address: string | null
   is_active: boolean
@@ -166,6 +170,10 @@ export interface Student {
   date_of_admission: string
   biometric_id: string | null
   photo_url: string | null
+  birth_certificate_path: string | null
+  father_name: string | null
+  mother_name: string | null
+  religion: string | null
   is_active: boolean
   created_at: string
   updated_at: string

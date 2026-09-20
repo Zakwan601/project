@@ -82,6 +82,10 @@ function studentFromZktecoUser(
     date_of_admission: new Date().toISOString().slice(0, 10),
     biometric_id: pin,
     photo_url: null,
+    birth_certificate_path: null,
+    father_name: null,
+    mother_name: null,
+    religion: null,
     is_active: true,
   }
 }
