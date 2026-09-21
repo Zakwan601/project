@@ -235,14 +235,8 @@ export function ReportsPage() {
 
     const dailyHeaders = dailyStudentAttendance.dates.map(date => formatDisplayDate(date))
     const headers = [
-      'SN',
-      'Class',
-      'Report From',
-      'Report To',
-      'Student Filter',
       'Roll',
       'Student Name',
-      'Admission Number',
       ...dailyHeaders,
       'Present',
       'Absent',
@@ -251,15 +245,9 @@ export function ReportsPage() {
       'Total Days',
       'Attendance %',
     ]
-    const rows = reportRows.map((row, index) => [
-      index + 1,
-      selectedClassName,
-      startDate,
-      endDate,
-      studentFilterDescription,
+    const rows = reportRows.map(row => [
       row.roll,
       row.name,
-      row.admission,
       ...dailyStudentAttendance.dates.map(date => {
         const status = dailyStudentAttendance.statuses[dailyStatusKey(row.id, date)]
         return status ? dailyStatusMeta[status].label : ''
@@ -271,8 +259,14 @@ export function ReportsPage() {
       row.total,
       Number(row.percentage.toFixed(2)),
     ])
+    const title = [
+      'Class: ' + selectedClassName,
+      'Report From: ' + formatDisplayDate(startDate),
+      'Report To: ' + formatDisplayDate(endDate),
+      ...Array<string>(headers.length - 3).fill(''),
+    ]
     const classSlug = selectedClassName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'class'
-    downloadCsv('attendance-' + classSlug + '-' + startDate + '-to-' + endDate + '.csv', [headers, ...rows])
+    downloadCsv('attendance-' + classSlug + '-' + startDate + '-to-' + endDate + '.csv', [title, headers, ...rows])
   }
 
   const printStudentReport = () => {
@@ -426,7 +420,7 @@ export function ReportsPage() {
                 </div>
                 <p className="text-sm text-muted-foreground">{reportRows.length} student{reportRows.length === 1 ? '' : 's'}</p>
               </div>
-              <div className="overflow-x-auto rounded-lg border">
+              <div className="min-w-0 max-w-full overflow-hidden rounded-lg border">
               <Table className="min-w-[880px]">
                 <TableHeader>
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -489,7 +483,7 @@ export function ReportsPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-lg border">
+              <div className="min-w-0 max-w-full overflow-hidden rounded-lg border">
                 <Table className="min-w-max">
                   <TableHeader>
                     <TableRow>

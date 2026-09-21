@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, Clock3, Copy, Eye, EyeOff, GraduationCap, History, KeyRound, Pencil, RefreshCw, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
+import { Check, Copy, Eye, EyeOff, GraduationCap, KeyRound, Pencil, RefreshCw, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { STUDENTS_KEY, useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents, useStudentEnrollmentHistory } from '@/hooks/useStudents'
-import { useStudentPunches } from '@/hooks/useDeviceLogs'
+import { STUDENTS_KEY, useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents } from '@/hooks/useStudents'
 import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
@@ -21,8 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
-import type { ClassGroup, Student, StudentWithClass, Subject, SubjectCourseOption } from '@/types/database'
-import { formatBangladeshDateTime, formatDisplayDate } from '@/lib/dateTime'
+import type { AcademicYear, ClassGroup, Student, StudentWithClass, Subject, SubjectCourseOption } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { isValidBangladeshMobile } from '@/lib/profile'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -87,6 +85,15 @@ type StudentForm = z.infer<typeof studentSchema>
 export function StudentsPage() {
   const { data: students, isLoading, error } = useStudents()
   const { data: classes } = useClasses()
+  const { data: academicSessions = [] } = useQuery<AcademicYear[]>({
+    queryKey: ['academic_years'],
+    queryFn: async () => {
+      const { data, error } = await db.from('academic_years').select('*')
+        .order('start_date', { ascending: false })
+      if (error) throw error
+      return data as AcademicYear[]
+    },
+  })
   const { data: fourthSubjects = [] } = useQuery<Pick<Subject, 'id' | 'name' | 'code' | 'class_group'>[]>({
     queryKey: ['student-fourth-subject-options'],
     queryFn: async () => {
@@ -118,17 +125,18 @@ export function StudentsPage() {
 
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('all')
+  const [academicSessionFilter, setAcademicSessionFilter] = useState('all')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editing, setEditing] = useState<StudentWithClass | null>(null)
   const [accountStudent, setAccountStudent] = useState<StudentWithClass | null>(null)
-  const [punchStudent, setPunchStudent] = useState<StudentWithClass | null>(null)
   const [creatingAccount, setCreatingAccount] = useState(false)
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
   const [promotionOpen, setPromotionOpen] = useState(false)
   const [targetClassId, setTargetClassId] = useState('')
   const [promotionDate, setPromotionDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [historyStudent, setHistoryStudent] = useState<StudentWithClass | null>(null)
   const [isSyncingUsers, setIsSyncingUsers] = useState(false)
   const [syncSummary, setSyncSummary] = useState<ZktecoSyncSummary | null>(null)
 
@@ -156,9 +164,26 @@ export function StudentsPage() {
     const matchesClass = classFilter === 'all'
       || (classFilter === 'unassigned' ? !student.class_id : student.class_id === classFilter)
 
-    return matchesSearch && matchesClass
+    const matchesSession = academicSessionFilter === 'all'
+      || classes?.some(cls => cls.id === student.class_id && cls.academic_year_id === academicSessionFilter)
+
+    return matchesSearch && matchesClass && matchesSession
   }) ?? []
-  const allFilteredSelected = filtered.length > 0 && filtered.every(student => selectedStudentIds.includes(student.id))
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const pageStudents = filtered.slice(pageStart, pageStart + pageSize)
+  const allPageSelected = pageStudents.length > 0 && pageStudents.every(student => selectedStudentIds.includes(student.id))
+  const somePageSelected = pageStudents.some(student => selectedStudentIds.includes(student.id))
+
+  useEffect(() => {
+    setPage(1)
+    setSelectedStudentIds([])
+  }, [search, classFilter, academicSessionFilter])
+
+  useEffect(() => {
+    setPage(currentPage)
+  }, [currentPage])
 
   const toggleStudent = (studentId: string, checked: boolean) => {
     setSelectedStudentIds(current => checked
@@ -322,16 +347,33 @@ export function StudentsPage() {
       />
 
       <section aria-label="Student filters" className="mb-3 sm:mb-4">
-          <div className="flex  gap-2 flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <StudentSearchInput value={search} onChange={setSearch} className="sm:max-w-sm" />
+            <Select value={academicSessionFilter} onValueChange={value => {
+              setAcademicSessionFilter(value)
+              setClassFilter('all')
+              setSelectedStudentIds([])
+            }}>
+              <SelectTrigger className="w-full sm:w-56" aria-label="Filter students by academic session">
+                <SelectValue placeholder="All academic sessions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All academic sessions</SelectItem>
+                {academicSessions.map(academicSession => (
+                  <SelectItem key={academicSession.id} value={academicSession.id}>
+                    {academicSession.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={classFilter} onValueChange={setClassFilter}>
               <SelectTrigger className="w-full sm:w-56" aria-label="Filter students by class">
                 <SelectValue placeholder="All classes" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All classes</SelectItem>
-                <SelectItem value="unassigned">No class assigned</SelectItem>
-                {classes?.map(currentClass => (
+                {academicSessionFilter === 'all' && <SelectItem value="unassigned">No class assigned</SelectItem>}
+                {classes?.filter(cls => academicSessionFilter === 'all' || cls.academic_year_id === academicSessionFilter).map(currentClass => (
                   <SelectItem key={currentClass.id} value={currentClass.id}>
                     {currentClass.name} ({currentClass.grade}-{currentClass.section})
                   </SelectItem>
@@ -345,8 +387,8 @@ export function StudentsPage() {
         {filtered.length === 0 ? (
           <EmptyState
             title="No students found"
-            description={search || classFilter !== 'all'
-              ? 'Try changing the search or class filter.'
+            description={search || classFilter !== 'all' || academicSessionFilter !== 'all'
+              ? 'Try changing the search, academic session, or class filter.'
               : 'Students will appear here when synchronized.'}
           />
         ) : (
@@ -356,13 +398,13 @@ export function StudentsPage() {
       {canWriteStudents && (
         <TableHead className="w-8 px-2 sm:w-10 sm:px-3">
           <Checkbox
-            checked={allFilteredSelected}
+            checked={allPageSelected ? true : somePageSelected ? 'indeterminate' : false}
             onCheckedChange={checked =>
-              setSelectedStudentIds(
-                checked ? filtered.map(student => student.id) : [],
-              )
+              setSelectedStudentIds(current => checked === true
+                ? [...new Set([...current, ...pageStudents.map(student => student.id)])]
+                : current.filter(id => !pageStudents.some(student => student.id === id)))
             }
-            aria-label="Select all visible students"
+            aria-label="Select all students on this page"
           />
         </TableHead>
       )}
@@ -394,7 +436,7 @@ export function StudentsPage() {
   </TableHeader>
 
   <TableBody>
-    {filtered.map((student, i) => (
+    {pageStudents.map((student, i) => (
       <motion.tr
         key={student.id}
         initial={{ opacity: 0 }}
@@ -445,11 +487,6 @@ export function StudentsPage() {
           )}
           <span className="block text-[10px] text-muted-foreground">
             {student.class_group === 'business' ? 'Business Studies' : student.class_group === 'science' ? 'Science' : 'Humanities'}
-            {[student.fourth_subject_id, student.optional_subject_2_id].filter(Boolean).length > 0 &&
-              ` · Optional: ${[student.fourth_subject_id, student.optional_subject_2_id]
-                .filter(Boolean)
-                .map(id => fourthSubjects.find(subject => subject.id === id)?.name ?? 'Assigned')
-                .join(', ')}`}
           </span>
         </TableCell>
 
@@ -473,7 +510,7 @@ export function StudentsPage() {
         {/* Actions */}
         <TableCell className="px-1 py-1.5 text-right sm:px-3 sm:py-2">
           {/* Mobile: 3-dot menu */}
-          <div className="flex justify-end sm:hidden">
+          <div className={canWriteStudents || isFullAdmin ? 'flex justify-end sm:hidden' : 'hidden'}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -486,21 +523,6 @@ export function StudentsPage() {
               </DropdownMenuTrigger>
 
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => setHistoryStudent(student)}
-                >
-                  <History className="mr-2 h-4 w-4" />
-                  Academic history
-                </DropdownMenuItem>
-
-                {can('punches') && (
-                  <DropdownMenuItem
-                    onClick={() => setPunchStudent(student)}
-                  >
-                    <Clock3 className="mr-2 h-4 w-4" />
-                    View punching data
-                  </DropdownMenuItem>
-                )}
 
                 {isFullAdmin && (
                   <DropdownMenuItem
@@ -537,26 +559,6 @@ export function StudentsPage() {
 
           {/* Desktop: individual action buttons */}
           <div className="hidden items-center justify-end gap-1 sm:flex">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setHistoryStudent(student)}
-              title="Academic history"
-            >
-              <History className="h-3.5 w-3.5" />
-            </Button>
-
-            {can('punches') && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setPunchStudent(student)}
-                title="View punching data"
-                className="text-emerald-600 hover:text-emerald-700"
-              >
-                <Clock3 className="h-3.5 w-3.5" />
-              </Button>
-            )}
 
             {isFullAdmin && (
               <Button
@@ -602,6 +604,35 @@ export function StudentsPage() {
     ))}
   </TableBody>
 </Table>
+        )}
+        {filtered.length > 0 && (
+          <nav aria-label="Student pagination" className="flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              Showing {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} students
+              {selectedStudentIds.length > 0 && <span> · {selectedStudentIds.length} selected</span>}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Rows per page</span>
+              <Select value={String(pageSize)} onValueChange={value => {
+                setPageSize(Number(value))
+                setPage(1)
+              }}>
+                <SelectTrigger className="w-20" aria-label="Students per page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map(size => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <span className="px-1 text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+                Previous
+              </Button>
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>
+                Next
+              </Button>
+            </div>
+          </nav>
         )}
       </Card>
 
@@ -917,11 +948,6 @@ export function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      <PunchHistoryDialog
-        student={punchStudent}
-        onClose={() => setPunchStudent(null)}
-      />
-      <EnrollmentHistoryDialog student={historyStudent} onClose={() => setHistoryStudent(null)} />
     </div>
   )
 }
@@ -935,183 +961,6 @@ function SyncSummaryItem({ label, value }: { label: string; value: number }) {
   )
 }
 
-function EnrollmentHistoryDialog({ student, onClose }: {
-  student: StudentWithClass | null
-  onClose: () => void
-}) {
-  const { data: history = [], isLoading, error } = useStudentEnrollmentHistory(student?.id)
-
-  return (
-    <Dialog open={student !== null} onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Academic history</DialogTitle>
-          <DialogDescription>{student?.first_name} {student?.last_name}</DialogDescription>
-        </DialogHeader>
-        {isLoading ? <LoadingState message="Loading academic history..." /> : error ? (
-          <ErrorState message={(error as Error).message} />
-        ) : history.length === 0 ? (
-          <EmptyState title="No academic history" description="The current assignment will appear after the enrollment migration is applied." />
-        ) : (
-          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
-            {history.map(enrollment => (
-              <div key={enrollment.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
-                <div>
-                  <p className="text-sm font-medium">
-                    {enrollment.classes.name} ({enrollment.classes.grade}-{enrollment.classes.section})
-                  </p>
-                  <p className="text-xs text-muted-foreground">{enrollment.academic_years.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatDisplayDate(enrollment.started_on)} – {enrollment.ended_on ? formatDisplayDate(enrollment.ended_on) : 'Current'}
-                  </p>
-                </div>
-                <Badge variant={enrollment.ended_on ? 'secondary' : 'default'} className="capitalize">
-                  {enrollment.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function PunchHistoryDialog({
-  student,
-  onClose,
-}: {
-  student: StudentWithClass | null
-  onClose: () => void
-}) {
-  const {
-    data: punches = [],
-    isLoading,
-    error,
-  } = useStudentPunches(student?.admission_number ?? null)
-
-  const processedCount = punches.filter(punch => punch.processed).length
-  const latestPunch = punches[0]?.punched_at ?? null
-
-  return (
-    <Dialog open={student !== null} onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            Punching Data — {student?.first_name} {student?.last_name}
-          </DialogTitle>
-          <DialogDescription>
-            Biometric Id = {' '}
-            <span className="font-mono font-medium text-foreground">
-              {student?.admission_number}
-            </span>
-          </DialogDescription>
-        </DialogHeader>
-
-        {isLoading ? (
-          <LoadingState message="Loading punching data..." />
-        ) : error ? (
-          <ErrorState message={(error as Error).message} />
-        ) : punches.length === 0 ? (
-          <EmptyState
-            title="No punching data found"
-            description={`No device logs match admission number ${student?.admission_number ?? ''}.`}
-          />
-        ) : (
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <PunchSummary label="Total punches" value={String(punches.length)} />
-              <PunchSummary label="Processed" value={`${processedCount} / ${punches.length}`} />
-              <PunchSummary label="Latest punch" value={latestPunch ? formatDate(latestPunch) : '—'} />
-            </div>
-
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Punched at</TableHead>
-                    <TableHead>Biometric ID</TableHead>
-                    <TableHead>Device</TableHead>
-                    <TableHead>Processed</TableHead>
-                    <TableHead>Attendance record</TableHead>
-                    <TableHead>Created at</TableHead>
-                    <TableHead>Raw data</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {punches.map(punch => (
-                    <TableRow key={punch.id}>
-                      <TableCell className="whitespace-nowrap font-medium">
-                        {formatDate(punch.punched_at)}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {punch.student_biometric_id}
-                      </TableCell>
-                      <TableCell>
-                        <p className="whitespace-nowrap text-sm">
-                          {punch.devices?.alias || punch.devices?.name || 'Unknown device'}
-                        </p>
-                        <p className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                          {punch.devices?.sn || punch.devices?.device_serial || '—'}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={punch.processed ? 'default' : 'secondary'}>
-                          {punch.processed ? 'Processed' : 'Pending'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {punch.attendance_record_id ?? '—'}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDate(punch.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        {punch.raw_data ? (
-                          <details>
-                            <summary className="cursor-pointer text-xs text-primary">View</summary>
-                            <pre className="mt-2 max-h-48 min-w-72 overflow-auto rounded bg-muted p-2 text-[10px]">
-                              {JSON.stringify(punch.raw_data, null, 2)}
-                            </pre>
-                          </details>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {punches.length === 500 && (
-              <p className="text-xs text-muted-foreground">
-                Showing the latest 500 punching records for this student.
-              </p>
-            )}
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function PunchSummary({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border bg-muted/20 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-semibold">{value}</p>
-    </div>
-  )
-}
-
-function formatDate(value: string | null) {
-  return formatBangladeshDateTime(value)
-}
 
 function StudentAccountForm({ student, session, creating, setCreating, onClose }: {
   student: StudentWithClass | null
