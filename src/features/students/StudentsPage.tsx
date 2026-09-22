@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, Copy, Eye, EyeOff, GraduationCap, KeyRound, Pencil, RefreshCw, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
+import { Check, Copy, Download, Eye, EyeOff, GraduationCap, KeyRound, Pencil, Printer, RefreshCw, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -20,7 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
-import type { AcademicYear, ClassGroup, Student, StudentWithClass, Subject, SubjectCourseOption } from '@/types/database'
+import type { AcademicYear, ClassGroup, Student, StudentWithClass, SubjectCourseOption } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { isValidBangladeshMobile } from '@/lib/profile'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -29,6 +29,7 @@ import { supabase } from '@/lib/supabase'
 import { syncZktecoUsers, type ZktecoSyncSummary } from '@/services/zktecoUsers'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 import { ProfileUploads } from '@/features/profile/ProfileUploads'
+import { downloadCsv } from '@/lib/csv'
 
 import { MoreHorizontal } from 'lucide-react'
 
@@ -94,18 +95,6 @@ export function StudentsPage() {
       return data as AcademicYear[]
     },
   })
-  const { data: fourthSubjects = [] } = useQuery<Pick<Subject, 'id' | 'name' | 'code' | 'class_group'>[]>({
-    queryKey: ['student-fourth-subject-options'],
-    queryFn: async () => {
-      const { data, error } = await db.from('subjects')
-        .select('id,name,code,class_group')
-        .eq('is_fourth_subject', true)
-        .eq('is_active', true)
-        .order('name')
-      if (error) throw error
-      return data
-    },
-  })
   const { data: courseOptions = [] } = useQuery<SubjectCourseOption[]>({
     queryKey: ['subject-course-options'],
     queryFn: async () => {
@@ -169,6 +158,17 @@ export function StudentsPage() {
 
     return matchesSearch && matchesClass && matchesSession
   }) ?? []
+  const selectedClassDetails = classes?.find(currentClass => currentClass.id === classFilter)
+  const selectedClassGroupLabel = selectedClassDetails?.class_group === 'business'
+    ? 'Business Studies'
+    : selectedClassDetails?.class_group === 'science'
+      ? 'Science'
+      : selectedClassDetails?.class_group === 'humanities'
+        ? 'Humanities'
+        : ''
+  const studentListTitle = selectedClassDetails
+    ? selectedClassDetails.name + ' - Section ' + selectedClassDetails.section + ' - ' + selectedClassGroupLabel
+    : ''
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages)
   const pageStart = (currentPage - 1) * pageSize
@@ -189,6 +189,44 @@ export function StudentsPage() {
     setSelectedStudentIds(current => checked
       ? [...new Set([...current, studentId])]
       : current.filter(id => id !== studentId))
+  }
+
+  const exportStudentList = () => {
+    if (!selectedClassDetails || filtered.length === 0) return
+
+    const rows = filtered.map(student => [
+      (student.first_name + ' ' + student.last_name).trim(),
+      student.roll_number,
+      student.guardian_phone,
+    ])
+    const classSlug = (selectedClassDetails.name + '-' + selectedClassDetails.section + '-' + selectedClassDetails.class_group)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+
+    downloadCsv('students-' + classSlug + '.csv', [
+      [studentListTitle, '', ''],
+      ['Name', 'Roll', "Parent's Number"],
+      ...rows,
+    ])
+  }
+
+  const printStudentList = () => {
+    if (!selectedClassDetails || filtered.length === 0) return
+
+    const pageStyle = document.createElement('style')
+    pageStyle.id = 'student-list-page-style'
+    pageStyle.textContent = '@page { size: A4 portrait; margin: 12mm; }'
+    document.head.appendChild(pageStyle)
+
+    const cleanup = () => {
+      document.body.classList.remove('student-report-printing')
+      pageStyle.remove()
+    }
+
+    document.body.classList.add('student-report-printing')
+    window.addEventListener('afterprint', cleanup, { once: true })
+    window.print()
   }
 
   const submitPromotion = async () => {
@@ -326,7 +364,7 @@ export function StudentsPage() {
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
-    <div>
+    <div className="student-report-screen">
       <PageHeader
         title="Students"
         description={`${students?.length ?? 0} students enrolled`}
@@ -380,6 +418,14 @@ export function StudentsPage() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="flex gap-2 sm:ml-auto">
+              <Button type="button" variant="outline" className="flex-1 whitespace-nowrap sm:flex-none" onClick={exportStudentList} disabled={!selectedClassDetails || filtered.length === 0}>
+                <Download className="h-4 w-4" /> Export CSV
+              </Button>
+              <Button type="button" variant="outline" className="flex-1 whitespace-nowrap sm:flex-none" onClick={printStudentList} disabled={!selectedClassDetails || filtered.length === 0}>
+                <Printer className="h-4 w-4" /> Print
+              </Button>
+            </div>
           </div>
       </section>
 
@@ -635,6 +681,44 @@ export function StudentsPage() {
           </nav>
         )}
       </Card>
+
+      {selectedClassDetails && filtered.length > 0 && (
+        <div className="student-report-print" aria-hidden="true">
+          <header className="print-report-header">
+            <div>
+              <h1>{studentListTitle}</h1>
+              <p>Student List</p>
+            </div>
+            <dl>
+              <dt>Students</dt>
+              <dd>{filtered.length}</dd>
+              <dt>Generated</dt>
+              <dd>{format(new Date(), 'dd MMM yyyy, hh:mm a')}</dd>
+            </dl>
+          </header>
+
+          <section className="print-summary-section">
+            <table className="print-summary-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Roll</th>
+                  <th>Parent's Number</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(student => (
+                  <tr key={student.id}>
+                    <td>{student.first_name} {student.last_name}</td>
+                    <td>{student.roll_number ?? '-'}</td>
+                    <td>{student.guardian_phone ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      )}
 
       <Dialog open={syncSummary !== null} onOpenChange={open => { if (!open) setSyncSummary(null) }}>
         <DialogContent className="max-w-md">

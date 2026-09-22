@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import postgres from "npm:postgres@3.4.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,6 +81,79 @@ Deno.serve(async (req: Request) => {
         })
       : userClient!;
 
+    const { data: dateIsArchived, error: archiveStatusError } = await rpcClient.rpc(
+      "is_device_log_date_archived",
+      { p_date: date },
+    );
+    if (archiveStatusError) {
+      return jsonResponse(400, { error: archiveStatusError.message });
+    }
+
+    if (dateIsArchived === true) {
+      const archiveDb = postgres(requiredEnv("ARCHIVE_DATABASE_URL"), {
+        ssl: "require",
+        max: 1,
+        prepare: false,
+        connect_timeout: 15,
+        idle_timeout: 5,
+      });
+
+      try {
+        const start = new Date(date + "T00:00:00+06:00").toISOString();
+        const end = new Date(new Date(start).getTime() + 86_400_000).toISOString();
+        const archivedPunches = await archiveDb.unsafe(
+          "select id, student_biometric_id, punched_at " +
+            "from public.device_logs_archive " +
+            "where punched_at >= $1::timestamptz and punched_at < $2::timestamptz " +
+            "order by punched_at, id",
+          [start, end],
+        );
+
+        const archiveRpcClient = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+        const { data: hotPunches, error: hotPunchesError } = await archiveRpcClient
+          .from("device_logs")
+          .select("id,student_biometric_id,punched_at")
+          .gte("punched_at", start)
+          .lt("punched_at", end)
+          .order("punched_at");
+        if (hotPunchesError) return jsonResponse(400, { error: hotPunchesError.message });
+
+        const punchesById = new Map<string, {
+          id: string;
+          student_biometric_id: string;
+          punched_at: string;
+        }>();
+        for (const row of [...archivedPunches, ...(hotPunches ?? [])]) {
+          const id = String(row.id);
+          punchesById.set(id, {
+            id,
+            student_biometric_id: String(row.student_biometric_id),
+            punched_at: row.punched_at instanceof Date
+              ? row.punched_at.toISOString()
+              : String(row.punched_at),
+          });
+        }
+
+        const { data, error } = await archiveRpcClient.rpc(
+          "sync_archived_attendance_as_service",
+          {
+            p_date: date,
+            p_punches: [...punchesById.values()],
+          },
+        );
+
+        if (error) return jsonResponse(400, { error: error.message });
+        return jsonResponse(200, {
+          ...data as Record<string, unknown>,
+          invoked_by: isServiceRequest ? "service" : "user",
+        });
+      } finally {
+        await archiveDb.end({ timeout: 5 });
+      }
+    }
+
     const rpcName = isServiceRequest
       ? "sync_daily_attendance_as_service"
       : "sync_daily_attendance";
@@ -90,6 +164,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(200, {
       ...data as Record<string, unknown>,
       invoked_by: isServiceRequest ? "service" : "user",
+      source: "hot",
     });
   } catch (error) {
     console.error("Attendance sync failed:", error);

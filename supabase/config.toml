@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.zkteco-connect-test]
 verify_jwt = false
+
+[functions.archive-device-logs]
+verify_jwt = false

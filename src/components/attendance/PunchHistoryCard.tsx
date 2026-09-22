@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound } from 'lucide-react'
 import { useDailyPunchesPage, useDashboardPunches } from '@/hooks/useDeviceLogs'
-import type { DashboardPunch } from '@/types/database'
+import type { ClassWithDetails, DashboardPunch } from '@/types/database'
 import type { DailyPunchGroup } from '@/services/deviceLogs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,12 +12,20 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDisplayDate, splitBangladeshDateTime } from '@/lib/dateTime'
 import { DateFilter } from '@/components/shared/DateFilter'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface PunchHistoryCardProps {
   admissionNumber?: string
   title: string
   description: string
   variant?: 'list' | 'table'
+  classes?: ClassWithDetails[]
 }
 
 export function PunchHistoryCard({
@@ -25,15 +33,18 @@ export function PunchHistoryCard({
   title,
   description,
   variant = 'list',
+  classes = [],
 }: PunchHistoryCardProps) {
   const isTable = variant === 'table'
   const [dateFilter, setDateFilter] = useState('')
+  const [classFilter, setClassFilter] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [search, setSearch] = useState('')
   const punchQuery = useDashboardPunches(admissionNumber, !isTable)
   const tableQuery = useDailyPunchesPage({
     admissionNumber,
+    classId: classFilter || undefined,
     date: dateFilter,
     page,
     pageSize,
@@ -60,16 +71,37 @@ export function PunchHistoryCard({
           aria-label="Punch history filters"
           className="mb-3 w-full"
         >
-          <div className="flex w-full flex-nowrap items-end gap-2">
+          <div className="flex w-full flex-wrap items-end gap-2">
             {!admissionNumber && (
-              <StudentSearchInput
-                value={search}
-                onChange={value => {
-                  setSearch(value)
-                  setPage(1)
-                }}
-                className="min-w-0 flex-1"
-              />
+              <>
+                <StudentSearchInput
+                  value={search}
+                  onChange={value => {
+                    setSearch(value)
+                    setPage(1)
+                  }}
+                  className="min-w-[12rem] flex-1"
+                />
+                <Select
+                  value={classFilter || 'all'}
+                  onValueChange={value => {
+                    setClassFilter(value === 'all' ? '' : value)
+                    setPage(1)
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-56" aria-label="Filter punches by class">
+                    <SelectValue placeholder="All classes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All classes</SelectItem>
+                    {classes.map(item => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} ({item.grade}-{item.section})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
             )}
 
             <DateFilter
@@ -258,7 +290,7 @@ function AdminPunchTableRow({ day }: { day: DailyPunches }) {
           {arrival.time}
         </TableCell>
         <TableCell className="whitespace-nowrap font-mono text-sm">
-          {departure?.time ?? '—'}
+          {departure?.time ?? '\u2014'}
         </TableCell>
         <TableCell>
           <Badge
@@ -358,7 +390,7 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
               {isPresent
                 ? <CheckCircle className="h-3.5 w-3.5" />
                 : <Clock3 className="h-3.5 w-3.5" />}
-              {isPresent ? 'Present' : `Late — after ${lateCutoffLabel(day.checkIn.punched_at)}`}
+              {isPresent ? 'Present' : `Late \u2014 after ${lateCutoffLabel(day.checkIn.punched_at)}`}
             </p>
           </div>
         </div>
@@ -373,7 +405,7 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
           <p className="mt-1 flex items-center justify-end gap-1.5 font-mono text-sm">
             <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-[11px] text-muted-foreground">Departure</span>
-            {departure?.time ?? '—'}
+            {departure?.time ?? '\u2014'}
           </p>
           {day.extraPunches.length > 0 && (
             <button

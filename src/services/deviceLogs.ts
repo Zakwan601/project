@@ -108,17 +108,82 @@ export const deviceLogsService = {
   async getDailyPunchesPage({
     search = '',
     admissionNumber,
+    classId,
     date,
     page,
     pageSize,
   }: {
     search?: string
     admissionNumber?: string
+    classId?: string
     date?: string
     page: number
     pageSize: number
   }): Promise<DailyPunchPage> {
+    let dateIsArchived = false
+    if (date) {
+      const { data, error } = await db.rpc('is_device_log_date_archived', { p_date: date })
+      if (error) throw error
+      dateIsArchived = data === true
+    }
+
+    if (dateIsArchived) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) throw new Error('Authentication required')
+
+      const { data, error } = await supabase.functions.invoke<{
+        rows: Array<{
+          student_biometric_id: string
+          punch_date: string
+          punch_ids: string[]
+          punch_times: string[]
+          first_name: string | null
+          last_name: string | null
+          photo_url: string | null
+          total_count: number | string
+        }>
+        total: number
+      }>('archive-device-logs', {
+        body: {
+          action: 'query',
+          search: search.trim(),
+          admissionNumber: admissionNumber || null,
+          classId: classId || null,
+          date,
+          page,
+          pageSize,
+        },
+        headers: { Authorization: 'Bearer ' + accessToken },
+      })
+
+      if (error) throw error
+      const rows = data?.rows ?? []
+      return {
+        total: Number(data?.total ?? 0),
+        rows: rows.map(row => ({
+          key: row.student_biometric_id + ':' + row.punch_date,
+          studentBiometricId: row.student_biometric_id,
+          date: row.punch_date,
+          student: row.first_name != null && row.last_name != null
+            ? {
+                admission_number: row.student_biometric_id,
+                first_name: row.first_name,
+                last_name: row.last_name,
+                photo_url: row.photo_url,
+              }
+            : null,
+          punches: row.punch_times.map((punched_at, index) => ({
+            id: row.punch_ids[index] ?? row.student_biometric_id + ':' + punched_at + ':' + index,
+            punched_at,
+          })),
+        })),
+      }
+    }
+
     const { data, error } = await db.rpc('search_daily_punches_page', {
+      p_class_id: classId || null,
       p_search: search.trim(),
       p_date: date || null,
       p_page: page,
