@@ -26,6 +26,7 @@ interface PunchHistoryCardProps {
   description: string
   variant?: 'list' | 'table'
   classes?: ClassWithDetails[]
+  source?: 'current' | 'archive'
 }
 
 export function PunchHistoryCard({
@@ -34,6 +35,7 @@ export function PunchHistoryCard({
   description,
   variant = 'list',
   classes = [],
+  source: dataSource = 'current',
 }: PunchHistoryCardProps) {
   const isTable = variant === 'table'
   const [dateFilter, setDateFilter] = useState('')
@@ -45,11 +47,12 @@ export function PunchHistoryCard({
   const tableQuery = useDailyPunchesPage({
     admissionNumber,
     classId: classFilter || undefined,
+    source: dataSource,
     date: dateFilter,
     page,
     pageSize,
     search,
-    enabled: isTable,
+    enabled: isTable && (dataSource === 'current' || Boolean(dateFilter)),
   })
   const dailyPunches = isTable
     ? (tableQuery.data?.rows ?? []).map(pagedPunchToDailyPunches)
@@ -161,9 +164,15 @@ export function PunchHistoryCard({
         ) : dailyPunches.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <ScanLine className="mx-auto mb-3 h-8 w-8 text-muted-foreground/60" />
-            <p className="text-sm font-medium">No punches found</p>
+                        <p className="text-sm font-medium">
+              {dataSource === 'archive' && !dateFilter ? 'Select a date' : 'No punches found'}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              New biometric punches will appear here automatically.
+              {dataSource === 'archive' && !dateFilter
+                ? 'Choose a date to load punches from the archive database.'
+                : dataSource === 'archive'
+                  ? 'No archived punches match these filters.'
+                  : 'New biometric punches will appear here automatically.'}
             </p>
           </div>
         ) : variant === 'table' ? (

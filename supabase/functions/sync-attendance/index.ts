@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
 
     if (dateIsArchived === true) {
       const archiveDb = postgres(requiredEnv("ARCHIVE_DATABASE_URL"), {
-        ssl: "require",
+        ssl: archiveDatabaseSsl(),
         max: 1,
         prepare: false,
         connect_timeout: 15,
@@ -219,6 +219,15 @@ async function secretsMatch(left: string, right: string) {
   return difference === 0;
 }
 
+function archiveDatabaseSsl() {
+  const encodedCa = requiredEnv("ARCHIVE_DATABASE_CA_BASE64").replace(/\s+/g, "");
+  const lines = encodedCa.match(/.{1,64}/g);
+  if (!lines) throw new Error("ARCHIVE_DATABASE_CA_BASE64 is invalid");
+  return {
+    ca: `-----BEGIN CERTIFICATE-----\n${lines.join("\n")}\n-----END CERTIFICATE-----`,
+    rejectUnauthorized: true,
+  };
+}
 function requiredEnv(name: string) {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`${name} is not configured`);

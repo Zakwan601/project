@@ -17,6 +17,7 @@ const DevicesPage = lazy(() => import('@/features/devices/DevicesPage').then(mod
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(module => ({ default: module.SettingsPage })))
 const ProfilePage = lazy(() => import('@/features/profile/ProfilePage').then(module => ({ default: module.ProfilePage })))
 const RecentPunchesPage = lazy(() => import('@/features/punches/RecentPunchesPage').then(module => ({ default: module.RecentPunchesPage })))
+const ArchivedPunchesPage = lazy(() => import('@/features/punches/ArchivedPunchesPage').then(module => ({ default: module.ArchivedPunchesPage })))
 const StudentReportsPage = lazy(() => import('@/features/reports/StudentReportsPage').then(module => ({ default: module.StudentReportsPage })))
 const ComplaintsPage = lazy(() => import('@/features/reports/ComplaintsPage').then(module => ({ default: module.ComplaintsPage })))
 const SmsMessagesPage = lazy(() => import('@/features/sms/SmsMessagesPage').then(module => ({ default: module.SmsMessagesPage })))
@@ -43,7 +44,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
-            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loadingâ€¦</div>}>
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
@@ -60,6 +61,14 @@ function App() {
                   element={(
                     <ProtectedRoute roles={['admin', 'student']}>
                       <RecentPunchesPage />
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/archived-punches"
+                  element={(
+                    <ProtectedRoute roles={['admin']}>
+                      <ArchivedPunchesPage />
                     </ProtectedRoute>
                   )}
                 />

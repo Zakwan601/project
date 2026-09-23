@@ -24,6 +24,7 @@ export function useDailyPunchesPage({
   search = '',
   admissionNumber,
   classId,
+  source = 'current',
   date,
   page,
   pageSize,
@@ -32,6 +33,7 @@ export function useDailyPunchesPage({
   search?: string
   admissionNumber?: string
   classId?: string
+  source?: 'current' | 'archive'
   date?: string
   page: number
   pageSize: number
@@ -41,6 +43,7 @@ export function useDailyPunchesPage({
     queryKey: [DEVICE_LOGS_KEY, 'daily-page', {
       admissionNumber: admissionNumber ?? 'all',
       classId: classId ?? 'all',
+      source,
       date: date || 'all',
       search: search.trim(),
       page,
@@ -50,12 +53,13 @@ export function useDailyPunchesPage({
       search: search.trim(),
       admissionNumber,
       classId,
+      source,
       date,
       page,
       pageSize,
     }),
     enabled,
     placeholderData: previousData => previousData,
-    refetchInterval: 60_000,
+    refetchInterval: source === 'current' ? 60_000 : false,
   })
 }

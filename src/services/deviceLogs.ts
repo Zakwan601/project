@@ -109,6 +109,7 @@ export const deviceLogsService = {
     search = '',
     admissionNumber,
     classId,
+    source = 'current',
     date,
     page,
     pageSize,
@@ -116,18 +117,13 @@ export const deviceLogsService = {
     search?: string
     admissionNumber?: string
     classId?: string
+    source?: 'current' | 'archive'
     date?: string
     page: number
     pageSize: number
   }): Promise<DailyPunchPage> {
-    let dateIsArchived = false
-    if (date) {
-      const { data, error } = await db.rpc('is_device_log_date_archived', { p_date: date })
-      if (error) throw error
-      dateIsArchived = data === true
-    }
-
-    if (dateIsArchived) {
+    if (source === 'archive') {
+      if (!date) throw new Error('Select a date to view archived punches')
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       if (sessionError) throw sessionError
       const accessToken = sessionData.session?.access_token
@@ -154,11 +150,12 @@ export const deviceLogsService = {
           date,
           page,
           pageSize,
+          includeHot: false,
         },
         headers: { Authorization: 'Bearer ' + accessToken },
       })
 
-      if (error) throw error
+      if (error) throw await readableFunctionError(error)
       const rows = data?.rows ?? []
       return {
         total: Number(data?.total ?? 0),
@@ -225,4 +222,17 @@ export const deviceLogsService = {
       })),
     }
   },
+}
+async function readableFunctionError(error: Error) {
+  const response = (error as Error & { context?: Response }).context
+  if (response) {
+    try {
+      const payload = await response.clone().json() as { error?: string; message?: string }
+      const message = payload.error || payload.message
+      if (message) return new Error(message)
+    } catch {
+      // Fall back to the SDK error below when the response is not JSON.
+    }
+  }
+  return error
 }

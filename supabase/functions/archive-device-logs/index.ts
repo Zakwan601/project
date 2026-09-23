@@ -44,7 +44,7 @@ Deno.serve(async (request: Request) => {
     const anonKey = requiredEnv("SUPABASE_ANON_KEY");
     const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     archiveDb = postgres(requiredEnv("ARCHIVE_DATABASE_URL"), {
-      ssl: "require",
+      ssl: archiveDatabaseSsl(),
       max: 1,
       prepare: false,
       connect_timeout: 15,
@@ -206,12 +206,16 @@ Deno.serve(async (request: Request) => {
     }
 
     if (action !== "query") return jsonResponse(400, { error: "Unknown action" });
+    if (profile.role !== "admin") {
+      return jsonResponse(403, { error: "Only a full administrator can view archived punches" });
+    }
 
     const date = String(body.date ?? "");
     if (!isValidDate(date)) {
       return jsonResponse(400, { error: "A real date in YYYY-MM-DD format is required" });
     }
 
+    const includeHot = body.includeHot === true;
     const page = boundedInteger(body.page, 1, 1, 1_000_000);
     const pageSize = boundedInteger(body.pageSize, 25, 1, 100);
     const search = String(body.search ?? "").trim().toLowerCase();
@@ -303,16 +307,20 @@ Deno.serve(async (request: Request) => {
       params,
     );
 
-    let hotQuery = adminClient
-      .from("device_logs")
-      .select("id,student_biometric_id,punched_at")
-      .gte("punched_at", start)
-      .lt("punched_at", end)
-      .order("punched_at");
+    let hotRows: Array<{ id: string; student_biometric_id: string; punched_at: string }> = [];
+    if (includeHot) {
+      let hotQuery = adminClient
+        .from("device_logs")
+        .select("id,student_biometric_id,punched_at")
+        .gte("punched_at", start)
+        .lt("punched_at", end)
+        .order("punched_at");
 
-    if (allowedAdmissions) hotQuery = hotQuery.in("student_biometric_id", allowedAdmissions);
-    const { data: hotRows, error: hotError } = await hotQuery;
-    if (hotError) throw hotError;
+      if (allowedAdmissions) hotQuery = hotQuery.in("student_biometric_id", allowedAdmissions);
+      const { data, error: hotError } = await hotQuery;
+      if (hotError) throw hotError;
+      hotRows = data ?? [];
+    }
 
     type CombinedGroup = {
       student_biometric_id: string;
@@ -377,7 +385,7 @@ Deno.serve(async (request: Request) => {
     const studentByAdmission = new Map(students.map(student => [student.admission_number, student]));
 
     return jsonResponse(200, {
-      source: "archive+hot",
+      source: includeHot ? "archive+hot" : "archive",
       total,
       rows: pageRows.map(row => {
         const student = studentByAdmission.get(row.student_biometric_id);
@@ -461,6 +469,15 @@ function dateInTimeZone(value: Date, timeZone: string) {
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find(item => item.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+function archiveDatabaseSsl() {
+  const encodedCa = requiredEnv("ARCHIVE_DATABASE_CA_BASE64").replace(/\s+/g, "");
+  const lines = encodedCa.match(/.{1,64}/g);
+  if (!lines) throw new Error("ARCHIVE_DATABASE_CA_BASE64 is invalid");
+  return {
+    ca: `-----BEGIN CERTIFICATE-----\n${lines.join("\n")}\n-----END CERTIFICATE-----`,
+    rejectUnauthorized: true,
+  };
 }
 function requiredEnv(name: string) {
   const value = Deno.env.get(name);

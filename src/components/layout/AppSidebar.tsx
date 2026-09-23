@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
-  BarChart3, CalendarOff, Cpu, Settings, User, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog, FileSpreadsheet,
+  BarChart3, CalendarOff, Cpu, Settings, User, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog, FileSpreadsheet, Archive,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import type { PermissionKey, UserRole } from '@/types/database'
@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
   { title: 'Classes', href: '/classes', icon: BookOpen, roles: ['admin'] },
   { title: 'Attendance', href: '/attendance', icon: ClipboardList, roles: ['admin', 'student'] },
   { title: 'Punches', href: '/punches', icon: ScanLine, roles: ['admin', 'student'] },
+  { title: 'Archived Punches', href: '/archived-punches', icon: Archive, roles: ['admin'] },
   { title: 'Report Issue', href: '/report-issue', icon: MessageSquareWarning, roles: ['student'] },
   { title: 'Vacations', href: '/vacations', icon: CalendarOff, roles: ['admin'] },
   { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin'] },
