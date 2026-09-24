@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, Copy, Download, Eye, EyeOff, GraduationCap, KeyRound, Pencil, Printer, RefreshCw, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
+import { Check, Copy, Download, Eye, EyeOff, FileSpreadsheet, GraduationCap, KeyRound, Pencil, Printer, RefreshCw, School, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { STUDENTS_KEY, useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents } from '@/hooks/useStudents'
+import { STUDENTS_KEY, useAssignStudentsToClass, useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents } from '@/hooks/useStudents'
 import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
@@ -30,6 +30,7 @@ import { syncZktecoUsers, type ZktecoSyncSummary } from '@/services/zktecoUsers'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 import { ProfileUploads } from '@/features/profile/ProfileUploads'
 import { downloadCsv } from '@/lib/csv'
+import { BulkStudentUpdateDialog } from './BulkStudentUpdateDialog'
 
 import { MoreHorizontal } from 'lucide-react'
 
@@ -113,6 +114,7 @@ export function StudentsPage() {
   const updateStudent = useUpdateStudent()
   const deleteStudent = useDeleteStudent()
   const promoteStudents = usePromoteStudents()
+  const assignStudents = useAssignStudentsToClass()
   const queryClient = useQueryClient()
   const { session, role, can } = useAuth()
   const canWriteStudents = can('students', 'write')
@@ -132,8 +134,12 @@ export function StudentsPage() {
   const [promotionOpen, setPromotionOpen] = useState(false)
   const [targetClassId, setTargetClassId] = useState('')
   const [promotionDate, setPromotionDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [assignmentOpen, setAssignmentOpen] = useState(false)
+  const [assignmentClassId, setAssignmentClassId] = useState('')
+  const [assignmentDate, setAssignmentDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [isSyncingUsers, setIsSyncingUsers] = useState(false)
   const [syncSummary, setSyncSummary] = useState<ZktecoSyncSummary | null>(null)
+  const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false)
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<StudentForm>({
     resolver: zodResolver(studentSchema),
@@ -235,6 +241,33 @@ export function StudentsPage() {
     document.body.classList.add('student-report-printing')
     window.addEventListener('afterprint', cleanup, { once: true })
     window.print()
+  }
+
+  const submitAssignment = async () => {
+    if (!assignmentClassId || selectedStudentIds.length === 0) return
+    await assignStudents.mutateAsync({
+      studentIds: selectedStudentIds,
+      targetClassId: assignmentClassId,
+      effectiveDate: assignmentDate,
+    })
+    setAssignmentOpen(false)
+    setSelectedStudentIds([])
+    setAssignmentClassId('')
+  }
+
+  const selectAssignmentTarget = (classId: string) => {
+    setAssignmentClassId(classId)
+    const targetSession = classes?.find(cls => cls.id === classId)?.academic_years
+    if (targetSession) {
+      const today = format(new Date(), 'yyyy-MM-dd')
+      setAssignmentDate(
+        today < targetSession.start_date
+          ? targetSession.start_date
+          : today > targetSession.end_date
+            ? targetSession.end_date
+            : today,
+      )
+    }
   }
 
   const submitPromotion = async () => {
@@ -381,19 +414,38 @@ export function StudentsPage() {
         description={`${students?.length ?? 0} students enrolled`}
         action={canWriteStudents ? (
           <div className="flex flex-wrap gap-2 sm:justify-end">
+            {isFullAdmin && <Button size="sm" variant="outline" onClick={() => setBulkUpdateOpen(true)}>
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Bulk edit
+            </Button>}
             {isFullAdmin && <Button size="sm" variant="outline" onClick={syncUsers} disabled={isSyncingUsers}>
               <RefreshCw className={`mr-1.5 h-4 w-4 ${isSyncingUsers ? 'animate-spin' : ''}`} />
               {isSyncingUsers ? 'Syncing users...' : 'Sync ZKTeco users'}
             </Button>}
-            {selectedStudentIds.length > 0 && (
+            {selectedStudentIds.length > 0 && <>
+              <Button size="sm" variant="outline" onClick={() => setAssignmentOpen(true)}>
+                <School className="mr-1.5 h-4 w-4" />
+                Assign class ({selectedStudentIds.length})
+              </Button>
               <Button size="sm" onClick={() => setPromotionOpen(true)}>
                 <GraduationCap className="mr-1.5 h-4 w-4" />
                 Promote ({selectedStudentIds.length})
               </Button>
-            )}
+            </>}
           </div>
         ) : undefined}
       />
+
+      {isFullAdmin && <BulkStudentUpdateDialog
+        open={bulkUpdateOpen}
+        onOpenChange={setBulkUpdateOpen}
+        students={filtered}
+        classes={classes ?? []}
+        scopeLabel={studentListTitle || 'current student list'}
+        onComplete={async () => {
+          await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+          await queryClient.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
+        }}
+      />}
 
       <section aria-label="Student filters" className="mb-3 sm:mb-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -767,6 +819,52 @@ export function StudentsPage() {
           )}
           <DialogFooter>
             <Button type="button" onClick={() => setSyncSummary(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignmentOpen} onOpenChange={setAssignmentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign students to class</DialogTitle>
+            <DialogDescription>
+              Assign {selectedStudentIds.length} selected student{selectedStudentIds.length === 1 ? '' : 's'} to one class. Enrollment history will be updated automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Target class</Label>
+              <Select value={assignmentClassId} onValueChange={selectAssignmentTarget}>
+                <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                <SelectContent>
+                  {classes?.filter(cls => cls.is_active && cls.academic_year_id).map(cls => (
+                    <SelectItem key={cls.id} value={cls.id}>
+                      {cls.name} ({cls.grade}-{cls.section}) · {cls.academic_years?.name ?? 'Academic year'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Assignment date</Label>
+              <DatePickerInput
+                value={assignmentDate}
+                onChange={setAssignmentDate}
+                min={classes?.find(cls => cls.id === assignmentClassId)?.academic_years?.start_date}
+                max={classes?.find(cls => cls.id === assignmentClassId)?.academic_years?.end_date}
+                disabled={!assignmentClassId}
+              />
+              <p className="text-xs text-muted-foreground">The date must fall within the target class's academic session.</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Subject choices are preserved when the group stays the same. Choices from a different group are cleared and must be assigned again.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAssignmentOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={!assignmentClassId || !assignmentDate || assignStudents.isPending} onClick={submitAssignment}>
+              {assignStudents.isPending ? 'Assigning...' : 'Confirm assignment'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

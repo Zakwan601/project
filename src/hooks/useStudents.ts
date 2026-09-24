@@ -82,6 +82,27 @@ export function usePromoteStudents() {
   })
 }
 
+export function useAssignStudentsToClass() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ studentIds, targetClassId, effectiveDate }: {
+      studentIds: string[]
+      targetClassId: string
+      effectiveDate: string
+    }) => studentsService.assignClass(studentIds, targetClassId, effectiveDate),
+    onSuccess: count => {
+      qc.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      qc.invalidateQueries({ queryKey: ['classes'] })
+      qc.invalidateQueries({ queryKey: ['student-enrollment-history'] })
+      qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
+      toast.success(count === 0
+        ? 'Selected students are already in this class'
+        : `${count} student${count === 1 ? '' : 's'} assigned to class`)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 export function useStudentEnrollmentHistory(studentId?: string) {
   return useQuery({
     queryKey: ['student-enrollment-history', studentId],

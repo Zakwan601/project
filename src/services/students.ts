@@ -107,6 +107,16 @@ export const studentsService = {
     return Number(data ?? 0)
   },
 
+  async assignClass(studentIds: string[], targetClassId: string, effectiveDate: string) {
+    const { data, error } = await db.rpc('assign_students_to_class', {
+      p_student_ids: studentIds,
+      p_target_class_id: targetClassId,
+      p_effective_date: effectiveDate,
+    })
+    if (error) throw error
+    return Number(data ?? 0)
+  },
+
   async getEnrollmentHistory(studentId: string) {
     const { data, error } = await db
       .from('student_enrollments')
