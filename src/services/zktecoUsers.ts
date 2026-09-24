@@ -90,7 +90,8 @@ function studentFromZktecoUser(
     birth_certificate_path: null,
     father_name: null,
     mother_name: null,
-    religion: null,
+    blood_group: null,
+    secondary_phone: null,
     is_active: true,
   }
 }

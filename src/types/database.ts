@@ -27,6 +27,7 @@ export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
 export type SessionType = 'morning' | 'afternoon' | 'period' | 'full_day'
 export type AttendanceSource = 'manual' | 'biometric' | 'system'
 export type ClassGroup = 'humanities' | 'science' | 'business'
+export type BloodGroup = 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-'
 
 export interface Database {
   public: {
@@ -124,7 +125,8 @@ export interface Profile {
   birth_certificate_path: string | null
   father_name: string | null
   mother_name: string | null
-  religion: string | null
+  blood_group: BloodGroup | null
+  secondary_phone: string | null
   phone: string | null
   address: string | null
   is_active: boolean
@@ -183,7 +185,8 @@ export interface Student {
   birth_certificate_path: string | null
   father_name: string | null
   mother_name: string | null
-  religion: string | null
+  blood_group: BloodGroup | null
+  secondary_phone: string | null
   is_active: boolean
   created_at: string
   updated_at: string

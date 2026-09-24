@@ -20,9 +20,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
-import type { AcademicYear, ClassGroup, Student, StudentWithClass, SubjectCourseOption } from '@/types/database'
+import type { AcademicYear, BloodGroup, ClassGroup, Student, StudentWithClass, SubjectCourseOption } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
-import { isValidBangladeshMobile } from '@/lib/profile'
+import { isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -44,6 +44,8 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
+
 const studentSchema = z.object({
   first_name: z.string().min(1, 'Required'),
   last_name: z.string().min(1, 'Required'),
@@ -61,7 +63,11 @@ const studentSchema = z.object({
   biometric_id: z.string().optional(),
   father_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
   mother_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
-  religion: z.string().trim().max(80, 'Use 80 characters or fewer').optional(),
+  blood_group: z.enum(BLOOD_GROUPS).or(z.literal('')).optional(),
+  secondary_phone: z.string().trim().optional().refine(
+    value => !value || isValidBangladeshMobile(value),
+    'Enter a valid Bangladesh mobile number',
+  ),
   humanities_main_option_1_id: z.string().optional(),
   humanities_main_option_2_id: z.string().optional(),
   humanities_main_option_3_id: z.string().optional(),
@@ -145,6 +151,8 @@ export function StudentsPage() {
   const humanitiesFourth = watch('humanities_fourth_option_id')
   const humanitiesSelectionIds = [humanitiesMain1, humanitiesMain2, humanitiesMain3, humanitiesFourth].filter(Boolean)
   const guardianPhone = watch('guardian_phone')
+  const secondaryPhone = watch('secondary_phone')
+  const bloodGroup = watch('blood_group')
 
   const filtered = students?.filter(student => {
     const matchesSearch = `${student.first_name} ${student.last_name} ${student.admission_number}`
@@ -312,7 +320,8 @@ export function StudentsPage() {
       biometric_id: s.biometric_id ?? undefined,
       father_name: s.father_name ?? '',
       mother_name: s.mother_name ?? '',
-      religion: s.religion ?? '',
+      blood_group: s.blood_group ?? '',
+      secondary_phone: s.secondary_phone ?? '',
     })
     setDialogOpen(true)
   }
@@ -336,7 +345,8 @@ export function StudentsPage() {
       biometric_id: data.biometric_id || null,
       father_name: data.father_name?.trim() || null,
       mother_name: data.mother_name?.trim() || null,
-      religion: data.religion?.trim() || null,
+      blood_group: (data.blood_group || null) as BloodGroup | null,
+      secondary_phone: data.secondary_phone ? normalizeBangladeshMobile(data.secondary_phone) : null,
     }
 
     if (!editing) return
@@ -347,7 +357,8 @@ export function StudentsPage() {
           full_name: `${data.first_name.trim()} ${data.last_name.trim()}`.trim(),
           father_name: data.father_name?.trim() || null,
           mother_name: data.mother_name?.trim() || null,
-          religion: data.religion?.trim() || null,
+          blood_group: (data.blood_group || null) as BloodGroup | null,
+          secondary_phone: data.secondary_phone ? normalizeBangladeshMobile(data.secondary_phone) : null,
         })
         .eq('id', editing.profile_id)
       if (error) {
@@ -972,10 +983,29 @@ export function StudentsPage() {
                         <Input {...register('mother_name')} aria-invalid={!!errors.mother_name} />
                         {errors.mother_name && <p className="text-xs text-destructive">{errors.mother_name.message}</p>}
                       </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label>Religion <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                        <Input {...register('religion')} aria-invalid={!!errors.religion} />
-                        {errors.religion && <p className="text-xs text-destructive">{errors.religion.message}</p>}
+                      <div className="space-y-2">
+                        <Label>Blood Group <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                        <Select
+                          value={bloodGroup || 'not-specified'}
+                          onValueChange={value => setValue('blood_group', value === 'not-specified' ? '' : value as BloodGroup, { shouldValidate: true })}
+                        >
+                          <SelectTrigger aria-invalid={!!errors.blood_group}><SelectValue placeholder="Select blood group" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="not-specified">Not specified</SelectItem>
+                            {BLOOD_GROUPS.map(group => <SelectItem key={group} value={group}>{group}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {errors.blood_group && <p className="text-xs text-destructive">{errors.blood_group.message}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Secondary Mobile Number <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                        <Input type="tel" inputMode="tel" placeholder="01XXXXXXXXX" {...register('secondary_phone')} aria-invalid={!!errors.secondary_phone} />
+                        {secondaryPhone && (
+                          <p className={`flex items-center gap-1.5 text-xs ${errors.secondary_phone ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`} aria-live="polite">
+                            {errors.secondary_phone ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                            {errors.secondary_phone?.message ?? 'Valid Bangladesh mobile number'}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </>

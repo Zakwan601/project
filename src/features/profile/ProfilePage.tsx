@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -25,6 +26,8 @@ import { StudentSubjects } from './StudentSubjects'
 
 const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
 
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
+
 const profileSchema = z.object({
   full_name: z.string().trim().min(2, 'Required'),
   phone: z.string()
@@ -33,7 +36,11 @@ const profileSchema = z.object({
     .refine(isValidBangladeshMobile, 'Enter a valid Bangladesh mobile number'),
   father_name: z.string().trim().max(120, 'Use 120 characters or fewer'),
   mother_name: z.string().trim().max(120, 'Use 120 characters or fewer'),
-  religion: z.string().trim().max(80, 'Use 80 characters or fewer'),
+  blood_group: z.enum(BLOOD_GROUPS).or(z.literal('')),
+  secondary_phone: z.string().trim().refine(
+    value => !value || isValidBangladeshMobile(value),
+    'Enter a valid Bangladesh mobile number',
+  ),
 })
 const studentProfileSchema = profileSchema.extend({
   phone: z.string(),
@@ -82,6 +89,7 @@ export function ProfilePage() {
     handleSubmit: handleProfile,
     reset: resetProfile,
     watch: watchProfile,
+    setValue: setProfileValue,
     formState: { errors: profileErrors },
   } = useForm<ProfileForm>({
     resolver: zodResolver(role === 'student' ? studentProfileSchema : profileSchema),
@@ -93,7 +101,8 @@ export function ProfilePage() {
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
       father_name: profile?.father_name ?? '',
       mother_name: profile?.mother_name ?? '',
-      religion: profile?.religion ?? '',
+      blood_group: profile?.blood_group ?? '',
+      secondary_phone: profile?.secondary_phone ?? '',
     },
   })
 
@@ -105,7 +114,8 @@ export function ProfilePage() {
       phone: role === 'student' ? student?.guardian_phone ?? '' : profile?.phone ?? '',
       father_name: profile?.father_name ?? '',
       mother_name: profile?.mother_name ?? '',
-      religion: profile?.religion ?? '',
+      blood_group: profile?.blood_group ?? '',
+      secondary_phone: profile?.secondary_phone ?? '',
     })
   }, [profile, resetProfile, role, student])
 
@@ -117,6 +127,8 @@ export function ProfilePage() {
   const newPassword = watchPwd('newPassword')
   const confirmPassword = watchPwd('confirmPassword')
   const parentPhone = watchProfile('phone')
+  const secondaryPhone = watchProfile('secondary_phone')
+  const bloodGroup = watchProfile('blood_group')
   const parentPhoneIsValid = isValidBangladeshMobile(parentPhone)
   const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword
   const metRequirements = passwordRequirements.filter(requirement => requirement.test(newPassword)).length
@@ -181,7 +193,8 @@ export function ProfilePage() {
       const personalDetails = {
         father_name: data.father_name.trim() || null,
         mother_name: data.mother_name.trim() || null,
-        religion: data.religion.trim() || null,
+        blood_group: data.blood_group || null,
+        secondary_phone: data.secondary_phone ? normalizeBangladeshMobile(data.secondary_phone) : null,
       }
       const updates = role === 'student'
         ? personalDetails
@@ -366,9 +379,18 @@ export function ProfilePage() {
                     {profileErrors.mother_name && <p className="text-xs text-destructive">{profileErrors.mother_name.message}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label>Religion <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                    <Input {...regProfile('religion')} aria-invalid={!!profileErrors.religion} />
-                    {profileErrors.religion && <p className="text-xs text-destructive">{profileErrors.religion.message}</p>}
+                    <Label>Blood group <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                    <Select
+                      value={bloodGroup || 'not-specified'}
+                      onValueChange={value => setProfileValue('blood_group', value === 'not-specified' ? '' : value as ProfileForm['blood_group'], { shouldValidate: true })}
+                    >
+                      <SelectTrigger aria-invalid={!!profileErrors.blood_group}><SelectValue placeholder="Select blood group" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="not-specified">Not specified</SelectItem>
+                        {BLOOD_GROUPS.map(group => <SelectItem key={group} value={group}>{group}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {profileErrors.blood_group && <p className="text-xs text-destructive">{profileErrors.blood_group.message}</p>}
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
@@ -378,6 +400,14 @@ export function ProfilePage() {
                     <Input type="tel" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" readOnly={phoneManagedByAdmin} className={phoneManagedByAdmin ? 'bg-muted/40' : undefined} {...regProfile('phone')} aria-invalid={!!profileErrors.phone} />
                     {profileErrors.phone && <p className="text-xs text-destructive">{profileErrors.phone.message}</p>}
                     {!phoneManagedByAdmin && parentPhone && !profileErrors.phone && parentPhoneIsValid && (
+                      <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Secondary mobile number <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                    <Input type="tel" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" {...regProfile('secondary_phone')} aria-invalid={!!profileErrors.secondary_phone} />
+                    {profileErrors.secondary_phone && <p className="text-xs text-destructive">{profileErrors.secondary_phone.message}</p>}
+                    {secondaryPhone && !profileErrors.secondary_phone && (
                       <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number</p>
                     )}
                   </div>
