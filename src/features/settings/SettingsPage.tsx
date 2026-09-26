@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Save} from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -27,6 +28,15 @@ const yearSchema = z.object({
 })
 type YearForm = z.infer<typeof yearSchema>
 
+const attendanceFineSchema = z.object({
+  fine_per_absent_day: z.number().min(0, 'Fine cannot be negative').max(1000000, 'Fine is too large'),
+})
+type AttendanceFineForm = z.infer<typeof attendanceFineSchema>
+
+interface AttendanceFineSetting {
+  fine_per_absent_day: number | string
+}
+
 function useAcademicYears() {
   return useQuery<AcademicYear[]>({
     queryKey: ['academic_years'],
@@ -41,14 +51,45 @@ function useAcademicYears() {
   })
 }
 
+function useAttendanceFineSetting() {
+  return useQuery<AttendanceFineSetting>({
+    queryKey: ['attendance_fine_setting'],
+    queryFn: async () => {
+      const { data, error } = await db
+        .from('attendance_fine_settings')
+        .select('fine_per_absent_day')
+        .eq('id', true)
+        .single()
+      if (error) throw error
+      return data as AttendanceFineSetting
+    },
+  })
+}
+
 export function SettingsPage() {
   const { data: years, isLoading } = useAcademicYears()
+  const { data: attendanceFineSetting, isLoading: attendanceFineLoading } = useAttendanceFineSetting()
   const qc = useQueryClient()
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<YearForm>({
     resolver: zodResolver(yearSchema),
   })
+  const {
+    register: registerFine,
+    handleSubmit: handleFineSubmit,
+    reset: resetFine,
+    formState: { errors: fineErrors, isSubmitting: isFineSubmitting },
+  } = useForm<AttendanceFineForm>({
+    resolver: zodResolver(attendanceFineSchema),
+    defaultValues: { fine_per_absent_day: 0 },
+  })
+
+  useEffect(() => {
+    if (attendanceFineSetting) {
+      resetFine({ fine_per_absent_day: Number(attendanceFineSetting.fine_per_absent_day) })
+    }
+  }, [attendanceFineSetting, resetFine])
 
   const createYear = useMutation({
     mutationFn: async (data: YearForm) => {
@@ -88,11 +129,55 @@ export function SettingsPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  if (isLoading) return <LoadingState />
+  const saveAttendanceFine = useMutation({
+    mutationFn: async (data: AttendanceFineForm) => {
+      const { error } = await db
+        .from('attendance_fine_settings')
+        .update({ fine_per_absent_day: data.fine_per_absent_day })
+        .eq('id', true)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['attendance_fine_setting'] })
+      toast.success('Attendance fine updated')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  if (isLoading || attendanceFineLoading) return <LoadingState />
 
   return (
     <div className="max-w-3xl space-y-3 sm:space-y-4">
       <PageHeader title="Settings" description="Manage system configuration and academic years" />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Attendance Fine</CardTitle>
+          <CardDescription>Set the fine charged for each absent day. Late and approved-leave days are not fined.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleFineSubmit(data => saveAttendanceFine.mutate(data))} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="w-full max-w-xs space-y-2">
+              <Label htmlFor="fine-per-absent-day">Fine per absent day (৳)</Label>
+              <Input
+                id="fine-per-absent-day"
+                type="number"
+                min="0"
+                max="1000000"
+                step="0.01"
+                inputMode="decimal"
+                {...registerFine('fine_per_absent_day', { valueAsNumber: true })}
+                aria-invalid={!!fineErrors.fine_per_absent_day}
+              />
+              {fineErrors.fine_per_absent_day && <p className="text-xs text-destructive">{fineErrors.fine_per_absent_day.message}</p>}
+            </div>
+            <Button type="submit" size="sm" disabled={isFineSubmitting || saveAttendanceFine.isPending}>
+              {(isFineSubmitting || saveAttendanceFine.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Save className="mr-2 h-4 w-4" /> Save Fine
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -196,7 +281,7 @@ export function SettingsPage() {
         <CardContent className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">System</span>
-            <span className="font-medium">NMDC - Axentra@Zuanshi v1.0 by Zakwan Masud</span>
+            <span className="font-medium">NMDC - Axentra@Zuanshi v1.3 by Zakwan Masud</span>
           </div>
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">Database</span>
@@ -208,7 +293,7 @@ export function SettingsPage() {
           </div>
           <div className="flex justify-between py-2">
             <span className="text-muted-foreground">Version</span>
-            <Badge variant="outline">1.2.0</Badge>
+            <Badge variant="outline">1.3</Badge>
           </div>
         </CardContent>
       </Card>

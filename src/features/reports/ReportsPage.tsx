@@ -42,6 +42,10 @@ interface StudentReportRow {
   percentage: number
 }
 
+interface AttendanceFineSetting {
+  fine_per_absent_day: number | string
+}
+
 
 function chunkDates(dates: string[], size: number) {
   const chunks: string[][] = []
@@ -67,6 +71,28 @@ function useClassAttendanceReport(classId: string, startDate: string, endDate: s
       return (data ?? []) as StudentReportRow[]
     },
     enabled: !!classId && !!startDate && !!endDate,
+  })
+}
+
+function useAttendanceFineSetting() {
+  return useQuery<AttendanceFineSetting>({
+    queryKey: ['attendance_fine_setting'],
+    queryFn: async () => {
+      const { data, error } = await db
+        .from('attendance_fine_settings')
+        .select('fine_per_absent_day')
+        .eq('id', true)
+        .single()
+      if (error) throw error
+      return data as AttendanceFineSetting
+    },
+  })
+}
+
+function formatFine(value: number) {
+  return '৳' + value.toLocaleString('en-BD', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
 }
 
@@ -198,6 +224,11 @@ function useDailyReport(startDate: string, endDate: string) {
 
 export function ReportsPage() {
   const { data: classes } = useClasses()
+  const {
+    data: attendanceFineSetting,
+    isLoading: attendanceFineLoading,
+    error: attendanceFineError,
+  } = useAttendanceFineSetting()
   const [selectedClass, setSelectedClass] = useState('')
   const [studentScope, setStudentScope] = useState<'all' | 'below'>('all')
   const [percentageThreshold, setPercentageThreshold] = useState('75')
@@ -211,6 +242,8 @@ export function ReportsPage() {
     error: dailyStudentError,
   } = useDailyStudentAttendance(selectedClass, startDate, endDate)
   const selectedClassName = classes?.find(c => c.id === selectedClass)?.name ?? 'selected class'
+  const finePerAbsentDay = Number(attendanceFineSetting?.fine_per_absent_day ?? 0)
+  const studentFine = (row: StudentReportRow) => row.absent * finePerAbsentDay
   const parsedPercentageThreshold = Number(percentageThreshold)
   const percentageFilterValid = percentageThreshold.trim() !== ''
     && Number.isFinite(parsedPercentageThreshold)
@@ -240,6 +273,7 @@ export function ReportsPage() {
       ...dailyHeaders,
       'Present',
       'Absent',
+      'Fine (BDT)',
       'Late',
       'Approved Leave',
       'Total Days',
@@ -254,6 +288,7 @@ export function ReportsPage() {
       }),
       row.present,
       row.absent,
+      studentFine(row),
       row.late,
       row.excused,
       row.total,
@@ -382,7 +417,7 @@ export function ReportsPage() {
                 variant="outline"
                 className="whitespace-nowrap"
                 onClick={exportStudentReport}
-                disabled={!reportRows.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
+                disabled={!reportRows.length || studentLoading || dailyStudentLoading || attendanceFineLoading || !dailyStudentAttendance}
               >
                 <Download className="h-4 w-4" /> Export CSV
               </Button>
@@ -391,7 +426,7 @@ export function ReportsPage() {
                 variant="outline"
                 className="whitespace-nowrap"
                 onClick={printStudentReport}
-                disabled={!reportRows.length || studentLoading || dailyStudentLoading || !dailyStudentAttendance}
+                disabled={!reportRows.length || studentLoading || dailyStudentLoading || attendanceFineLoading || !dailyStudentAttendance}
               >
                 <Printer className="h-4 w-4" /> Print Report
               </Button>
@@ -407,6 +442,7 @@ export function ReportsPage() {
           {studentLoading && selectedClass && <LoadingState />}
           {studentError && <ErrorState message={(studentError as Error).message} />}
           {dailyStudentError && <ErrorState message={(dailyStudentError as Error).message} />}
+          {attendanceFineError && <ErrorState message={(attendanceFineError as Error).message} />}
           {reportRows.length > 0 && dailyStudentLoading && (
             <LoadingState message="Loading daily attendance..." />
           )}
@@ -416,12 +452,12 @@ export function ReportsPage() {
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h3 id="attendance-summary-heading" className="font-semibold">Attendance Summary</h3>
-                  <p className="text-sm text-muted-foreground">{selectedClassName} · {formatDisplayDate(startDate)} to {formatDisplayDate(endDate)}</p>
+                  <p className="text-sm text-muted-foreground">{selectedClassName} · {formatDisplayDate(startDate)} to {formatDisplayDate(endDate)} · Fine {formatFine(finePerAbsentDay)} per absent day</p>
                 </div>
                 <p className="text-sm text-muted-foreground">{reportRows.length} student{reportRows.length === 1 ? '' : 's'}</p>
               </div>
               <div className="min-w-0 max-w-full overflow-hidden rounded-lg border">
-              <Table className="min-w-[880px]">
+              <Table className="min-w-[960px]">
                 <TableHeader>
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
                     <TableHead>Roll</TableHead>
@@ -429,6 +465,7 @@ export function ReportsPage() {
                     <TableHead>Admission No.</TableHead>
                     <TableHead className="text-center">Present</TableHead>
                     <TableHead className="text-center">Absent</TableHead>
+                    <TableHead className="text-center">Fine</TableHead>
                     <TableHead className="text-center">Late</TableHead>
                     <TableHead className="text-center">Approved Leave</TableHead>
                     <TableHead className="text-center">Total Days</TableHead>
@@ -443,6 +480,7 @@ export function ReportsPage() {
                       <TableCell className="font-mono text-sm">{row.admission}</TableCell>
                       <TableCell className="text-center text-emerald-600 dark:text-emerald-400">{row.present}</TableCell>
                       <TableCell className="text-center text-red-600 dark:text-red-400">{row.absent}</TableCell>
+                      <TableCell className="text-center font-medium">{formatFine(studentFine(row))}</TableCell>
                       <TableCell className="text-center text-amber-600 dark:text-amber-400">{row.late}</TableCell>
                       <TableCell className="text-center text-blue-600 dark:text-blue-400">{row.excused}</TableCell>
                       <TableCell className="text-center">{row.total}</TableCell>
@@ -563,6 +601,8 @@ export function ReportsPage() {
               <dd>{reportRows.length}</dd>
               <dt>Student filter</dt>
               <dd>{studentFilterDescription}</dd>
+              <dt>Fine per absent day</dt>
+              <dd>{formatFine(finePerAbsentDay)}</dd>
               <dt>Generated</dt>
               <dd>{format(new Date(), 'dd MMM yyyy, hh:mm a')}</dd>
             </dl>
@@ -571,27 +611,25 @@ export function ReportsPage() {
           <section className="print-summary-section">
             <div className="print-section-heading">
               <h2>Attendance Summary</h2>
-              <p>Consolidated attendance performance for the selected period</p>
             </div>
             <table className="print-summary-table">
               <thead>
                 <tr>
-                  <th>SN</th><th>Roll</th><th>Student</th><th>Admission No.</th>
-                  <th>Present</th><th>Absent</th><th>Late</th><th>Leave</th>
+                  <th>SN</th><th>Roll</th><th>Student</th>
+                  <th>Present</th><th>Absent</th><th>Fine</th><th>Late</th><th>Leave</th>
                   <th>Total</th><th>Attendance</th>
                 </tr>
               </thead>
               <tbody>
                 {reportRows.map((row, index) => (
                   <tr key={row.id}>
-                    <td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>
-                    <td>{row.present}</td><td>{row.absent}</td><td>{row.late}</td><td>{row.excused}</td>
+                    <td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td>
+                    <td>{row.present}</td><td>{row.absent}</td><td>{formatFine(studentFine(row))}</td><td>{row.late}</td><td>{row.excused}</td>
                     <td>{row.total}</td><td>{Number(row.percentage.toFixed(2))}%</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="print-footnote">Attendance percentage is based on recorded attendance days in the selected reporting period.</p>
           </section>
 
           {chunkDates(dailyStudentAttendance.dates, 12).map(dates => (

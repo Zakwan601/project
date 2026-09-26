@@ -166,9 +166,10 @@ export const attendanceService = {
 
     const { data } = await query
     const records = (data ?? []) as Array<{ status: string }>
-    const present = records.filter(r => r.status === 'present').length
-    const total = records.length
-    return { present, absent: total - present, total, percentage: total > 0 ? Math.round((present / total) * 100) : 0 }
+    const present = records.filter(r => r.status === 'present' || r.status === 'late' || r.status === 'excused').length
+    const absent = records.filter(r => r.status === 'absent').length
+    const total = present + absent
+    return { present, absent, total, percentage: total > 0 ? Math.round((present / total) * 100) : 0 }
   },
 
   async syncDailyAttendance(date: string) {
