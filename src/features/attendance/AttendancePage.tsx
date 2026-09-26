@@ -60,6 +60,7 @@ const statusStyles: Record<AttendanceStatus, string> = {
   present: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   absent: 'bg-red-500/10 text-red-700 dark:text-red-400',
   late: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  too_late: 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
   excused: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
 }
 
@@ -227,6 +228,7 @@ function StaffDailyAttendance() {
                 <SelectItem value="present">Present</SelectItem>
                 <SelectItem value="absent">Absent</SelectItem>
                 <SelectItem value="late">Late</SelectItem>
+                <SelectItem value="too_late">Too Late</SelectItem>
                 <SelectItem value="excused">Approved leave</SelectItem>
               </SelectContent>
             </Select>
@@ -438,7 +440,7 @@ function DailyAttendanceSheet({
   )
   const presentCount = records.filter(record => record.status === 'present').length
   const absentCount = students.filter(student =>
-    (recordsByStudent.get(student.id)?.status ?? 'absent') === 'absent'
+    ['absent', 'too_late'].includes(recordsByStudent.get(student.id)?.status ?? 'absent')
   ).length
   const approvedLeaveCount = students.filter(student =>
     recordsByStudent.get(student.id)?.status === 'excused'
@@ -694,6 +696,7 @@ function DailyAttendanceSheet({
                 <SelectItem value="present">Present</SelectItem>
                 <SelectItem value="absent">Absent</SelectItem>
                 <SelectItem value="late">Late</SelectItem>
+                <SelectItem value="too_late">Too Late</SelectItem>
                 <SelectItem value="excused">Approved leave</SelectItem>
               </SelectContent>
             </Select>
@@ -807,7 +810,7 @@ function StudentDailyAttendance() {
   const statusDates = (status: AttendanceStatus) => records
     .filter(record => record.status === status)
     .map(record => databaseDateToDate(record.attendance_sessions.date))
-  const monthlyAbsentCount = records.filter(record => record.status === 'absent').length
+  const monthlyAbsentCount = records.filter(record => record.status === 'absent' || record.status === 'too_late').length
   const monthlyLateCount = records.filter(record => record.status === 'late').length
 
   return (
@@ -854,6 +857,7 @@ function StudentDailyAttendance() {
                 present: statusDates('present'),
                 absent: statusDates('absent'),
                 late: statusDates('late'),
+                too_late: statusDates('too_late'),
                 excused: statusDates('excused'),
                 vacation: calendarHolidays.map(holiday => databaseDateToDate(holiday.date)),
                 weekend: { dayOfWeek: [5, 6] },
@@ -862,6 +866,7 @@ function StudentDailyAttendance() {
                 present: '[&>button]:bg-emerald-500/15 [&>button]:text-emerald-800 dark:[&>button]:text-emerald-300',
                 absent: '[&>button]:bg-red-500/15 [&>button]:text-red-800 dark:[&>button]:text-red-300',
                 late: '[&>button]:bg-amber-500/20 [&>button]:text-amber-800 dark:[&>button]:text-amber-300',
+                too_late: '[&>button]:bg-rose-500/20 [&>button]:text-rose-800 dark:[&>button]:text-rose-300',
                 excused: '[&>button]:bg-blue-500/15 [&>button]:text-blue-800 dark:[&>button]:text-blue-300',
                 vacation: '[&>button]:bg-violet-500/15 [&>button]:text-violet-800 dark:[&>button]:text-violet-300',
                 weekend: '[&>button]:opacity-45',
@@ -975,6 +980,7 @@ function AttendanceCalendarLegend() {
     { label: 'Present', color: 'bg-emerald-500' },
     { label: 'Absent', color: 'bg-red-500' },
     { label: 'Late', color: 'bg-amber-500' },
+    { label: 'Too Late', color: 'bg-rose-500' },
     { label: 'Approved leave', color: 'bg-blue-500' },
     { label: 'Vacation', color: 'bg-violet-500' },
   ]
@@ -1038,7 +1044,7 @@ function databaseDateToDate(value: string) {
 }
 
 function isAttendanceStatus(value: string | null): value is AttendanceStatus {
-  return value === 'present' || value === 'absent' || value === 'late' || value === 'excused'
+  return value === 'present' || value === 'absent' || value === 'late' || value === 'too_late' || value === 'excused'
 }
 
 function isWeekend(value: string) {

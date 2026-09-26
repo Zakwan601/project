@@ -148,7 +148,7 @@ export const attendanceService = {
       .eq('attendance_sessions.date', date)
     const records = (data ?? []) as Array<{ status: string }>
     const present = records.filter(r => r.status === 'present').length
-    const absent = records.filter(r => r.status === 'absent').length
+    const absent = records.filter(r => r.status === 'absent' || r.status === 'too_late').length
     const late = records.filter(r => r.status === 'late').length
     const excused = records.filter(r => r.status === 'excused').length
     const total = records.length
@@ -167,7 +167,7 @@ export const attendanceService = {
     const { data } = await query
     const records = (data ?? []) as Array<{ status: string }>
     const present = records.filter(r => r.status === 'present' || r.status === 'late' || r.status === 'excused').length
-    const absent = records.filter(r => r.status === 'absent').length
+    const absent = records.filter(r => r.status === 'absent' || r.status === 'too_late').length
     const total = present + absent
     return { present, absent, total, percentage: total > 0 ? Math.round((present / total) * 100) : 0 }
   },

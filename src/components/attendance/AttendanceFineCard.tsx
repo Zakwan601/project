@@ -45,13 +45,13 @@ export function AttendanceFineCard({
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <FineDetail label="Recorded absences" value={fine.recordedAbsences} />
+              <FineDetail label="Absent + too late" value={fine.recordedAbsences} />
               <FineDetail label="Late-day penalty" value={`+${fine.latePenaltyAbsences}`} hint={`${fine.lateDays} late day${fine.lateDays === 1 ? '' : 's'}`} />
               <FineDetail label="Fineable absences" value={fine.fineableAbsences} />
               <FineDetail label="Rate per absence" value={formatFine(fine.finePerAbsentDay)} />
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Every complete pair of late days adds one fineable absence. Approved leave does not incur a fine.
+              Too Late counts as an absence. Every complete pair of Late days adds one more fineable absence. Approved leave does not incur a fine.
             </p>
           </>
         )}

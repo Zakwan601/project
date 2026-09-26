@@ -23,7 +23,7 @@ export interface SubAdminPermission {
   created_at: string
   updated_at: string
 }
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'too_late' | 'excused'
 export type SessionType = 'morning' | 'afternoon' | 'period' | 'full_day'
 export type AttendanceSource = 'manual' | 'biometric' | 'system'
 export type ClassGroup = 'humanities' | 'science' | 'business'

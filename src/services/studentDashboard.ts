@@ -70,7 +70,7 @@ export const studentDashboardService = {
       return {
         date,
         present: dayRecs.filter(r => r.status === 'present').length,
-        absent: dayRecs.filter(r => r.status === 'absent').length,
+        absent: dayRecs.filter(r => r.status === 'absent' || r.status === 'too_late').length,
         late: dayRecs.filter(r => r.status === 'late').length,
       }
     })

@@ -109,6 +109,7 @@ const dailyStatusMeta: Record<AttendanceStatus, { mark: string; label: string; c
   present: { mark: 'P', label: 'Present', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' },
   absent: { mark: 'A', label: 'Absent', className: 'bg-red-500/15 text-red-700 dark:text-red-300' },
   late: { mark: 'L', label: 'Late', className: 'bg-amber-500/20 text-amber-700 dark:text-amber-300' },
+  too_late: { mark: 'T', label: 'Too Late', className: 'bg-rose-500/20 text-rose-700 dark:text-rose-300' },
   excused: { mark: 'E', label: 'Approved Leave', className: 'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
 }
 
@@ -268,7 +269,7 @@ export function ReportsPage() {
       'Student Name',
       ...dailyHeaders,
       'Present',
-      'Absent',
+      'Absent / Too Late',
       'Fine (BDT)',
       'Late',
       'Approved Leave',
@@ -460,7 +461,7 @@ export function ReportsPage() {
                     <TableHead>Student</TableHead>
                     <TableHead>Admission No.</TableHead>
                     <TableHead className="text-center">Present</TableHead>
-                    <TableHead className="text-center">Absent</TableHead>
+                    <TableHead className="text-center">Absent / Too Late</TableHead>
                     <TableHead className="text-center">Fine</TableHead>
                     <TableHead className="text-center">Late</TableHead>
                     <TableHead className="text-center">Approved Leave</TableHead>
@@ -614,7 +615,7 @@ export function ReportsPage() {
               <thead>
                 <tr>
                   <th>SN</th><th>Roll</th><th>Student</th>
-                  <th>Present</th><th>Absent</th><th>Fine</th><th>Late</th><th>Leave</th>
+                  <th>Present</th><th>Absent / Too Late</th><th>Fine</th><th>Late</th><th>Leave</th>
                   <th>Total</th><th>Attendance</th>
                 </tr>
               </thead>
@@ -637,7 +638,7 @@ export function ReportsPage() {
                   <h2>Daily Attendance</h2>
                   <p>{formatDisplayDate(dates[0])} to {formatDisplayDate(dates[dates.length - 1])}</p>
                 </div>
-                <p className="print-legend">P Present | A Absent | L Late | E Approved Leave | - No Record</p>
+                <p className="print-legend">P Present | A Absent | L Late | T Too Late | E Approved Leave | - No Record</p>
               </div>
               <table className="print-daily-table">
                 <thead>

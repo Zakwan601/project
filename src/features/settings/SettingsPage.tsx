@@ -153,7 +153,7 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Attendance Fine</CardTitle>
-          <CardDescription>Set the fine per absence. Every two late days add one fineable absence; approved leave is not fined.</CardDescription>
+          <CardDescription>Set the fine per absence. Too Late counts as absent, every two Late days add one fineable absence, and approved leave is not fined.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleFineSubmit(data => saveAttendanceFine.mutate(data))} className="flex flex-col gap-3 sm:flex-row sm:items-end">

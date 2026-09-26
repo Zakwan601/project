@@ -676,7 +676,7 @@ Deno.serve(
           )
         `)
         .in("session_id", sessionIds)
-        .eq("status", "absent");
+        .in("status", ["absent", "too_late"]);
 
       if (absentError) {
         throw absentError;

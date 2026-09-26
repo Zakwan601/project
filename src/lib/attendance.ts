@@ -4,6 +4,7 @@ export const attendanceStatusLabels: Record<AttendanceStatus, string> = {
   present: 'Present',
   absent: 'Absent',
   late: 'Late',
+  too_late: 'Too Late',
   excused: 'Approved leave',
 }
 

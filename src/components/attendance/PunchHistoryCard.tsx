@@ -276,7 +276,9 @@ function AdminPunchTableRow({ day }: { day: DailyPunches }) {
     : ''
   const arrival = splitPunchTime(day.checkIn.punched_at)
   const departure = day.checkOut ? splitPunchTime(day.checkOut.punched_at) : null
-  const isPresent = isOnTimeArrival(day.checkIn.punched_at)
+  const arrivalStatus = classifyArrival(day.checkIn.punched_at)
+  const isPresent = arrivalStatus === 'present'
+  const isTooLate = arrivalStatus === 'too_late'
   const punchCount = 1 + (day.checkOut ? 1 : 0) + day.extraPunches.length
 
   return (
@@ -306,9 +308,11 @@ function AdminPunchTableRow({ day }: { day: DailyPunches }) {
             variant="secondary"
             className={isPresent
               ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-              : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}
+              : isTooLate
+                ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}
           >
-            {isPresent ? 'Present' : 'Late'}
+            {isPresent ? 'Present' : isTooLate ? 'Too Late' : 'Late'}
           </Badge>
         </TableCell>
         <TableCell className="text-right">
@@ -376,7 +380,9 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
     : ''
   const arrival = splitPunchTime(day.checkIn.punched_at)
   const departure = day.checkOut ? splitPunchTime(day.checkOut.punched_at) : null
-  const isPresent = isOnTimeArrival(day.checkIn.punched_at)
+  const arrivalStatus = classifyArrival(day.checkIn.punched_at)
+  const isPresent = arrivalStatus === 'present'
+  const isTooLate = arrivalStatus === 'too_late'
 
   return (
     <div className="border-b last:border-b-0">
@@ -394,12 +400,16 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
             <p className="truncate text-sm font-semibold">{day.studentBiometricId}</p>
             <p className="truncate text-sm text-muted-foreground">{name}</p>
             <p className={`mt-1 flex items-center gap-1 text-xs font-medium ${
-              isPresent ? 'text-emerald-600' : 'text-amber-600'
+              isPresent ? 'text-emerald-600' : isTooLate ? 'text-rose-600' : 'text-amber-600'
             }`}>
               {isPresent
                 ? <CheckCircle className="h-3.5 w-3.5" />
                 : <Clock3 className="h-3.5 w-3.5" />}
-              {isPresent ? 'Present' : `Late \u2014 after ${lateCutoffLabel(day.checkIn.punched_at)}`}
+              {isPresent
+                ? 'Present'
+                : isTooLate
+                  ? 'Too Late — after 9:00 AM'
+                  : `Late — after ${lateCutoffLabel(day.checkIn.punched_at)}`}
             </p>
           </div>
         </div>
@@ -478,10 +488,13 @@ function punchTime(value: string) {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
-function isOnTimeArrival(value: string) {
+function classifyArrival(value: string): 'present' | 'late' | 'too_late' {
   const { date, time24 } = splitPunchTime(value)
+  if (date >= '2026-09-27' && /^\d{2}:\d{2}:\d{2}$/.test(time24) && time24 > '09:00:00') {
+    return 'too_late'
+  }
   const cutoff = date >= '2026-08-26' ? '08:20:00' : '09:00:00'
-  return /^\d{2}:\d{2}:\d{2}$/.test(time24) && time24 <= cutoff
+  return /^\d{2}:\d{2}:\d{2}$/.test(time24) && time24 <= cutoff ? 'present' : 'late'
 }
 
 function lateCutoffLabel(value: string) {

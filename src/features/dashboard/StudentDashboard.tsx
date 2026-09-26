@@ -9,8 +9,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { BarChart, Bar, XAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { StudentNotices } from '@/components/dashboard/StudentNotices'
-import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 import { formatDisplayDate } from '@/lib/dateTime'
+import { calculateAttendanceFine, formatFine } from '@/lib/attendanceFine'
 const chartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
   absent: { label: 'Absent', color: 'var(--chart-1)' },
@@ -32,8 +32,9 @@ function StatCard({ title, value, description, icon: Icon, delay = 0, colorClass
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay }}
+      className="h-full"
     >
-      <Card className="group relative overflow-hidden py-0 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+      <Card className="group relative h-full overflow-hidden py-0 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
         <div className={`absolute inset-x-0 top-0 h-1 ${accentClass}`} />
         <CardContent className="p-3 sm:p-6">
           <div className="flex items-center justify-between">
@@ -60,6 +61,11 @@ export function StudentDashboard() {
   const { data: stats, isLoading: statsLoading, error } = useStudentDashboardStats(studentId)
   const { data: weekly, isLoading: weeklyLoading, error: weeklyError } = useStudentWeeklyAttendance(studentId)
   const dashboardLoading = statsLoading
+  const fine = calculateAttendanceFine(
+    stats?.absentCount ?? 0,
+    stats?.lateCount ?? 0,
+    Number(stats?.finePerAbsentDay ?? 0),
+  )
 
   const today = format(new Date(), 'yyyy-MM-dd')
   const weeklyChartData = weekly?.map(d => ({
@@ -75,14 +81,12 @@ export function StudentDashboard() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-card p-4 sm:p-8"
+        className="pb-1"
       >
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/5 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-purple-500/5 blur-3xl" />
-        <div className="relative flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           {formatDisplayDate(new Date())}
         </div>
-        <h2 className="relative mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+        <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
           Good {getGreeting()}, {student?.first_name ?? profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
       </motion.div>
@@ -110,6 +114,7 @@ export function StudentDashboard() {
         <StatCard
           title="Absent"
           value={stats?.absentCount ?? 0}
+          description={dashboardLoading ? undefined : `${fine.fineableAbsences} fineable · ${formatFine(fine.totalFine)} fine`}
           icon={UserX}
           delay={0.1}
           colorClass="bg-red-500/10 text-red-600 dark:text-red-400"
@@ -119,6 +124,7 @@ export function StudentDashboard() {
         <StatCard
           title="Late"
           value={stats?.lateCount ?? 0}
+          description={dashboardLoading ? undefined : `+${fine.latePenaltyAbsences} fineable absence${fine.latePenaltyAbsences === 1 ? '' : 's'}`}
           icon={Clock}
           delay={0.15}
           colorClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
@@ -126,15 +132,6 @@ export function StudentDashboard() {
           loading={dashboardLoading}
         />
       </div>
-
-      <AttendanceFineCard
-        absentCount={stats?.absentCount ?? 0}
-        lateCount={stats?.lateCount ?? 0}
-        finePerAbsentDay={Number(stats?.finePerAbsentDay ?? 0)}
-        periodLabel="Lifetime attendance fine breakdown"
-        loading={dashboardLoading}
-        error={Boolean(error)}
-      />
 
       {error && (
         <p className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
