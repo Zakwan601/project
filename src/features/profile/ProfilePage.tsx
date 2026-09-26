@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
+import { useStudentDashboardStats } from '@/hooks/useStudentDashboard'
+import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { ProfileUploads } from './ProfileUploads'
 import { StudentSubjects } from './StudentSubjects'
@@ -83,6 +85,11 @@ export function ProfilePage() {
   const { data: enrollmentHistory = [], isLoading: historyLoading } = useStudentEnrollmentHistory(
     role === 'student' ? student?.id : undefined,
   )
+  const {
+    data: attendanceStats,
+    isLoading: attendanceStatsLoading,
+    error: attendanceStatsError,
+  } = useStudentDashboardStats(role === 'student' ? student?.id : undefined)
 
   const {
     register: regProfile,
@@ -437,6 +444,16 @@ export function ProfilePage() {
 
         {role === 'student' && student && (
           <TabsContent value="academics" className="m-0">
+            <div className="border-b p-5 sm:p-7">
+              <AttendanceFineCard
+                absentCount={attendanceStats?.absentCount ?? 0}
+                lateCount={attendanceStats?.lateCount ?? 0}
+                finePerAbsentDay={Number(attendanceStats?.finePerAbsentDay ?? 0)}
+                periodLabel="Lifetime attendance fine breakdown"
+                loading={attendanceStatsLoading}
+                error={Boolean(attendanceStatsError)}
+              />
+            </div>
             <div className="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
               <div className="p-5 sm:p-7 lg:border-r [&_section]:border-0 [&_section]:pt-0">
                 <StudentSubjects student={student} />

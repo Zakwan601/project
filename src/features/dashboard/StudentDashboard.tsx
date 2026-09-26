@@ -9,6 +9,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { BarChart, Bar, XAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { StudentNotices } from '@/components/dashboard/StudentNotices'
+import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 import { formatDisplayDate } from '@/lib/dateTime'
 const chartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
@@ -125,6 +126,15 @@ export function StudentDashboard() {
           loading={dashboardLoading}
         />
       </div>
+
+      <AttendanceFineCard
+        absentCount={stats?.absentCount ?? 0}
+        lateCount={stats?.lateCount ?? 0}
+        finePerAbsentDay={Number(stats?.finePerAbsentDay ?? 0)}
+        periodLabel="Lifetime attendance fine breakdown"
+        loading={dashboardLoading}
+        error={Boolean(error)}
+      />
 
       {error && (
         <p className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">

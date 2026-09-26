@@ -12,6 +12,7 @@ export interface StudentDashboardStats {
   lateCount: number
   excusedCount: number
   totalSessions: number
+  finePerAbsentDay: number
   className: string | null
   classGrade: string | null
   classSection: string | null

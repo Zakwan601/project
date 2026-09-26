@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadCsv } from '@/lib/csv'
+import { calculateAttendanceFine, formatFine } from '@/lib/attendanceFine'
 import type { AttendanceStatus } from '@/types/database'
 
 const chartConfig: ChartConfig = {
@@ -86,13 +87,6 @@ function useAttendanceFineSetting() {
       if (error) throw error
       return data as AttendanceFineSetting
     },
-  })
-}
-
-function formatFine(value: number) {
-  return '৳' + value.toLocaleString('en-BD', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
   })
 }
 
@@ -243,7 +237,9 @@ export function ReportsPage() {
   } = useDailyStudentAttendance(selectedClass, startDate, endDate)
   const selectedClassName = classes?.find(c => c.id === selectedClass)?.name ?? 'selected class'
   const finePerAbsentDay = Number(attendanceFineSetting?.fine_per_absent_day ?? 0)
-  const studentFine = (row: StudentReportRow) => row.absent * finePerAbsentDay
+  const fineDetails = (row: StudentReportRow) => calculateAttendanceFine(row.absent, row.late, finePerAbsentDay)
+  const chargeableAbsences = (row: StudentReportRow) => fineDetails(row).fineableAbsences
+  const studentFine = (row: StudentReportRow) => fineDetails(row).totalFine
   const parsedPercentageThreshold = Number(percentageThreshold)
   const percentageFilterValid = percentageThreshold.trim() !== ''
     && Number.isFinite(parsedPercentageThreshold)
@@ -452,7 +448,7 @@ export function ReportsPage() {
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h3 id="attendance-summary-heading" className="font-semibold">Attendance Summary</h3>
-                  <p className="text-sm text-muted-foreground">{selectedClassName} · {formatDisplayDate(startDate)} to {formatDisplayDate(endDate)} · Fine {formatFine(finePerAbsentDay)} per absent day</p>
+                  <p className="text-sm text-muted-foreground">{selectedClassName} · {formatDisplayDate(startDate)} to {formatDisplayDate(endDate)} · Fine {formatFine(finePerAbsentDay)} per absence; every 2 late days add 1 fineable absence</p>
                 </div>
                 <p className="text-sm text-muted-foreground">{reportRows.length} student{reportRows.length === 1 ? '' : 's'}</p>
               </div>
@@ -480,7 +476,7 @@ export function ReportsPage() {
                       <TableCell className="font-mono text-sm">{row.admission}</TableCell>
                       <TableCell className="text-center text-emerald-600 dark:text-emerald-400">{row.present}</TableCell>
                       <TableCell className="text-center text-red-600 dark:text-red-400">{row.absent}</TableCell>
-                      <TableCell className="text-center font-medium">{formatFine(studentFine(row))}</TableCell>
+                      <TableCell className="text-center font-medium" title={`${chargeableAbsences(row)} fineable absence${chargeableAbsences(row) === 1 ? '' : 's'}`}>{formatFine(studentFine(row))}</TableCell>
                       <TableCell className="text-center text-amber-600 dark:text-amber-400">{row.late}</TableCell>
                       <TableCell className="text-center text-blue-600 dark:text-blue-400">{row.excused}</TableCell>
                       <TableCell className="text-center">{row.total}</TableCell>
@@ -603,6 +599,8 @@ export function ReportsPage() {
               <dd>{studentFilterDescription}</dd>
               <dt>Fine per absent day</dt>
               <dd>{formatFine(finePerAbsentDay)}</dd>
+              <dt>Late fine rule</dt>
+              <dd>Every 2 late days add 1 fineable absence</dd>
               <dt>Generated</dt>
               <dd>{format(new Date(), 'dd MMM yyyy, hh:mm a')}</dd>
             </dl>

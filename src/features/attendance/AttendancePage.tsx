@@ -14,6 +14,7 @@ import {
 import { useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAbsenceNotificationStatus, useSendAbsenceNotifications } from '@/hooks/useAbsenceNotifications'
 import { useClasses } from '@/hooks/useClasses'
+import { useStudentDashboardStats } from '@/hooks/useStudentDashboard'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
@@ -49,6 +50,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import type { AttendanceSessionWithDetails, AttendanceStatus } from '@/types/database'
 import { attendanceStatusLabel } from '@/lib/attendance'
+import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 
 // Handwritten database types do not include all nested relationship selections.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -751,6 +753,11 @@ interface CorrectionTarget {
 
 function StudentDailyAttendance() {
   const { student } = useAuth()
+  const {
+    data: fineStats,
+    isLoading: fineStatsLoading,
+    error: fineStatsError,
+  } = useStudentDashboardStats(student?.id)
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
   const monthStart = `${month}-01`
@@ -800,6 +807,8 @@ function StudentDailyAttendance() {
   const statusDates = (status: AttendanceStatus) => records
     .filter(record => record.status === status)
     .map(record => databaseDateToDate(record.attendance_sessions.date))
+  const monthlyAbsentCount = records.filter(record => record.status === 'absent').length
+  const monthlyLateCount = records.filter(record => record.status === 'late').length
 
   return (
     <div>
@@ -813,6 +822,17 @@ function StudentDailyAttendance() {
         onChange={setMonth}
         className="mb-3 max-w-xs sm:mb-5"
       />
+
+      <div className="mb-3 sm:mb-5">
+        <AttendanceFineCard
+          absentCount={monthlyAbsentCount}
+          lateCount={monthlyLateCount}
+          finePerAbsentDay={Number(fineStats?.finePerAbsentDay ?? 0)}
+          periodLabel={`${format(calendarMonth, 'MMMM yyyy')} fine breakdown`}
+          loading={fineStatsLoading}
+          error={Boolean(fineStatsError)}
+        />
+      </div>
 
       <div className="mb-3 grid min-w-0 gap-3 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] sm:mb-5">
         <Card className="min-w-0">
