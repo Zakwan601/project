@@ -13,9 +13,31 @@ export interface StudentDashboardStats {
   excusedCount: number
   totalSessions: number
   finePerAbsentDay: number
+  fineRecordedAbsences: number
+  fineLateDays: number
+  latePenaltyAbsences: number
+  fineableAbsences: number
+  attendanceFine: number
+  examMissedCount: number
+  examMissedFineAmount: number
+  examMissedFine: number
+  totalFine: number
   className: string | null
   classGrade: string | null
   classSection: string | null
+}
+
+export interface StudentFineDetails {
+  recordedAbsences: number
+  lateDays: number
+  latePenaltyAbsences: number
+  fineableAbsences: number
+  finePerAbsentDay: number
+  attendanceFine: number
+  examMissedCount: number
+  examMissedFineAmount: number
+  examMissedFine: number
+  totalFine: number
 }
 
 export interface SubjectAttendance {
@@ -42,12 +64,44 @@ export interface WeeklyAttendanceDay {
 
 export const studentDashboardService = {
   async getAttendanceStatistics(studentId: string): Promise<StudentAttendanceStatistics> {
-    const { data, error } = await db.rpc('get_student_attendance_statistics', {
-      p_student_id: studentId,
-    })
+    const [statisticsResponse, fineResponse] = await Promise.all([
+      db.rpc('get_student_attendance_statistics', { p_student_id: studentId }),
+      db.rpc('get_student_attendance_fine_details', {
+        p_student_id: studentId,
+        p_start_date: null,
+        p_end_date: null,
+      }),
+    ])
+    if (statisticsResponse.error) throw statisticsResponse.error
+    if (fineResponse.error) throw fineResponse.error
+    const statistics = statisticsResponse.data as StudentAttendanceStatistics
+    const fine = fineResponse.data as StudentFineDetails
+    return {
+      ...statistics,
+      stats: {
+        ...statistics.stats,
+        finePerAbsentDay: fine.finePerAbsentDay,
+        fineRecordedAbsences: fine.recordedAbsences,
+        fineLateDays: fine.lateDays,
+        latePenaltyAbsences: fine.latePenaltyAbsences,
+        fineableAbsences: fine.fineableAbsences,
+        attendanceFine: fine.attendanceFine,
+        examMissedCount: fine.examMissedCount,
+        examMissedFineAmount: fine.examMissedFineAmount,
+        examMissedFine: fine.examMissedFine,
+        totalFine: fine.totalFine,
+      },
+    }
+  },
 
+  async getFineDetails(studentId: string, startDate?: string, endDate?: string): Promise<StudentFineDetails> {
+    const { data, error } = await db.rpc('get_student_attendance_fine_details', {
+      p_student_id: studentId,
+      p_start_date: startDate ?? null,
+      p_end_date: endDate ?? null,
+    })
     if (error) throw error
-    return data as StudentAttendanceStatistics
+    return data as StudentFineDetails
   },
 
   async getWeeklyAttendance(studentId: string): Promise<WeeklyAttendanceDay[]> {

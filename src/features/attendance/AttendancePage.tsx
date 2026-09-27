@@ -14,7 +14,7 @@ import {
 import { useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAbsenceNotificationStatus, useSendAbsenceNotifications } from '@/hooks/useAbsenceNotifications'
 import { useClasses } from '@/hooks/useClasses'
-import { useStudentDashboardStats } from '@/hooks/useStudentDashboard'
+import { useStudentFineDetails } from '@/hooks/useStudentDashboard'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
@@ -756,15 +756,15 @@ interface CorrectionTarget {
 
 function StudentDailyAttendance() {
   const { student } = useAuth()
-  const {
-    data: fineStats,
-    isLoading: fineStatsLoading,
-    error: fineStatsError,
-  } = useStudentDashboardStats(student?.id)
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
   const monthStart = `${month}-01`
   const monthEnd = format(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0), 'yyyy-MM-dd')
+  const {
+    data: fineStats,
+    isLoading: fineStatsLoading,
+    error: fineStatsError,
+  } = useStudentFineDetails(student?.id, monthStart, monthEnd)
   const { data: calendarHolidays = [] } = useHolidays(
     monthStart,
     monthEnd,
@@ -810,9 +810,6 @@ function StudentDailyAttendance() {
   const statusDates = (status: AttendanceStatus) => records
     .filter(record => record.status === status)
     .map(record => databaseDateToDate(record.attendance_sessions.date))
-  const monthlyAbsentCount = records.filter(record => record.status === 'absent' || record.status === 'too_late').length
-  const monthlyLateCount = records.filter(record => record.status === 'late').length
-
   return (
     <div>
       <PageHeader
@@ -828,9 +825,11 @@ function StudentDailyAttendance() {
 
       <div className="mb-3 sm:mb-5">
         <AttendanceFineCard
-          absentCount={monthlyAbsentCount}
-          lateCount={monthlyLateCount}
+          absentCount={fineStats?.recordedAbsences ?? 0}
+          lateCount={fineStats?.lateDays ?? 0}
           finePerAbsentDay={Number(fineStats?.finePerAbsentDay ?? 0)}
+          examMissedCount={fineStats?.examMissedCount ?? 0}
+          examMissedFineAmount={Number(fineStats?.examMissedFineAmount ?? 0)}
           periodLabel={`${format(calendarMonth, 'MMMM yyyy')} fine breakdown`}
           loading={fineStatsLoading}
           error={Boolean(fineStatsError)}

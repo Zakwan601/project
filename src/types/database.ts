@@ -457,11 +457,32 @@ export interface ResultExam {
   exam_type_id: string
   title: string | null
   exam_date: string
+  has_regular_classes: boolean
+  combine_subject_papers: boolean
   status: ResultExamStatus
   published_at: string | null
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ResultExamSchedule {
+  id: string
+  exam_group_id: string
+  subject_id: string | null
+  subject_name: string
+  exam_date: string
+  exam_time: string | null
+  has_regular_classes: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ResultExamScheduleClass {
+  schedule_id: string
+  exam_id: string
+  created_at: string
 }
 
 export interface ResultPayloadSubject {

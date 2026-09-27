@@ -62,9 +62,11 @@ export function StudentDashboard() {
   const { data: weekly, isLoading: weeklyLoading, error: weeklyError } = useStudentWeeklyAttendance(studentId)
   const dashboardLoading = statsLoading
   const fine = calculateAttendanceFine(
-    stats?.absentCount ?? 0,
-    stats?.lateCount ?? 0,
+    stats?.fineRecordedAbsences ?? 0,
+    stats?.fineLateDays ?? 0,
     Number(stats?.finePerAbsentDay ?? 0),
+    stats?.examMissedCount ?? 0,
+    Number(stats?.examMissedFineAmount ?? 0),
   )
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -114,7 +116,7 @@ export function StudentDashboard() {
         <StatCard
           title="Absent"
           value={stats?.absentCount ?? 0}
-          description={dashboardLoading ? undefined : `${fine.fineableAbsences} fineable · ${formatFine(fine.totalFine)} fine`}
+          description={dashboardLoading ? undefined : `${fine.fineableAbsences} attendance · ${fine.examMissedCount} exam missed · ${formatFine(fine.totalFine)}`}
           icon={UserX}
           delay={0.1}
           colorClass="bg-red-500/10 text-red-600 dark:text-red-400"

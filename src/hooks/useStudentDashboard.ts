@@ -18,6 +18,14 @@ export function useStudentDashboardStats(studentId: string | undefined) {
   })
 }
 
+export function useStudentFineDetails(studentId: string | undefined, startDate?: string, endDate?: string) {
+  return useQuery({
+    queryKey: ['student_attendance_fine_details', studentId, startDate ?? 'all', endDate ?? 'all'],
+    queryFn: () => studentDashboardService.getFineDetails(studentId!, startDate, endDate),
+    enabled: !!studentId,
+  })
+}
+
 export function useStudentSubjectAttendance(studentId: string | undefined) {
   return useQuery({
     ...attendanceStatisticsQuery(studentId),

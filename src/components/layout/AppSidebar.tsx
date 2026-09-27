@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
   { title: 'Report Issue', href: '/report-issue', icon: MessageSquareWarning, roles: ['student'] },
   { title: 'Vacations', href: '/vacations', icon: CalendarOff, roles: ['admin'] },
   { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin'] },
-  { title: 'Results', href: '/results', icon: FileSpreadsheet, roles: ['admin', 'student'] },
+  { title: 'Exams & Results', href: '/results', icon: FileSpreadsheet, roles: ['admin', 'student'] },
 ]
 
 const advancedNavItems: NavItem[] = [

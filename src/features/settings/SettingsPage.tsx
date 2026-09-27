@@ -30,11 +30,13 @@ type YearForm = z.infer<typeof yearSchema>
 
 const attendanceFineSchema = z.object({
   fine_per_absent_day: z.number().min(0, 'Fine cannot be negative').max(1000000, 'Fine is too large'),
+  exam_missed_fine: z.number().min(0, 'Fine cannot be negative').max(1000000, 'Fine is too large'),
 })
 type AttendanceFineForm = z.infer<typeof attendanceFineSchema>
 
 interface AttendanceFineSetting {
   fine_per_absent_day: number | string
+  exam_missed_fine: number | string
 }
 
 function useAcademicYears() {
@@ -57,7 +59,7 @@ function useAttendanceFineSetting() {
     queryFn: async () => {
       const { data, error } = await db
         .from('attendance_fine_settings')
-        .select('fine_per_absent_day')
+        .select('fine_per_absent_day, exam_missed_fine')
         .eq('id', true)
         .single()
       if (error) throw error
@@ -82,12 +84,15 @@ export function SettingsPage() {
     formState: { errors: fineErrors, isSubmitting: isFineSubmitting },
   } = useForm<AttendanceFineForm>({
     resolver: zodResolver(attendanceFineSchema),
-    defaultValues: { fine_per_absent_day: 0 },
+    defaultValues: { fine_per_absent_day: 0, exam_missed_fine: 0 },
   })
 
   useEffect(() => {
     if (attendanceFineSetting) {
-      resetFine({ fine_per_absent_day: Number(attendanceFineSetting.fine_per_absent_day) })
+      resetFine({
+        fine_per_absent_day: Number(attendanceFineSetting.fine_per_absent_day),
+        exam_missed_fine: Number(attendanceFineSetting.exam_missed_fine),
+      })
     }
   }, [attendanceFineSetting, resetFine])
 
@@ -133,13 +138,19 @@ export function SettingsPage() {
     mutationFn: async (data: AttendanceFineForm) => {
       const { error } = await db
         .from('attendance_fine_settings')
-        .update({ fine_per_absent_day: data.fine_per_absent_day })
+        .update({
+          fine_per_absent_day: data.fine_per_absent_day,
+          exam_missed_fine: data.exam_missed_fine,
+        })
         .eq('id', true)
       if (error) throw error
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance_fine_setting'] })
-      toast.success('Attendance fine updated')
+      qc.invalidateQueries({ queryKey: ['student_attendance_statistics'] })
+      qc.invalidateQueries({ queryKey: ['student_attendance_fine_details'] })
+      qc.invalidateQueries({ queryKey: ['class_attendance_fine_details'] })
+      toast.success('Fine settings updated')
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -152,8 +163,8 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Attendance Fine</CardTitle>
-          <CardDescription>Set the fine per absence. Too Late counts as absent, every two Late days add one fineable absence, and approved leave is not fined.</CardDescription>
+          <CardTitle>Attendance and Exam Fines</CardTitle>
+          <CardDescription>Set the regular absence fine and the fine charged when a student misses an exam.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleFineSubmit(data => saveAttendanceFine.mutate(data))} className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -171,9 +182,23 @@ export function SettingsPage() {
               />
               {fineErrors.fine_per_absent_day && <p className="text-xs text-destructive">{fineErrors.fine_per_absent_day.message}</p>}
             </div>
+            <div className="w-full max-w-xs space-y-2">
+              <Label htmlFor="exam-missed-fine">Exam missed fine (৳)</Label>
+              <Input
+                id="exam-missed-fine"
+                type="number"
+                min="0"
+                max="1000000"
+                step="0.01"
+                inputMode="decimal"
+                {...registerFine('exam_missed_fine', { valueAsNumber: true })}
+                aria-invalid={!!fineErrors.exam_missed_fine}
+              />
+              {fineErrors.exam_missed_fine && <p className="text-xs text-destructive">{fineErrors.exam_missed_fine.message}</p>}
+            </div>
             <Button type="submit" size="sm" disabled={isFineSubmitting || saveAttendanceFine.isPending}>
               {(isFineSubmitting || saveAttendanceFine.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <Save className="mr-2 h-4 w-4" /> Save Fine
+              <Save className="mr-2 h-4 w-4" /> Save Fines
             </Button>
           </form>
         </CardContent>

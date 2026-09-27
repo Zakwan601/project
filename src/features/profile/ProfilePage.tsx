@@ -446,9 +446,11 @@ export function ProfilePage() {
           <TabsContent value="academics" className="m-0">
             <div className="border-b p-5 sm:p-7">
               <AttendanceFineCard
-                absentCount={attendanceStats?.absentCount ?? 0}
-                lateCount={attendanceStats?.lateCount ?? 0}
+                absentCount={attendanceStats?.fineRecordedAbsences ?? 0}
+                lateCount={attendanceStats?.fineLateDays ?? 0}
                 finePerAbsentDay={Number(attendanceStats?.finePerAbsentDay ?? 0)}
+                examMissedCount={attendanceStats?.examMissedCount ?? 0}
+                examMissedFineAmount={Number(attendanceStats?.examMissedFineAmount ?? 0)}
                 periodLabel="Lifetime attendance fine breakdown"
                 loading={attendanceStatsLoading}
                 error={Boolean(attendanceStatsError)}

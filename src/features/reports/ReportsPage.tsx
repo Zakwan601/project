@@ -45,6 +45,16 @@ interface StudentReportRow {
 
 interface AttendanceFineSetting {
   fine_per_absent_day: number | string
+  exam_missed_fine: number | string
+}
+
+interface ClassFineRow {
+  student_id: string
+  recorded_absences: number
+  late_days: number
+  exam_missed_count: number
+  fine_per_absent_day: number | string
+  exam_missed_fine_amount: number | string
 }
 
 
@@ -81,12 +91,28 @@ function useAttendanceFineSetting() {
     queryFn: async () => {
       const { data, error } = await db
         .from('attendance_fine_settings')
-        .select('fine_per_absent_day')
+        .select('fine_per_absent_day, exam_missed_fine')
         .eq('id', true)
         .single()
       if (error) throw error
       return data as AttendanceFineSetting
     },
+  })
+}
+
+function useClassAttendanceFineDetails(classId: string, startDate: string, endDate: string) {
+  return useQuery<ClassFineRow[]>({
+    queryKey: ['class_attendance_fine_details', classId, startDate, endDate],
+    queryFn: async () => {
+      const { data, error } = await db.rpc('get_class_attendance_fine_details', {
+        p_class_id: classId,
+        p_start_date: startDate,
+        p_end_date: endDate,
+      })
+      if (error) throw error
+      return (data ?? []) as ClassFineRow[]
+    },
+    enabled: Boolean(classId && startDate && endDate),
   })
 }
 
@@ -232,15 +258,34 @@ export function ReportsPage() {
 
   const { data: studentReport, isLoading: studentLoading, error: studentError } = useClassAttendanceReport(selectedClass, startDate, endDate)
   const {
+    data: classFineReport,
+    isLoading: classFineLoading,
+    error: classFineError,
+  } = useClassAttendanceFineDetails(selectedClass, startDate, endDate)
+  const {
     data: dailyStudentAttendance,
     isLoading: dailyStudentLoading,
     error: dailyStudentError,
   } = useDailyStudentAttendance(selectedClass, startDate, endDate)
   const selectedClassName = classes?.find(c => c.id === selectedClass)?.name ?? 'selected class'
   const finePerAbsentDay = Number(attendanceFineSetting?.fine_per_absent_day ?? 0)
-  const fineDetails = (row: StudentReportRow) => calculateAttendanceFine(row.absent, row.late, finePerAbsentDay)
+  const examMissedFineAmount = Number(attendanceFineSetting?.exam_missed_fine ?? 0)
+  const fineByStudent = new Map((classFineReport ?? []).map(item => [item.student_id, item]))
+  const fineDetails = (row: StudentReportRow) => {
+    const detail = fineByStudent.get(row.id)
+    return calculateAttendanceFine(
+      detail?.recorded_absences ?? row.absent,
+      detail?.late_days ?? row.late,
+      Number(detail?.fine_per_absent_day ?? finePerAbsentDay),
+      detail?.exam_missed_count ?? 0,
+      Number(detail?.exam_missed_fine_amount ?? examMissedFineAmount),
+    )
+  }
   const chargeableAbsences = (row: StudentReportRow) => fineDetails(row).fineableAbsences
-  const studentFine = (row: StudentReportRow) => fineDetails(row).totalFine
+  const fineCalculation = (row: StudentReportRow) => {
+    const fine = fineDetails(row)
+    return formatFine(fine.attendanceFine) + ' + ' + formatFine(fine.examMissedFine) + ' = ' + formatFine(fine.totalFine)
+  }
   const parsedPercentageThreshold = Number(percentageThreshold)
   const percentageFilterValid = percentageThreshold.trim() !== ''
     && Number.isFinite(parsedPercentageThreshold)
@@ -270,7 +315,7 @@ export function ReportsPage() {
       ...dailyHeaders,
       'Present',
       'Absent / Too Late',
-      'Fine (BDT)',
+      'Fine (Absent + Exam Missed = Total)',
       'Late',
       'Approved Leave',
       'Total Days',
@@ -285,7 +330,7 @@ export function ReportsPage() {
       }),
       row.present,
       row.absent,
-      studentFine(row),
+      fineCalculation(row),
       row.late,
       row.excused,
       row.total,
@@ -414,7 +459,7 @@ export function ReportsPage() {
                 variant="outline"
                 className="whitespace-nowrap"
                 onClick={exportStudentReport}
-                disabled={!reportRows.length || studentLoading || dailyStudentLoading || attendanceFineLoading || !dailyStudentAttendance}
+                disabled={!reportRows.length || studentLoading || dailyStudentLoading || attendanceFineLoading || classFineLoading || !dailyStudentAttendance}
               >
                 <Download className="h-4 w-4" /> Export CSV
               </Button>
@@ -423,7 +468,7 @@ export function ReportsPage() {
                 variant="outline"
                 className="whitespace-nowrap"
                 onClick={printStudentReport}
-                disabled={!reportRows.length || studentLoading || dailyStudentLoading || attendanceFineLoading || !dailyStudentAttendance}
+                disabled={!reportRows.length || studentLoading || dailyStudentLoading || attendanceFineLoading || classFineLoading || !dailyStudentAttendance}
               >
                 <Printer className="h-4 w-4" /> Print Report
               </Button>
@@ -440,7 +485,8 @@ export function ReportsPage() {
           {studentError && <ErrorState message={(studentError as Error).message} />}
           {dailyStudentError && <ErrorState message={(dailyStudentError as Error).message} />}
           {attendanceFineError && <ErrorState message={(attendanceFineError as Error).message} />}
-          {reportRows.length > 0 && dailyStudentLoading && (
+          {classFineError && <ErrorState message={(classFineError as Error).message} />}
+          {reportRows.length > 0 && (dailyStudentLoading || classFineLoading) && (
             <LoadingState message="Loading daily attendance..." />
           )}
 
@@ -449,7 +495,7 @@ export function ReportsPage() {
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h3 id="attendance-summary-heading" className="font-semibold">Attendance Summary</h3>
-                  <p className="text-sm text-muted-foreground">{selectedClassName} · {formatDisplayDate(startDate)} to {formatDisplayDate(endDate)} · Fine {formatFine(finePerAbsentDay)} per absence; every 2 late days add 1 fineable absence</p>
+                  <p className="text-sm text-muted-foreground">{selectedClassName} · {formatDisplayDate(startDate)} to {formatDisplayDate(endDate)} · Absence {formatFine(finePerAbsentDay)} · Exam missed {formatFine(examMissedFineAmount)}</p>
                 </div>
                 <p className="text-sm text-muted-foreground">{reportRows.length} student{reportRows.length === 1 ? '' : 's'}</p>
               </div>
@@ -459,10 +505,12 @@ export function ReportsPage() {
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
                     <TableHead>Roll</TableHead>
                     <TableHead>Student</TableHead>
-                    <TableHead>Admission No.</TableHead>
                     <TableHead className="text-center">Present</TableHead>
                     <TableHead className="text-center">Absent / Too Late</TableHead>
-                    <TableHead className="text-center">Fine</TableHead>
+                    <TableHead className="text-center">
+                      Fine
+                      <span className="block text-[10px] font-normal text-muted-foreground">Absent + Exam Missed Fine</span>
+                    </TableHead>
                     <TableHead className="text-center">Late</TableHead>
                     <TableHead className="text-center">Approved Leave</TableHead>
                     <TableHead className="text-center">Total Days</TableHead>
@@ -474,10 +522,11 @@ export function ReportsPage() {
                     <TableRow key={row.id}>
                       <TableCell>{row.roll ?? '—'}</TableCell>
                       <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell className="font-mono text-sm">{row.admission}</TableCell>
                       <TableCell className="text-center text-emerald-600 dark:text-emerald-400">{row.present}</TableCell>
                       <TableCell className="text-center text-red-600 dark:text-red-400">{row.absent}</TableCell>
-                      <TableCell className="text-center font-medium" title={`${chargeableAbsences(row)} fineable absence${chargeableAbsences(row) === 1 ? '' : 's'}`}>{formatFine(studentFine(row))}</TableCell>
+                      <TableCell className="whitespace-nowrap text-center font-medium" title={`${chargeableAbsences(row)} fineable absence(s), ${fineDetails(row).examMissedCount} exam(s) missed`}>
+                        <span>{fineCalculation(row)}</span>
+                      </TableCell>
                       <TableCell className="text-center text-amber-600 dark:text-amber-400">{row.late}</TableCell>
                       <TableCell className="text-center text-blue-600 dark:text-blue-400">{row.excused}</TableCell>
                       <TableCell className="text-center">{row.total}</TableCell>
@@ -600,6 +649,8 @@ export function ReportsPage() {
               <dd>{studentFilterDescription}</dd>
               <dt>Fine per absent day</dt>
               <dd>{formatFine(finePerAbsentDay)}</dd>
+              <dt>Exam missed fine</dt>
+              <dd>{formatFine(examMissedFineAmount)}</dd>
               <dt>Late fine rule</dt>
               <dd>Every 2 late days add 1 fineable absence</dd>
               <dt>Generated</dt>
@@ -623,7 +674,7 @@ export function ReportsPage() {
                 {reportRows.map((row, index) => (
                   <tr key={row.id}>
                     <td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td>
-                    <td>{row.present}</td><td>{row.absent}</td><td>{formatFine(studentFine(row))}</td><td>{row.late}</td><td>{row.excused}</td>
+                    <td>{row.present}</td><td>{row.absent}</td><td className="fine-calculation">{fineCalculation(row)}</td><td>{row.late}</td><td>{row.excused}</td>
                     <td>{row.total}</td><td>{Number(row.percentage.toFixed(2))}%</td>
                   </tr>
                 ))}

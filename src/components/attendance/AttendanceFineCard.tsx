@@ -7,6 +7,8 @@ interface AttendanceFineCardProps {
   absentCount: number
   lateCount: number
   finePerAbsentDay: number
+  examMissedCount?: number
+  examMissedFineAmount?: number
   periodLabel: string
   loading?: boolean
   error?: boolean
@@ -16,11 +18,13 @@ export function AttendanceFineCard({
   absentCount,
   lateCount,
   finePerAbsentDay,
+  examMissedCount = 0,
+  examMissedFineAmount = 0,
   periodLabel,
   loading = false,
   error = false,
 }: AttendanceFineCardProps) {
-  const fine = calculateAttendanceFine(absentCount, lateCount, finePerAbsentDay)
+  const fine = calculateAttendanceFine(absentCount, lateCount, finePerAbsentDay, examMissedCount, examMissedFineAmount)
 
   return (
     <Card className="overflow-hidden">
@@ -28,7 +32,7 @@ export function AttendanceFineCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Banknote className="h-4 w-4 text-amber-600" /> Attendance Fine
+              <Banknote className="h-4 w-4 text-amber-600" /> Fine Details
             </CardTitle>
             <CardDescription>{periodLabel}</CardDescription>
           </div>
@@ -44,14 +48,16 @@ export function AttendanceFineCard({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <FineDetail label="Absent + too late" value={fine.recordedAbsences} />
               <FineDetail label="Late-day penalty" value={`+${fine.latePenaltyAbsences}`} hint={`${fine.lateDays} late day${fine.lateDays === 1 ? '' : 's'}`} />
-              <FineDetail label="Fineable absences" value={fine.fineableAbsences} />
-              <FineDetail label="Rate per absence" value={formatFine(fine.finePerAbsentDay)} />
+              <FineDetail label="Attendance fine" value={formatFine(fine.attendanceFine)} hint={`${fine.fineableAbsences} × ${formatFine(fine.finePerAbsentDay)}`} />
+              <FineDetail label="Exams missed" value={fine.examMissedCount} />
+              <FineDetail label="Exam fine rate" value={formatFine(fine.examMissedFineAmount)} />
+              <FineDetail label="Exam missed fine" value={formatFine(fine.examMissedFine)} />
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Too Late counts as an absence. Every complete pair of Late days adds one more fineable absence. Approved leave does not incur a fine.
+              Exam + classes applies both fines. Exam-only days apply only the exam missed fine. Approved leave does not incur a fine.
             </p>
           </>
         )}

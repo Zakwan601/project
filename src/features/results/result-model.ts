@@ -2,7 +2,7 @@ import type { ClassGroup, ResultExam } from '@/types/database'
 
 export interface ExamWithDetails extends ResultExam {
   result_exam_types: { name: string }
-  academic_years: { name: string }
+  academic_years: { name: string; start_date?: string; end_date?: string }
   classes: { name: string; grade: string; section: string; class_group: ClassGroup }
 }
 
@@ -10,12 +10,14 @@ export interface ExamSubject {
   id: string
   exam_id: string
   subject_id: string
+  paper_group_id: string | null
   creative_max: number
   written_max: number
   practical_max: number
   pass_mark: number
   sort_order: number
   subjects: { id: string; name: string; code: string; is_fourth_subject: boolean }
+  result_subject_paper_groups: { name: string; code: string } | null
 }
 
 export interface MarkRow {
@@ -67,6 +69,20 @@ export interface ClassSubject {
   is_active: boolean
   class_group: ClassGroup
   is_fourth_subject: boolean
+}
+
+export interface ResultSubjectPaperGroup {
+  id: string
+  class_group: ClassGroup
+  name: string
+  code: string
+  first_paper_subject_id: string
+  second_paper_subject_id: string
+  is_active: boolean
+}
+
+export interface ConfigurableExamSubject extends ClassSubject {
+  paper_group_id: string | null
 }
 
 export interface ExamSubjectConfigDraft {

@@ -26,11 +26,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { ClassGroup, ResultExamType, StudentResultPayload, Student } from '@/types/database'
 import { downloadCsv } from '@/lib/csv'
 import { MarkInput, SimpleDialog } from '@/features/results/ResultControls'
+import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import {
   examSubjectTotal,
   gradeSubject,
   overallGrade,
   type ClassSubject,
+  type ConfigurableExamSubject,
   type ExamResultReportRow,
   type ExamResultSubjectCell,
   type ExamSubject,
@@ -39,12 +41,16 @@ import {
   type MarkDraft,
   type MarkRow,
   type ResultShareLink,
+  type ResultSubjectPaperGroup,
   type ResultSmsSummary,
 } from '@/features/results/result-model'
 
 
 const db = supabase as any
 const StudentResultsPage = lazy(() => import('@/features/results/StudentResultsPage').then(module => ({ default: module.StudentResultsPage })))
+
+const examSubjectName = (subject: ExamSubject) => subject.result_subject_paper_groups?.name ?? subject.subjects.name
+const examSubjectCode = (subject: ExamSubject) => subject.result_subject_paper_groups?.code ?? subject.subjects.code
 
 export function ResultsPage() {
   const { role } = useAuth()
@@ -61,18 +67,20 @@ function StaffResults() {
   const canWrite = can('results', 'write')
   const qc = useQueryClient()
   const { data: classes = [], isLoading: classesLoading } = useClasses()
-  const [activeTab, setActiveTab] = useState(isExamPage ? 'marks' : 'overview')
+  const [activeTab, setActiveTab] = useState(isExamPage ? 'routine' : 'overview')
   const [classId, setClassId] = useState('')
   const [examId, setExamId] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [studentSearch, setStudentSearch] = useState('')
   const [examDialog, setExamDialog] = useState(false)
+  const [editExamDialog, setEditExamDialog] = useState(false)
   const [subjectDialog, setSubjectDialog] = useState(false)
   const [settingsDialog, setSettingsDialog] = useState(false)
   const [configDialog, setConfigDialog] = useState(false)
   const [configureAfterCreateExamId, setConfigureAfterCreateExamId] = useState<string | null>(null)
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null)
-  const [examForm, setExamForm] = useState({ classIds: [] as string[], typeId: '', title: '', date: '' })
+  const [examForm, setExamForm] = useState({ classIds: [] as string[], typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false })
+  const [editExamForm, setEditExamForm] = useState({ typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false })
   const [subjectForm, setSubjectForm] = useState({ name: '', code: '', isFourthSubject: false })
   const [settingsGroup, setSettingsGroup] = useState<ClassGroup>('science')
   const [configRows, setConfigRows] = useState<Record<string, ExamSubjectConfigDraft>>({})
@@ -104,7 +112,7 @@ function StaffResults() {
 
   const examTypesQuery = useQuery<ResultExamType[]>({
     queryKey: ['result-exam-types'],
-    enabled: examDialog,
+    enabled: examDialog || editExamDialog,
     queryFn: async () => {
       const { data, error } = await db.from('result_exam_types').select('*').order('sort_order').order('name')
       if (error) throw error
@@ -133,7 +141,7 @@ function StaffResults() {
     if (!routeExamQuery.data) return
     setClassId(routeExamQuery.data.class_id)
     setExamId(routeExamId)
-    setActiveTab('marks')
+    setActiveTab('routine')
   }, [routeExamId, routeExamQuery.data])
 
   const selectedClassGroup = classes.find(item => item.id === classId)?.class_group
@@ -144,6 +152,17 @@ function StaffResults() {
       const { data, error } = await db.from('subjects').select('id,name,code,is_active,class_group,is_fourth_subject').eq('class_group', subjectGroup).order('name')
       if (error) throw error
       return data
+    },
+  })
+
+  const paperGroupsQuery = useQuery<ResultSubjectPaperGroup[]>({
+    queryKey: ['result-subject-paper-groups', subjectGroup],
+    enabled: Boolean(subjectGroup && isExamPage),
+    queryFn: async () => {
+      const { data, error } = await db.from('result_subject_paper_groups')
+        .select('*').eq('class_group', subjectGroup).eq('is_active', true).order('name')
+      if (error) throw error
+      return data as ResultSubjectPaperGroup[]
     },
   })
 
@@ -168,7 +187,7 @@ function StaffResults() {
   const examSubjectsQuery = useQuery<ExamSubject[]>({
     queryKey: ['result-exam-subjects', activeExamId], enabled: Boolean(activeExamId),
     queryFn: async () => {
-      const { data, error } = await db.from('result_exam_subjects').select('*, subjects(id,name,code,is_fourth_subject)').eq('exam_id', activeExamId).order('sort_order')
+      const { data, error } = await db.from('result_exam_subjects').select('*, subjects(id,name,code,is_fourth_subject), result_subject_paper_groups(name,code)').eq('exam_id', activeExamId).order('sort_order')
       if (error) throw error
       return data as ExamSubject[]
     },
@@ -305,7 +324,7 @@ function StaffResults() {
     if (!selectedExam || !examResultRows.length || !examSubjectsQuery.data) return
     const headers = [
       'SN', 'Class', 'Exam', 'Exam Date', 'Roll', 'Student', 'Admission Number',
-      ...examSubjectsQuery.data.map(subject => `${subject.subjects.name} (${subject.subjects.code}) / ${examSubjectTotal(subject)}`),
+      ...examSubjectsQuery.data.map(subject => `${examSubjectName(subject)} (${examSubjectCode(subject)}) / ${examSubjectTotal(subject)}`),
       'Total', 'GPA', 'Grade', 'Position', 'Failed Subjects',
     ]
     const rows = examResultRows.map((row, index) => [
@@ -354,12 +373,14 @@ function StaffResults() {
       p_exam_type_id: examForm.typeId,
       p_title: examForm.title.trim() || null,
       p_exam_date: examForm.date,
+      p_has_regular_classes: examForm.hasRegularClasses,
+      p_combine_subject_papers: examForm.combineSubjectPapers,
     })
     if (error) return toast.error(error.message)
     const created = data as Array<{ exam_id: string; class_id: string }>
     const firstExam = created.find(item => item.class_id === classId) ?? created[0]
     await qc.invalidateQueries({ queryKey: ['result-exams'] })
-    setExamDialog(false); setExamForm({ classIds: [], typeId: '', title: '', date: '' }); setExamId(firstExam?.exam_id ?? ''); setActiveTab('marks')
+    setExamDialog(false); setExamForm({ classIds: [], typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false }); setExamId(firstExam?.exam_id ?? ''); setActiveTab('routine')
     if (firstExam) {
       setConfigureAfterCreateExamId(firstExam.exam_id)
       navigate(`/results/${firstExam.exam_id}`)
@@ -370,6 +391,39 @@ function StaffResults() {
   const openExamDialog = () => {
     setExamForm(current => ({ ...current, classIds: classId ? [classId] : [] }))
     setExamDialog(true)
+  }
+
+  const openEditExamDialog = () => {
+    if (!selectedExam) return
+    setEditExamForm({
+      typeId: selectedExam.exam_type_id,
+      title: selectedExam.title ?? '',
+      date: selectedExam.exam_date,
+      hasRegularClasses: selectedExam.has_regular_classes,
+      combineSubjectPapers: selectedExam.combine_subject_papers,
+    })
+    setEditExamDialog(true)
+  }
+
+  const updateExam = async () => {
+    if (!selectedExam || !editExamForm.typeId || !editExamForm.date) return toast.error('Exam type and reference date are required')
+    const { error } = await db.rpc('update_result_exam_group_settings', {
+      p_exam_group_id: selectedExam.exam_group_id,
+      p_exam_type_id: editExamForm.typeId,
+      p_title: editExamForm.title.trim() || null,
+      p_exam_date: editExamForm.date,
+      p_has_regular_classes: editExamForm.hasRegularClasses,
+      p_combine_subject_papers: editExamForm.combineSubjectPapers,
+    })
+    if (error) return toast.error(error.message)
+    setEditExamDialog(false)
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['result-exam', routeExamId] }),
+      qc.invalidateQueries({ queryKey: ['result-exams'] }),
+      qc.invalidateQueries({ queryKey: ['result-exam-group', selectedExam.exam_group_id] }),
+      qc.invalidateQueries({ queryKey: ['result-exam-routine', selectedExam.exam_group_id] }),
+    ])
+    toast.success('Examination updated')
   }
 
   const saveSubject = async () => {
@@ -399,7 +453,7 @@ function StaffResults() {
 
   const openSubjectConfiguration = () => {
     const configured = new Map((examSubjectsQuery.data ?? []).map(item => [item.subject_id, item]))
-    setConfigRows(Object.fromEntries((subjectsQuery.data ?? []).filter(subject => subject.is_active || configured.has(subject.id)).map(subject => {
+    setConfigRows(Object.fromEntries(configurableSubjects.map(subject => {
       const current = configured.get(subject.id)
       return [subject.id, {
         selected: Boolean(current),
@@ -414,13 +468,13 @@ function StaffResults() {
   }
 
   useEffect(() => {
-    if (!configureAfterCreateExamId || examId !== configureAfterCreateExamId || subjectsQuery.isLoading || examSubjectsQuery.isLoading) return
+    if (!configureAfterCreateExamId || examId !== configureAfterCreateExamId || subjectsQuery.isLoading || paperGroupsQuery.isLoading || examSubjectsQuery.isLoading) return
     openSubjectConfiguration()
     setConfigureAfterCreateExamId(null)
-  }, [configureAfterCreateExamId, examId, subjectsQuery.isLoading, examSubjectsQuery.isLoading])
+  }, [configureAfterCreateExamId, examId, subjectsQuery.isLoading, paperGroupsQuery.isLoading, examSubjectsQuery.isLoading])
 
   const saveExamSubjects = async () => {
-    const available = (subjectsQuery.data ?? []).filter(subject => subject.is_active || examSubjectsQuery.data?.some(item => item.subject_id === subject.id))
+    const available = configurableSubjects
     const selected = available.filter(subject => configRows[subject.id]?.selected)
     if (!selected.length) return toast.error('Select at least one subject')
     const rows = selected.map((subject, index) => {
@@ -435,6 +489,7 @@ function StaffResults() {
     if (invalid) return toast.error(`Check the marks configuration for ${invalid.subject.name}`)
     const { error } = await db.from('result_exam_subjects').upsert(rows.map(({ subject, values, index }) => ({
       exam_id: examId, subject_id: subject.id,
+      paper_group_id: subject.paper_group_id,
       creative_max: values[0], written_max: values[1], practical_max: values[2], pass_mark: values[3],
       sort_order: index * 10,
     })), { onConflict: 'exam_id,subject_id' })
@@ -467,9 +522,9 @@ function StaffResults() {
       }
       const rows = subjects.map(examSubject => ({
         exam_subject_id: examSubject.id, student_id: studentId,
-        creative_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.creative ?? '', examSubject.creative_max, examSubject.subjects.name, 'creative'),
-        written_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.written ?? '', examSubject.written_max, examSubject.subjects.name, 'MCQ'),
-        practical_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.practical ?? '', examSubject.practical_max, examSubject.subjects.name, 'practical'),
+        creative_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.creative ?? '', examSubject.creative_max, examSubjectName(examSubject), 'creative'),
+        written_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.written ?? '', examSubject.written_max, examSubjectName(examSubject), 'MCQ'),
+        practical_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.practical ?? '', examSubject.practical_max, examSubjectName(examSubject), 'practical'),
         is_absent: nextDrafts[examSubject.id]?.absent ?? false, entered_by: user?.id,
       }))
       const { error } = await db.from('result_marks')
@@ -486,6 +541,8 @@ function StaffResults() {
       })
       await qc.invalidateQueries({ queryKey: ['result-preview', result.marksExamId, result.studentId] })
       await qc.invalidateQueries({ queryKey: ['result-exam-marks', result.marksExamId] })
+      await qc.invalidateQueries({ queryKey: ['student_attendance_fine_details'] })
+      await qc.invalidateQueries({ queryKey: ['class_attendance_fine_details'] })
       setMarksSaveStatus('saved')
     },
     onError: error => {
@@ -625,7 +682,34 @@ function StaffResults() {
     toast.success('Guardian link copied; it expires in 30 days')
   }
 
-  const configurableSubjects = useMemo(() => subjectsQuery.data?.filter(subject => subject.is_active || examSubjectsQuery.data?.some(item => item.subject_id === subject.id)) ?? [], [subjectsQuery.data, examSubjectsQuery.data])
+  const configurableSubjects = useMemo<ConfigurableExamSubject[]>(() => {
+    const configuredIds = new Set((examSubjectsQuery.data ?? []).map(item => item.subject_id))
+    const catalogue = (subjectsQuery.data ?? []).filter(subject => subject.is_active || configuredIds.has(subject.id))
+    if (!selectedExam?.combine_subject_papers) {
+      return catalogue.map(subject => ({ ...subject, paper_group_id: null }))
+    }
+
+    const byId = new Map(catalogue.map(subject => [subject.id, subject]))
+    const pairedSubjectIds = new Set<string>()
+    const combined = (paperGroupsQuery.data ?? []).flatMap(paperGroup => {
+      const firstPaper = byId.get(paperGroup.first_paper_subject_id)
+      const secondPaper = byId.get(paperGroup.second_paper_subject_id)
+      if (!firstPaper || !secondPaper) return []
+      pairedSubjectIds.add(firstPaper.id)
+      pairedSubjectIds.add(secondPaper.id)
+      return [{
+        ...firstPaper,
+        name: paperGroup.name,
+        code: paperGroup.code,
+        is_fourth_subject: firstPaper.is_fourth_subject || secondPaper.is_fourth_subject,
+        paper_group_id: paperGroup.id,
+      }]
+    })
+    const unpaired = catalogue
+      .filter(subject => !pairedSubjectIds.has(subject.id))
+      .map(subject => ({ ...subject, paper_group_id: null }))
+    return [...unpaired, ...combined].sort((a, b) => a.name.localeCompare(b.name))
+  }, [subjectsQuery.data, examSubjectsQuery.data, paperGroupsQuery.data, selectedExam?.combine_subject_papers])
   // Kept as a local alias while the compact exam-action markup is transitioned.
   const unusedSubjects = configurableSubjects
   const attachSubjects = saveExamSubjects
@@ -657,6 +741,7 @@ function StaffResults() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 max-w-full">
           {isExamPage && <div className="mb-3 ">
             <TabsList className=" justify-start gap-1 bg-transparent p-0">
+              <TabsTrigger value="routine" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Routine</TabsTrigger>
               <TabsTrigger value="marks" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Enter marks</TabsTrigger>
               <TabsTrigger value="results" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> All results</TabsTrigger>
               <TabsTrigger value="preview" disabled={!selectedStudentId} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Report card</TabsTrigger>
@@ -682,9 +767,15 @@ function StaffResults() {
             </div>}
             <Card className="border-0 bg-transparent shadow-none">
               <CardContent className="px-0 py-2">
-                {!examsQuery.data?.length ? <EmptyState title="No examinations found" description={classId ? 'No examinations are available for this class.' : 'Create an examination to begin.'} /> : <div className="max-w-full overflow-x-auto"><Table className="min-w-[760px]"><TableHeader><TableRow><TableHead>Examination</TableHead><TableHead>Class</TableHead><TableHead>Session</TableHead><TableHead>Date</TableHead><TableHead>Status</TableHead><TableHead className="w-24 text-right">Action</TableHead></TableRow></TableHeader><TableBody>{examsQuery.data.map(exam => <TableRow key={exam.id} className="cursor-pointer" onClick={() => navigate(`/results/${exam.id}`)}><TableCell className="font-semibold">{exam.title || exam.result_exam_types.name}</TableCell><TableCell>{exam.classes.name}<span className="block text-xs text-muted-foreground">{exam.classes.grade}-{exam.classes.section}</span></TableCell><TableCell>{exam.academic_years.name}</TableCell><TableCell className="whitespace-nowrap">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell><Badge variant={exam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{exam.status}</Badge></TableCell><TableCell className="text-right"><Button type="button" variant="ghost" size="sm" onClick={event => { event.stopPropagation(); navigate(`/results/${exam.id}`) }}>Manage<ChevronRight className="ml-1 h-4 w-4" /></Button></TableCell></TableRow>)}</TableBody></Table></div>}
+                {!examsQuery.data?.length ? <EmptyState title="No examinations found" description={classId ? 'No examinations are available for this class.' : 'Create an examination to begin.'} /> : <div className="max-w-full overflow-x-auto"><Table className="min-w-[820px]"><TableHeader><TableRow><TableHead>Examination</TableHead><TableHead>Class</TableHead><TableHead>Session</TableHead><TableHead>Mode</TableHead><TableHead>Reference date</TableHead><TableHead>Status</TableHead><TableHead className="w-24 text-right">Action</TableHead></TableRow></TableHeader><TableBody>{examsQuery.data.map(exam => <TableRow key={exam.id} className="cursor-pointer" onClick={() => navigate(`/results/${exam.id}`)}><TableCell className="font-semibold">{exam.title || exam.result_exam_types.name}</TableCell><TableCell>{exam.classes.name}<span className="block text-xs text-muted-foreground">{exam.classes.grade}-{exam.classes.section}</span></TableCell><TableCell>{exam.academic_years.name}</TableCell><TableCell><Badge variant={exam.has_regular_classes ? 'secondary' : 'default'}>{exam.has_regular_classes ? 'Exam + classes' : 'Exam only'}</Badge></TableCell><TableCell className="whitespace-nowrap">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell><Badge variant={exam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{exam.status}</Badge></TableCell><TableCell className="text-right"><Button type="button" variant="ghost" size="sm" onClick={event => { event.stopPropagation(); navigate(`/results/${exam.id}`) }}>Manage<ChevronRight className="ml-1 h-4 w-4" /></Button></TableCell></TableRow>)}</TableBody></Table></div>}
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="routine" className="mt-0">
+            {selectedExam && <>
+              {canWrite && selectedExam.status === 'draft' && <div className="mb-3 flex justify-end"><Button type="button" variant="outline" size="sm" onClick={openEditExamDialog}><Pencil className="mr-2 h-4 w-4" /> Edit examination</Button></div>}
+              <ExamScheduleManager examGroupId={selectedExam.exam_group_id} classId={selectedExam.class_id} canWrite={canWrite} hasRegularClasses={selectedExam.has_regular_classes} combineSubjectPapers={selectedExam.combine_subject_papers} />
+            </>}
           </TabsContent>
           <TabsContent value="marks" className="mt-0">
             {examSubjectsQuery.isLoading && <LoadingState message="Loading configured subjects..." />}
@@ -713,12 +804,12 @@ function StaffResults() {
                       const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
                       const disabled = draft.absent || selectedExam?.status === 'published' || !canWrite
                       return <TableRow key={examSubject.id} className={draft.absent ? 'opacity-60' : undefined}>
-                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><p className="font-medium">{examSubject.subjects.name}</p><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubject.subjects.code} · Pass {examSubject.pass_mark}</p></TableCell>
-                        <TableCell><MarkInput label={`${examSubject.subjects.name} creative marks`} value={draft.creative} max={examSubject.creative_max} disabled={disabled} onChange={value => update('creative', value)} /></TableCell>
-                        <TableCell><MarkInput label={`${examSubject.subjects.name} MCQ marks`} value={draft.written} max={examSubject.written_max} disabled={disabled} onChange={value => update('written', value)} /></TableCell>
-                        <TableCell><MarkInput label={`${examSubject.subjects.name} practical marks`} value={draft.practical} max={examSubject.practical_max} disabled={disabled} onChange={value => update('practical', value)} /></TableCell>
+                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><p className="font-medium">{examSubjectName(examSubject)}</p><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubjectCode(examSubject)} · Pass {examSubject.pass_mark}</p></TableCell>
+                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} creative marks`} value={draft.creative} max={examSubject.creative_max} disabled={disabled} onChange={value => update('creative', value)} /></TableCell>
+                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} MCQ marks`} value={draft.written} max={examSubject.written_max} disabled={disabled} onChange={value => update('written', value)} /></TableCell>
+                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} practical marks`} value={draft.practical} max={examSubject.practical_max} disabled={disabled} onChange={value => update('practical', value)} /></TableCell>
                         <TableCell className="text-center text-[10px]"><span className="font-semibold tabular-nums">{draft.absent ? '—' : total}</span><span className="block text-[9px] text-muted-foreground sm:text-xs">/ {maximum}</span></TableCell>
-                        <TableCell className="text-center"><Checkbox aria-label={`Mark ${examSubject.subjects.name} as absent`} checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></TableCell>
+                        <TableCell className="text-center"><Checkbox aria-label={`Mark ${examSubjectName(examSubject)} as absent`} checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></TableCell>
                       </TableRow>
                     })}</TableBody>
                   </Table>
@@ -741,7 +832,7 @@ function StaffResults() {
                   : examMarksQuery.error ? <ErrorState message={(examMarksQuery.error as Error).message} />
                     : studentsQuery.error ? <ErrorState message={(studentsQuery.error as Error).message} />
                       : examResultRows.length === 0 ? <EmptyState title="No students found" description="No students belong to this exam roster." />
-                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{examSubjectsQuery.data?.map(subject => <TableHead key={subject.id} className="min-w-14 text-center"><span className="block">{subject.subjects.code}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead><TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{examSubjectsQuery.data?.map(subject => <TableCell key={subject.id} className="text-center text-[11px]">{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell><TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
+                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{examSubjectsQuery.data?.map(subject => <TableHead key={subject.id} className="min-w-14 text-center"><span className="block">{examSubjectCode(subject)}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead><TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{examSubjectsQuery.data?.map(subject => <TableCell key={subject.id} className="text-center text-[11px]">{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell><TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -754,13 +845,27 @@ function StaffResults() {
         </Tabs>
       )}
 
-      <SimpleDialog open={examDialog} onOpenChange={setExamDialog} title="Create examination" description="Choose every class that will have this examination." onSave={createExam} saveLabel={examForm.classIds.length > 1 ? `Create for ${examForm.classIds.length} classes` : 'Create exam'}>
+      <SimpleDialog open={examDialog} onOpenChange={setExamDialog} title="Create examination" description="Choose the classes, day mode, and whether subject papers are combined." onSave={createExam} saveLabel={examForm.classIds.length > 1 ? `Create for ${examForm.classIds.length} classes` : 'Create exam'}>
         <Label>
           Classes from all sessions
         </Label>
         <div className="max-h-52 overflow-y-auto rounded-md border">
           <label className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm font-medium">
-            <Checkbox checked={examClasses.length > 0 && examForm.classIds.length === examClasses.length} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? examClasses.map(item => item.id) : [] }))} /> Select all classes</label>{examClasses.map(item => <label key={item.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm last:border-b-0"><Checkbox checked={examForm.classIds.includes(item.id)} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? [...new Set([...current.classIds, item.id])] : current.classIds.filter(id => id !== item.id) }))} /><span className="min-w-0"><span className="block truncate font-medium">{item.name} ({item.grade}-{item.section})</span><span className="block text-xs text-muted-foreground">{item.academic_years?.name}</span></span></label>)}</div><p className="text-xs text-muted-foreground">{examForm.classIds.length} class{examForm.classIds.length === 1 ? '' : 'es'} selected</p><Label>Exam type</Label><Select value={examForm.typeId} onValueChange={value => setExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select><Label>Custom title (optional)</Label><Input value={examForm.title} onChange={event => setExamForm(current => ({ ...current, title: event.target.value }))} placeholder="e.g. First Monthly Exam" /><Label>Exam date</Label><Input type="date" value={examForm.date} min={examDateMin} max={examDateMax} onChange={event => setExamForm(current => ({ ...current, date: event.target.value }))} /></SimpleDialog>
+            <Checkbox checked={examClasses.length > 0 && examForm.classIds.length === examClasses.length} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? examClasses.map(item => item.id) : [] }))} /> Select all classes</label>{examClasses.map(item => <label key={item.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm last:border-b-0"><Checkbox checked={examForm.classIds.includes(item.id)} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? [...new Set([...current.classIds, item.id])] : current.classIds.filter(id => id !== item.id) }))} /><span className="min-w-0"><span className="block truncate font-medium">{item.name} ({item.grade}-{item.section})</span><span className="block text-xs text-muted-foreground">{item.academic_years?.name}</span></span></label>)}</div><p className="text-xs text-muted-foreground">{examForm.classIds.length} class{examForm.classIds.length === 1 ? '' : 'es'} selected</p><Label>Exam type</Label><Select value={examForm.typeId} onValueChange={value => setExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select><Label>Custom title (optional)</Label><Input value={examForm.title} onChange={event => setExamForm(current => ({ ...current, title: event.target.value }))} placeholder="e.g. First Monthly Exam" /><Label>Examination mode</Label><Select value={examForm.hasRegularClasses ? 'with_classes' : 'exam_only'} onValueChange={value => setExamForm(current => ({ ...current, hasRegularClasses: value === 'with_classes' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="with_classes">Exam + classes</SelectItem><SelectItem value="exam_only">Exam only</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">This choice applies to every date in the routine.</p><Label>Subject papers</Label><Select value={examForm.combineSubjectPapers ? 'combined' : 'separate'} onValueChange={value => setExamForm(current => ({ ...current, combineSubjectPapers: value === 'combined' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="separate">Take 1st and 2nd papers separately</SelectItem><SelectItem value="combined">Take both papers combined</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">{examForm.combineSubjectPapers ? 'Each 1st/2nd-paper pair will appear as one subject, such as Bangla.' : 'Each paper will be configured as its own subject.'}</p><Label>Reference date</Label><Input type="date" value={examForm.date} min={examDateMin} max={examDateMax} onChange={event => setExamForm(current => ({ ...current, date: event.target.value }))} /></SimpleDialog>
+      <SimpleDialog open={editExamDialog} onOpenChange={setEditExamDialog} title="Edit examination" description="Changes apply to every class included in this examination." onSave={updateExam} saveLabel="Save changes">
+        <Label>Exam type</Label>
+        <Select value={editExamForm.typeId} onValueChange={value => setEditExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active || type.id === editExamForm.typeId).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select>
+        <Label>Custom title (optional)</Label>
+        <Input value={editExamForm.title} onChange={event => setEditExamForm(current => ({ ...current, title: event.target.value }))} />
+        <Label>Examination mode</Label>
+        <Select value={editExamForm.hasRegularClasses ? 'with_classes' : 'exam_only'} onValueChange={value => setEditExamForm(current => ({ ...current, hasRegularClasses: value === 'with_classes' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="with_classes">Exam + classes</SelectItem><SelectItem value="exam_only">Exam only</SelectItem></SelectContent></Select>
+        <p className="text-xs text-muted-foreground">Exam-only mode requires a time on every existing routine row.</p>
+        <Label>Subject papers</Label>
+        <Select value={editExamForm.combineSubjectPapers ? 'combined' : 'separate'} onValueChange={value => setEditExamForm(current => ({ ...current, combineSubjectPapers: value === 'combined' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="separate">Take 1st and 2nd papers separately</SelectItem><SelectItem value="combined">Take both papers combined</SelectItem></SelectContent></Select>
+        <p className="text-xs text-muted-foreground">Paper mode can be changed before subjects or routine rows are configured.</p>
+        <Label>Reference date</Label>
+        <Input type="date" value={editExamForm.date} onChange={event => setEditExamForm(current => ({ ...current, date: event.target.value }))} />
+      </SimpleDialog>
       <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className=" px-5 pt-4"><DialogTitle>Subject Settings</DialogTitle>
@@ -780,7 +885,7 @@ function StaffResults() {
       <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) { setEditingSubjectId(null); setSubjectForm({ name: '', code: '', isFourthSubject: false }) } }} title={editingSubjectId ? 'Edit group subject' : 'Add group subject'} description={`This subject belongs to the ${settingsGroup} group and will be available to all its exams.`} onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /><label className="flex items-center gap-2 text-sm"><Checkbox checked={subjectForm.isFourthSubject} onCheckedChange={checked => setSubjectForm(current => ({ ...current, isFourthSubject: checked === true }))} /><span> Available as optional subject</span></label></SimpleDialog>
       <Dialog open={configDialog} onOpenChange={setConfigDialog}>
         <DialogContent className="flex h-[90dvh] max-h-[90dvh] flex-col overflow-hidden p-0 sm:h-auto sm:max-w-5xl">
-          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>Select subjects and define their creative, MCQ, practical, and pass marks.</DialogDescription></DialogHeader>
+          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>{selectedExam?.combine_subject_papers ? 'Paired 1st and 2nd papers are combined into one subject. Define one marks configuration for each combined subject.' : 'Select subjects and define their creative, MCQ, practical, and pass marks.'}</DialogDescription></DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto">
             <Table>
               <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Pass mark</TableHead><TableHead className="w-32">Total max</TableHead></TableRow></TableHeader>
@@ -836,7 +941,7 @@ function StaffResults() {
               <p>Subject totals, overall result, GPA, grade, and class position</p>
             </div>
             <table className="print-summary-table exam-results-print-table">
-              <thead><tr><th>SN</th><th>Roll</th><th>Student</th><th>Admission</th>{examSubjectsQuery.data.map(subject => <th key={subject.id}>{subject.subjects.code}<br />/{examSubjectTotal(subject)}</th>)}<th>Total</th><th>GPA</th><th>Grade</th><th>Pos.</th></tr></thead>
+              <thead><tr><th>SN</th><th>Roll</th><th>Student</th><th>Admission</th>{examSubjectsQuery.data.map(subject => <th key={subject.id}>{examSubjectCode(subject)}<br />/{examSubjectTotal(subject)}</th>)}<th>Total</th><th>GPA</th><th>Grade</th><th>Pos.</th></tr></thead>
               <tbody>{examResultRows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>{examSubjectsQuery.data!.map(subject => <td key={subject.id}>{examSubjectResultText(row, subject)}</td>)}<td>{row.complete ? `${row.totalObtained}/${row.totalMax}` : '-'}</td><td>{row.gpa == null ? '-' : row.gpa.toFixed(2)}</td><td>{row.grade}</td><td>{row.position ?? '-'}</td></tr>)}</tbody>
             </table>
             <p className="print-footnote">A dash indicates an incomplete result. Subject columns show obtained marks over the configured maximum.</p>

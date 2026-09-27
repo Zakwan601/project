@@ -4,6 +4,10 @@ export interface AttendanceFineDetails {
   latePenaltyAbsences: number
   fineableAbsences: number
   finePerAbsentDay: number
+  attendanceFine: number
+  examMissedCount: number
+  examMissedFineAmount: number
+  examMissedFine: number
   totalFine: number
 }
 
@@ -11,9 +15,13 @@ export function calculateAttendanceFine(
   recordedAbsences: number,
   lateDays: number,
   finePerAbsentDay: number,
+  examMissedCount = 0,
+  examMissedFineAmount = 0,
 ): AttendanceFineDetails {
   const latePenaltyAbsences = Math.floor(lateDays / 2)
   const fineableAbsences = recordedAbsences + latePenaltyAbsences
+  const attendanceFine = fineableAbsences * finePerAbsentDay
+  const examMissedFine = examMissedCount * examMissedFineAmount
 
   return {
     recordedAbsences,
@@ -21,7 +29,11 @@ export function calculateAttendanceFine(
     latePenaltyAbsences,
     fineableAbsences,
     finePerAbsentDay,
-    totalFine: fineableAbsences * finePerAbsentDay,
+    attendanceFine,
+    examMissedCount,
+    examMissedFineAmount,
+    examMissedFine,
+    totalFine: attendanceFine + examMissedFine,
   }
 }
 
