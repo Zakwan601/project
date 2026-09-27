@@ -291,7 +291,7 @@ export function LoginPage() {
           </p>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Powered by - Axentra@Zuanshi
+            Powered by - Axentra@ZuanshiBD
           </p>
         </div>
 
@@ -368,7 +368,7 @@ export function LoginPage() {
               </div>
 
               {turnstileSiteKey ? (
-                <div className="flex justify-center overflow-hidden rounded-md border bg-background p-2">
+                <div >
                   <Turnstile
                     ref={turnstileRef}
                     siteKey={turnstileSiteKey}

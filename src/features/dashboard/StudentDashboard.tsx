@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { CheckCircle, UserX, Clock, TrendingUp } from 'lucide-react'
+import { CheckCircle, UserX, Clock, TrendingUp, AlarmClock, Banknote, MessageSquareWarning } from 'lucide-react'
 import { format } from 'date-fns'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useStudentDashboardStats, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -143,13 +144,14 @@ export function StudentDashboard() {
 
       <StudentNotices />
 
-      {/* Weekly attendance chart */}
+      {/* Weekly attendance chart and attendance instructions */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.2 }}
+        className="grid items-stretch gap-3 sm:gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]"
       >
-        <Card>
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>Weekly Attendance</CardTitle>
             <CardDescription>Last 7 days attendance overview</CardDescription>
@@ -178,8 +180,69 @@ export function StudentDashboard() {
             )}
           </CardContent>
         </Card>
+        <AttendanceInstructions
+          finePerAbsentDay={fine.finePerAbsentDay}
+          examMissedFine={fine.examMissedFineAmount}
+          loading={dashboardLoading}
+          error={Boolean(error)}
+        />
       </motion.div>
 
+    </div>
+  )
+}
+
+function AttendanceInstructions({
+  finePerAbsentDay,
+  examMissedFine,
+  loading,
+  error,
+}: {
+  finePerAbsentDay: number
+  examMissedFine: number
+  loading: boolean
+  error: boolean
+}) {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><AlarmClock className="h-5 w-5" /> Attendance Instructions</CardTitle>
+        <CardDescription>Arrival status and fine rules</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        <div className="space-y-2">
+          <InstructionRow label="Present" value="Arrival by 8:20 AM" tone="text-emerald-600 dark:text-emerald-400" />
+          <InstructionRow label="Late" value="After 8:20 AM through 9:00 AM" tone="text-amber-600 dark:text-amber-400" />
+          <InstructionRow label="Too late" value="After 9:00 AM; counted as absent" tone="text-red-600 dark:text-red-400" />
+        </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <p className="flex items-center gap-2 font-semibold"><Banknote className="h-4 w-4" /> Fine rules</p>
+          {loading ? <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" /><Skeleton className="h-4 w-4/5" /></div>
+            : error ? <p className="text-xs text-destructive">Fine values are currently unavailable.</p>
+              : <ul className="list-disc space-y-1.5 pl-5 text-muted-foreground">
+                <li>Absent or too late: <span className="font-medium text-foreground">{formatFine(finePerAbsentDay)}</span></li>
+                <li>Every 2 late days add 1 absence fine: <span className="font-medium text-foreground">{formatFine(finePerAbsentDay)}</span></li>
+                <li>Missing an exam: <span className="font-medium text-foreground">{formatFine(examMissedFine)}</span></li>
+              </ul>}
+        </div>
+
+        <p className="border-t pt-4 text-muted-foreground">
+          In case of any issue, submit it at {' '}
+          <Link to="/report-issue" className="inline-flex items-center gap-1 font-semibold text-primary underline underline-offset-4 hover:text-primary/80">
+            <MessageSquareWarning className="h-4 w-4" /> Report an Issue
+          </Link>.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function InstructionRow({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2">
+      <span className={`font-semibold ${tone}`}>{label}</span>
+      <span className="text-muted-foreground">{value}</span>
     </div>
   )
 }
