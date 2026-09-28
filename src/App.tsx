@@ -4,9 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/contexts/AuthContext'
-import { AppLayout } from '@/components/layout/AppLayout'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
 
+const AppLayout = lazy(() => import('@/components/layout/AppLayout').then(module => ({ default: module.AppLayout })))
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then(module => ({ default: module.LoginPage })))
 const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then(module => ({ default: module.DashboardPage })))
 const StudentsPage = lazy(() => import('@/features/students/StudentsPage').then(module => ({ default: module.StudentsPage })))
@@ -38,13 +38,22 @@ const queryClient = new QueryClient({
   },
 })
 
+function AppLoadingFallback() {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background" role="status" aria-label="Loading application">
+      <span className="h-7 w-7 animate-spin rounded-full border-2 border-muted border-t-primary" />
+      <span className="sr-only">Loading application</span>
+    </div>
+  )
+}
+
 function App() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="Axentra@Zuanshi-theme">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
-            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loadingâ€¦</div>}>
+            <Suspense fallback={<AppLoadingFallback />}>
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />

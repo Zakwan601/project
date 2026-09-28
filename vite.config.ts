@@ -48,8 +48,25 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // JavaScript route chunks are intentionally not precached. Precache used to
+        // download every screen, chart, and ExcelJS even when a user never opened
+        // those features. Scripts are now cached only after they are requested.
+        globPatterns: ["**/*.{css,html,ico,png,svg,woff2}"],
         navigateFallback: "/index.html",
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.destination === "script",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "axentra-route-scripts",
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: {
+                maxEntries: 80,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
+          },
+        ],
       },
     }),
   ],

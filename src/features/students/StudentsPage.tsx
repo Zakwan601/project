@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, Copy, Download, Eye, EyeOff, FileSpreadsheet, GraduationCap, KeyRound, Pencil, Printer, RefreshCw, School, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
+import { AlertCircle, Check, Copy, Download, Eye, EyeOff, FileSpreadsheet, GraduationCap, KeyRound, Loader2, Pencil, Printer, RefreshCw, School, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import type { AcademicYear, BloodGroup, ClassGroup, Student, StudentWithClass, SubjectCourseOption } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
@@ -30,6 +31,11 @@ import { syncZktecoUsers, type ZktecoSyncSummary } from '@/services/zktecoUsers'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 import { ProfileUploads } from '@/features/profile/ProfileUploads'
 import { downloadCsv } from '@/lib/csv'
+import {
+  createBulkStudentLogins,
+  downloadStudentLoginExport,
+  type BulkStudentLoginResult,
+} from '@/services/studentLogins'
 import { BulkStudentUpdateDialog } from './BulkStudentUpdateDialog'
 
 import { MoreHorizontal } from 'lucide-react'
@@ -89,6 +95,7 @@ const studentSchema = z.object({
   }
 })
 type StudentForm = z.infer<typeof studentSchema>
+type StudentLoginProgressStage = 'creating' | 'downloading' | 'success' | 'error'
 
 export function StudentsPage() {
   const { data: students, isLoading, error } = useStudents()
@@ -140,6 +147,13 @@ export function StudentsPage() {
   const [isSyncingUsers, setIsSyncingUsers] = useState(false)
   const [syncSummary, setSyncSummary] = useState<ZktecoSyncSummary | null>(null)
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false)
+  const [creatingStudentLogins, setCreatingStudentLogins] = useState(false)
+  const [pendingLoginExport, setPendingLoginExport] = useState<BulkStudentLoginResult | null>(null)
+  const [loginProgressOpen, setLoginProgressOpen] = useState(false)
+  const [loginProgressStage, setLoginProgressStage] = useState<StudentLoginProgressStage>('creating')
+  const [loginProgressCount, setLoginProgressCount] = useState(0)
+  const [loginProgressResult, setLoginProgressResult] = useState<BulkStudentLoginResult | null>(null)
+  const [loginProgressError, setLoginProgressError] = useState('')
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<StudentForm>({
     resolver: zodResolver(studentSchema),
@@ -322,6 +336,58 @@ export function StudentsPage() {
     }
   }
 
+  const createStudentLogins = async () => {
+    if (!session) {
+      toast.error('Your session has expired. Please sign in again.')
+      return
+    }
+
+    const studentIds = selectedStudentIds.length > 0
+      ? selectedStudentIds
+      : filtered.filter(student => student.is_active && !student.profile_id).map(student => student.id)
+    if (!pendingLoginExport && studentIds.length === 0) {
+      toast.info('Every student in the current list already has a login account.')
+      return
+    }
+
+    let exportReady = pendingLoginExport
+    setLoginProgressCount(pendingLoginExport?.created ?? studentIds.length)
+    setLoginProgressResult(pendingLoginExport)
+    setLoginProgressError('')
+    setLoginProgressStage(pendingLoginExport ? 'downloading' : 'creating')
+    setLoginProgressOpen(true)
+    setCreatingStudentLogins(true)
+    try {
+      if (pendingLoginExport) {
+        await downloadStudentLoginExport(
+          session,
+          pendingLoginExport.export_id,
+          pendingLoginExport.file_name,
+        )
+        setPendingLoginExport(null)
+        setLoginProgressStage('success')
+        return
+      }
+
+      const domain = (import.meta.env.VITE_STUDENT_LOGIN_DOMAIN || 'nmdc.edu').trim()
+      const result = await createBulkStudentLogins(session, studentIds, domain)
+      exportReady = result
+      setPendingLoginExport(result)
+      setLoginProgressResult(result)
+      setLoginProgressStage('downloading')
+      await queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
+      await downloadStudentLoginExport(session, result.export_id, result.file_name)
+      setPendingLoginExport(null)
+      setLoginProgressStage('success')
+    } catch (loginError) {
+      setLoginProgressError((loginError as Error).message)
+      setLoginProgressResult(exportReady)
+      setLoginProgressStage('error')
+    } finally {
+      setCreatingStudentLogins(false)
+    }
+  }
+
   const refreshEditingStudent = async (studentId: string) => {
     const { data, error } = await db
       .from('students')
@@ -408,12 +474,27 @@ export function StudentsPage() {
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
-    <div className="student-report-screen">
+    <div className="student-report-screen min-w-0 max-w-full overflow-x-hidden">
       <PageHeader
         title="Students"
         description={`${students?.length ?? 0} students enrolled`}
         action={canWriteStudents ? (
-          <div className="flex flex-wrap gap-2 sm:justify-end">
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+            {isFullAdmin && <Button
+              size="sm"
+              variant="outline"
+              onClick={createStudentLogins}
+              disabled={creatingStudentLogins || (!pendingLoginExport && filtered.length === 0)}
+            >
+              <KeyRound className="mr-1.5 h-4 w-4" />
+              {creatingStudentLogins
+                ? 'Processing student logins...'
+                : pendingLoginExport
+                  ? 'Retry credentials download'
+                  : selectedStudentIds.length > 0
+                    ? `Create logins (${selectedStudentIds.length})`
+                    : 'Create student logins'}
+            </Button>}
             {isFullAdmin && <Button size="sm" variant="outline" onClick={() => setBulkUpdateOpen(true)}>
               <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Bulk edit
             </Button>}
@@ -434,6 +515,88 @@ export function StudentsPage() {
           </div>
         ) : undefined}
       />
+
+      <Dialog
+        open={loginProgressOpen}
+        onOpenChange={open => {
+          if (!open && creatingStudentLogins) return
+          setLoginProgressOpen(open)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {loginProgressStage === 'success'
+                ? <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                : loginProgressStage === 'error'
+                  ? <AlertCircle className="h-5 w-5 text-destructive" />
+                  : <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+              {loginProgressStage === 'success'
+                ? 'Student logins are ready'
+                : loginProgressStage === 'error'
+                  ? 'Student login process needs attention'
+                  : 'Preparing student logins'}
+            </DialogTitle>
+            <DialogDescription>
+              {loginProgressStage === 'success'
+                ? 'The credentials were downloaded and the private Supabase file was deleted.'
+                : loginProgressStage === 'error'
+                  ? loginProgressError
+                  : `Securely processing ${loginProgressCount} student${loginProgressCount === 1 ? '' : 's'}. Please keep this window open.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Progress
+            value={loginProgressStage === 'creating' ? 35 : loginProgressStage === 'downloading' ? 75 : 100}
+            className={loginProgressStage === 'error' ? '[&>div]:bg-destructive' : ''}
+          />
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <StudentLoginProgressStep
+              label="Create secure login accounts"
+              status={loginProgressStage === 'creating' ? 'active' : loginProgressResult ? 'complete' : loginProgressStage === 'error' ? 'error' : 'pending'}
+            />
+            <StudentLoginProgressStep
+              label="Prepare private credentials file"
+              status={loginProgressStage === 'creating' ? 'pending' : loginProgressResult ? 'complete' : loginProgressStage === 'error' ? 'error' : 'pending'}
+            />
+            <StudentLoginProgressStep
+              label="Download once and delete from storage"
+              status={loginProgressStage === 'downloading' ? 'active' : loginProgressStage === 'success' ? 'complete' : loginProgressStage === 'error' && loginProgressResult ? 'error' : 'pending'}
+            />
+          </div>
+
+          {loginProgressResult && (
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30">
+                <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-400">{loginProgressResult.created}</p>
+                <p className="text-xs text-muted-foreground">Created</p>
+              </div>
+              <div className="rounded-md bg-muted p-2">
+                <p className="text-lg font-semibold">{loginProgressResult.skipped}</p>
+                <p className="text-xs text-muted-foreground">Skipped</p>
+              </div>
+              <div className="rounded-md bg-red-50 p-2 dark:bg-red-950/30">
+                <p className="text-lg font-semibold text-red-700 dark:text-red-400">{loginProgressResult.failed}</p>
+                <p className="text-xs text-muted-foreground">Failed</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {loginProgressStage === 'error' && pendingLoginExport && (
+              <Button onClick={createStudentLogins} disabled={creatingStudentLogins}>
+                <Download className="mr-2 h-4 w-4" /> Retry credentials download
+              </Button>
+            )}
+            {(loginProgressStage === 'success' || (loginProgressStage === 'error' && !pendingLoginExport)) && (
+              <Button variant={loginProgressStage === 'success' ? 'default' : 'outline'} onClick={() => setLoginProgressOpen(false)}>
+                Close
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isFullAdmin && <BulkStudentUpdateDialog
         open={bulkUpdateOpen}
@@ -1160,6 +1323,37 @@ export function StudentsPage() {
         </DialogContent>
       </Dialog>
 
+    </div>
+  )
+}
+
+function StudentLoginProgressStep({
+  label,
+  status,
+}: {
+  label: string
+  status: 'pending' | 'active' | 'complete' | 'error'
+}) {
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+        status === 'complete'
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+          : status === 'active'
+            ? 'bg-primary/10 text-primary'
+            : status === 'error'
+              ? 'bg-destructive/10 text-destructive'
+              : 'bg-muted text-muted-foreground'
+      }`}>
+        {status === 'complete'
+          ? <Check className="h-4 w-4" />
+          : status === 'active'
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : status === 'error'
+              ? <AlertCircle className="h-4 w-4" />
+              : <span className="h-2 w-2 rounded-full bg-current opacity-50" />}
+      </span>
+      <span className={status === 'pending' ? 'text-muted-foreground' : 'font-medium'}>{label}</span>
     </div>
   )
 }

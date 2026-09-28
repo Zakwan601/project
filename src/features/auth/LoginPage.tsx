@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { motion } from 'framer-motion'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -269,18 +268,15 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted px-4 py-8">
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-md"
-      >
+    <div className="flex min-h-screen items-start justify-center bg-gradient-to-br from-background to-muted px-4 py-8 sm:py-12 lg:py-16">
+      <div className="w-full max-w-md">
         {/* College Header */}
         <div className="mb-8 flex flex-col items-center text-center">
           <img
-            src="https://ik.imagekit.io/nmdc/nmdc_logo.jpg"
+            src="/pwa-192x192.png"
             alt="NMDC Logo"
+            width="80"
+            height="80"
             className="mb-3 h-20 w-20 object-contain"
           />
 
@@ -368,7 +364,7 @@ export function LoginPage() {
               </div>
 
               {turnstileSiteKey ? (
-                <div >
+                <div className="min-h-[65px]">
                   <Turnstile
                     ref={turnstileRef}
                     siteKey={turnstileSiteKey}
@@ -433,7 +429,7 @@ export function LoginPage() {
             </CardFooter>
           </form>
         </Card>
-      </motion.div>
+      </div>
     </div>
   )
 }

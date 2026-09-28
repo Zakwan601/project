@@ -1,5 +1,4 @@
 import { Outlet, Navigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/layout/AppSidebar'
@@ -104,15 +103,11 @@ export function AppLayout() {
           <PwaControls />
           <ModeToggle />
         </header>
-        <motion.main
-          key={location.pathname}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
+        <main
           className="min-w-0 flex-1 p-3 sm:p-6"
         >
           <Outlet />
-        </motion.main>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )
