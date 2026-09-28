@@ -53,20 +53,6 @@ export default defineConfig({
         // those features. Scripts are now cached only after they are requested.
         globPatterns: ["**/*.{css,html,ico,png,svg,woff2}"],
         navigateFallback: "/index.html",
-        runtimeCaching: [
-          {
-            urlPattern: ({ request }) => request.destination === "script",
-            handler: "CacheFirst",
-            options: {
-              cacheName: "axentra-route-scripts",
-              cacheableResponse: { statuses: [0, 200] },
-              expiration: {
-                maxEntries: 80,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
-              },
-            },
-          },
-        ],
       },
     }),
   ],

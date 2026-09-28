@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { startTransition, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
@@ -32,7 +32,6 @@ const navItems: NavItem[] = [
   { title: 'Classes', href: '/classes', icon: BookOpen, roles: ['admin'] },
   { title: 'Attendance', href: '/attendance', icon: ClipboardList, roles: ['admin', 'student'] },
   { title: 'Punches', href: '/punches', icon: ScanLine, roles: ['admin', 'student'] },
-  { title: 'Archived Punches', href: '/archived-punches', icon: Archive, roles: ['admin'] },
   { title: 'Report Issue', href: '/report-issue', icon: MessageSquareWarning, roles: ['student'] },
   { title: 'Vacations', href: '/vacations', icon: CalendarOff, roles: ['admin'] },
   { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin'] },
@@ -45,6 +44,7 @@ const advancedNavItems: NavItem[] = [
   { title: 'SMS Messages', href: '/sms-messages', icon: MessageSquareText, roles: ['admin'] },
   { title: 'Complaints', href: '/complaints', icon: MessageSquareWarning, roles: ['admin'] },
   { title: 'Announcements', href: '/announcements', icon: Megaphone, roles: ['admin'] },
+  { title: 'Archived Punches', href: '/archived-punches', icon: Archive, roles: ['admin'] },
   { title: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
   { title: 'Access Control', href: '/access-control', icon: UserCog, roles: ['admin'] },
 ]
@@ -52,6 +52,38 @@ const advancedNavItems: NavItem[] = [
 const bottomNavItems: NavItem[] = [
   { title: 'Profile', href: '/profile', icon: User, roles: ['admin', 'student'] },
 ]
+
+const routePrefetchers: Record<string, () => Promise<unknown>> = {
+  '/dashboard': () => import('@/features/dashboard/DashboardPage'),
+  '/students': () => import('@/features/students/StudentsPage'),
+  '/classes': () => import('@/features/classes/ClassesPage'),
+  '/attendance': () => import('@/features/attendance/AttendancePage'),
+  '/punches': () => import('@/features/punches/RecentPunchesPage'),
+  '/archived-punches': () => import('@/features/punches/ArchivedPunchesPage'),
+  '/report-issue': () => import('@/features/reports/StudentReportsPage'),
+  '/vacations': () => import('@/features/vacations/VacationsPage'),
+  '/reports': () => import('@/features/reports/ReportsPage'),
+  '/results': () => import('@/features/results/ResultsPage'),
+  '/departure-anomalies': () => import('@/features/departure-anomalies/DepartureAnomaliesPage'),
+  '/devices': () => import('@/features/devices/DevicesPage'),
+  '/sms-messages': () => import('@/features/sms/SmsMessagesPage'),
+  '/complaints': () => import('@/features/reports/ComplaintsPage'),
+  '/announcements': () => import('@/features/announcements/AnnouncementsPage'),
+  '/settings': () => import('@/features/settings/SettingsPage'),
+  '/access-control': () => import('@/features/access/AccessControlPage'),
+  '/profile': () => import('@/features/profile/ProfilePage'),
+}
+const routePrefetches = new Map<string, Promise<unknown>>()
+
+function prefetchRoute(href: string) {
+  const load = routePrefetchers[href]
+  if (!load || routePrefetches.has(href)) return
+  const request = load().catch(() => {
+    routePrefetches.delete(href)
+    return undefined
+  })
+  routePrefetches.set(href, request)
+}
 
 const permissionByHref: Partial<Record<string, PermissionKey>> = {
   '/dashboard': 'dashboard',
@@ -125,14 +157,23 @@ export function AppSidebar() {
     if (isMobile) setOpenMobile(false)
   }
 
+  const openRoute = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    closeMobileSidebar()
+    startTransition(() => navigate(href))
+  }
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2.5 px-2 py-1">
           <div className="flex h-8 w-8 items-center justify-center  shrink-0">
-            <img src="https://ik.imagekit.io/nmdc/nmdc_logo.jpg" 
-              alt="Logo" 
-              className="h-8 w-8" 
+            <img src="/pwa-192x192.png"
+              alt="Logo"
+              width="32"
+              height="32"
+              className="h-8 w-8"
             />
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
@@ -152,7 +193,12 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                      <Link to={item.href} onClick={closeMobileSidebar}>
+                      <Link
+                        to={item.href}
+                        onPointerEnter={() => prefetchRoute(item.href)}
+                        onFocus={() => prefetchRoute(item.href)}
+                        onClick={event => openRoute(event, item.href)}
+                      >
                         <item.icon />
                         <span>{item.title}</span>
                       </Link>
@@ -180,7 +226,12 @@ export function AppSidebar() {
                           return (
                             <SidebarMenuSubItem key={item.href}>
                               <SidebarMenuSubButton asChild={true} isActive={isActive}>
-                                <Link to={item.href} onClick={closeMobileSidebar}>
+                                <Link
+                                  to={item.href}
+                                  onPointerEnter={() => prefetchRoute(item.href)}
+                                  onFocus={() => prefetchRoute(item.href)}
+                                  onClick={event => openRoute(event, item.href)}
+                                >
                                   <item.icon />
                                   <span>{item.title}</span>
                                 </Link>
@@ -208,7 +259,12 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                      <Link to={item.href} onClick={closeMobileSidebar}>
+                      <Link
+                        to={item.href}
+                        onPointerEnter={() => prefetchRoute(item.href)}
+                        onFocus={() => prefetchRoute(item.href)}
+                        onClick={event => openRoute(event, item.href)}
+                      >
                         <item.icon />
                         <span>{item.title}</span>
                       </Link>

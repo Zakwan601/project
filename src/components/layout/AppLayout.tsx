@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Outlet, Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
@@ -106,9 +107,22 @@ export function AppLayout() {
         <main
           className="min-w-0 flex-1 p-3 sm:p-6"
         >
-          <Outlet />
+          <Suspense fallback={<PageLoadingFallback pageTitle={pageTitle} />}>
+            <Outlet />
+          </Suspense>
         </main>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+function PageLoadingFallback({ pageTitle }: { pageTitle: string }) {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label={`Loading ${pageTitle}`}>
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <Spinner className="h-5 w-5" />
+        <span>Loading {pageTitle}...</span>
+      </div>
+    </div>
   )
 }

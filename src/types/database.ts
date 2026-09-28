@@ -170,6 +170,7 @@ export interface Student {
   class_group: ClassGroup
   fourth_subject_id: string | null
   optional_subject_2_id: string | null
+  group_elective_option_id: string | null
   group_fourth_option_id: string | null
   humanities_main_option_1_id: string | null
   humanities_main_option_2_id: string | null
@@ -235,6 +236,8 @@ export interface SubjectCourseOption {
   first_paper_subject_id: string
   second_paper_subject_id: string
   exclusive_group: string | null
+  available_as_elective: boolean
+  available_as_fourth: boolean
   is_active: boolean
   created_at: string
 }

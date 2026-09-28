@@ -75,6 +75,7 @@ function studentFromZktecoUser(
     class_group: 'science',
     fourth_subject_id: null,
     optional_subject_2_id: null,
+    group_elective_option_id: null,
     group_fourth_option_id: null,
     humanities_main_option_1_id: null,
     humanities_main_option_2_id: null,

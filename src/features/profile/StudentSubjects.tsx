@@ -85,7 +85,6 @@ export function StudentSubjects({ student }: StudentSubjectsProps) {
 
   const optionsQuery = useQuery<SubjectCourseOption[]>({
     queryKey: ['profile-subject-course-options', student.class_group],
-    enabled: student.class_group === 'humanities',
     queryFn: async () => {
       const { data, error } = await db.from('subject_course_options').select('*')
         .eq('class_group', student.class_group)
@@ -118,46 +117,44 @@ export function StudentSubjects({ student }: StudentSubjectsProps) {
   const options = optionsQuery.data ?? []
   const compulsory = subjects.filter(subject => !subject.is_fourth_subject)
 
-  if (student.class_group === 'humanities') {
+  if (student.class_group !== 'science') {
     const optionById = new Map(options.map(option => [option.id, option]))
     const mainOptions = [
-      student.humanities_main_option_1_id,
-      student.humanities_main_option_2_id,
-      student.humanities_main_option_3_id,
+      student.group_elective_option_id,
     ].map(id => id ? optionById.get(id) : undefined)
       .filter((option): option is SubjectCourseOption => Boolean(option))
-    const fourthOption = student.humanities_fourth_option_id
-      ? optionById.get(student.humanities_fourth_option_id)
+    const fourthOption = student.group_fourth_option_id
+      ? optionById.get(student.group_fourth_option_id)
       : undefined
 
     return (
       <section className="space-y-5 border-t pt-6">
         <div>
           <h2 className="text-base font-semibold">Subjects</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Humanities - Read only</p>
+          <p className="mt-1 text-sm text-muted-foreground">{student.class_group === 'business' ? 'Business Studies' : 'Humanities'} - Read only</p>
         </div>
         <SubjectList title="Compulsory subjects" subjects={compulsory} emptyText="No compulsory subjects found." />
-        <CourseList title="Main electives (Group A)" options={mainOptions} subjects={subjects} emptyText="Main electives have not been assigned." />
-        <CourseList title="Fourth subject (Group B)" options={fourthOption ? [fourthOption] : []} subjects={subjects} emptyText="A fourth subject has not been assigned." />
+        <CourseList title="Elective subject" options={mainOptions} subjects={subjects} emptyText="An elective subject has not been assigned." />
+        <CourseList title="Fourth subject" options={fourthOption ? [fourthOption] : []} subjects={subjects} emptyText="A fourth subject has not been assigned." />
       </section>
     )
   }
 
-  const fourthIds = new Set([student.fourth_subject_id, student.optional_subject_2_id].filter(Boolean))
-  const mainGroupSubjects = subjects.filter(subject => subject.is_fourth_subject && !fourthIds.has(subject.id))
-  const fourthSubjects = subjects.filter(subject => fourthIds.has(subject.id))
+  const optionById = new Map(options.map(option => [option.id, option]))
+  const fourthOption = student.group_fourth_option_id
+    ? optionById.get(student.group_fourth_option_id)
+    : undefined
 
   return (
     <section className="space-y-5 border-t pt-6">
       <div>
         <h2 className="text-base font-semibold">Subjects</h2>
         <p className="mt-1 text-sm capitalize text-muted-foreground">
-          {student.class_group === 'business' ? 'Business studies' : student.class_group} - Read only
+          Science - Read only
         </p>
       </div>
       <SubjectList title="Compulsory subjects" subjects={compulsory} emptyText="No compulsory subjects found." />
-      <SubjectList title="Main group subject" subjects={mainGroupSubjects} emptyText="No main group subject is assigned." />
-      <SubjectList title="Fourth subject" subjects={fourthSubjects} emptyText="A fourth subject has not been assigned." />
+      <CourseList title="Fourth subject" options={fourthOption ? [fourthOption] : []} subjects={subjects} emptyText="A fourth subject has not been assigned." />
     </section>
   )
 }
