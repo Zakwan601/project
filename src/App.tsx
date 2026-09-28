@@ -1,32 +1,33 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute'
+import { lazyWithRetry } from '@/lib/lazyWithRetry'
+import { AppLayout } from '@/components/layout/AppLayout'
 
-const AppLayout = lazy(() => import('@/components/layout/AppLayout').then(module => ({ default: module.AppLayout })))
-const LoginPage = lazy(() => import('@/features/auth/LoginPage').then(module => ({ default: module.LoginPage })))
-const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then(module => ({ default: module.DashboardPage })))
-const StudentsPage = lazy(() => import('@/features/students/StudentsPage').then(module => ({ default: module.StudentsPage })))
-const ClassesPage = lazy(() => import('@/features/classes/ClassesPage').then(module => ({ default: module.ClassesPage })))
-const AttendancePage = lazy(() => import('@/features/attendance/AttendancePage').then(module => ({ default: module.AttendancePage })))
-const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then(module => ({ default: module.ReportsPage })))
-const DevicesPage = lazy(() => import('@/features/devices/DevicesPage').then(module => ({ default: module.DevicesPage })))
-const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(module => ({ default: module.SettingsPage })))
-const ProfilePage = lazy(() => import('@/features/profile/ProfilePage').then(module => ({ default: module.ProfilePage })))
-const RecentPunchesPage = lazy(() => import('@/features/punches/RecentPunchesPage').then(module => ({ default: module.RecentPunchesPage })))
-const ArchivedPunchesPage = lazy(() => import('@/features/punches/ArchivedPunchesPage').then(module => ({ default: module.ArchivedPunchesPage })))
-const StudentReportsPage = lazy(() => import('@/features/reports/StudentReportsPage').then(module => ({ default: module.StudentReportsPage })))
-const ComplaintsPage = lazy(() => import('@/features/reports/ComplaintsPage').then(module => ({ default: module.ComplaintsPage })))
-const SmsMessagesPage = lazy(() => import('@/features/sms/SmsMessagesPage').then(module => ({ default: module.SmsMessagesPage })))
-const AnnouncementsPage = lazy(() => import('@/features/announcements/AnnouncementsPage').then(module => ({ default: module.AnnouncementsPage })))
-const DepartureAnomaliesPage = lazy(() => import('@/features/departure-anomalies/DepartureAnomaliesPage').then(module => ({ default: module.DepartureAnomaliesPage })))
-const VacationsPage = lazy(() => import('@/features/vacations/VacationsPage').then(module => ({ default: module.VacationsPage })))
-const AccessControlPage = lazy(() => import('@/features/access/AccessControlPage').then(module => ({ default: module.AccessControlPage })))
-const ResultsPage = lazy(() => import('@/features/results/ResultsPage').then(module => ({ default: module.ResultsPage })))
-const SharedResultPage = lazy(() => import('@/features/results/SharedResultPage').then(module => ({ default: module.SharedResultPage })))
+const LoginPage = lazyWithRetry(() => import('@/features/auth/LoginPage'), module => module.LoginPage)
+const DashboardPage = lazyWithRetry(() => import('@/features/dashboard/DashboardPage'), module => module.DashboardPage)
+const StudentsPage = lazyWithRetry(() => import('@/features/students/StudentsPage'), module => module.StudentsPage)
+const ClassesPage = lazyWithRetry(() => import('@/features/classes/ClassesPage'), module => module.ClassesPage)
+const AttendancePage = lazyWithRetry(() => import('@/features/attendance/AttendancePage'), module => module.AttendancePage)
+const ReportsPage = lazyWithRetry(() => import('@/features/reports/ReportsPage'), module => module.ReportsPage)
+const DevicesPage = lazyWithRetry(() => import('@/features/devices/DevicesPage'), module => module.DevicesPage)
+const SettingsPage = lazyWithRetry(() => import('@/features/settings/SettingsPage'), module => module.SettingsPage)
+const ProfilePage = lazyWithRetry(() => import('@/features/profile/ProfilePage'), module => module.ProfilePage)
+const RecentPunchesPage = lazyWithRetry(() => import('@/features/punches/RecentPunchesPage'), module => module.RecentPunchesPage)
+const ArchivedPunchesPage = lazyWithRetry(() => import('@/features/punches/ArchivedPunchesPage'), module => module.ArchivedPunchesPage)
+const StudentReportsPage = lazyWithRetry(() => import('@/features/reports/StudentReportsPage'), module => module.StudentReportsPage)
+const ComplaintsPage = lazyWithRetry(() => import('@/features/reports/ComplaintsPage'), module => module.ComplaintsPage)
+const SmsMessagesPage = lazyWithRetry(() => import('@/features/sms/SmsMessagesPage'), module => module.SmsMessagesPage)
+const AnnouncementsPage = lazyWithRetry(() => import('@/features/announcements/AnnouncementsPage'), module => module.AnnouncementsPage)
+const DepartureAnomaliesPage = lazyWithRetry(() => import('@/features/departure-anomalies/DepartureAnomaliesPage'), module => module.DepartureAnomaliesPage)
+const VacationsPage = lazyWithRetry(() => import('@/features/vacations/VacationsPage'), module => module.VacationsPage)
+const AccessControlPage = lazyWithRetry(() => import('@/features/access/AccessControlPage'), module => module.AccessControlPage)
+const ResultsPage = lazyWithRetry(() => import('@/features/results/ResultsPage'), module => module.ResultsPage)
+const SharedResultPage = lazyWithRetry(() => import('@/features/results/SharedResultPage'), module => module.SharedResultPage)
 
 const queryClient = new QueryClient({
   defaultOptions: {

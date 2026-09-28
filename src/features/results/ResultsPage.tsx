@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Eye, Link2, Pencil, Plus, Printer, Search, Send, Settings, Users } from 'lucide-react'
@@ -27,6 +27,7 @@ import type { ClassGroup, ResultExamType, StudentResultPayload, Student } from '
 import { downloadCsv } from '@/lib/csv'
 import { MarkInput, SimpleDialog } from '@/features/results/ResultControls'
 import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
+import { lazyWithRetry } from '@/lib/lazyWithRetry'
 import {
   examSubjectTotal,
   gradeSubject,
@@ -47,7 +48,10 @@ import {
 
 
 const db = supabase as any
-const StudentResultsPage = lazy(() => import('@/features/results/StudentResultsPage').then(module => ({ default: module.StudentResultsPage })))
+const StudentResultsPage = lazyWithRetry(
+  () => import('@/features/results/StudentResultsPage'),
+  module => module.StudentResultsPage,
+)
 
 const examSubjectName = (subject: ExamSubject) => subject.result_subject_paper_groups?.name ?? subject.subjects.name
 const examSubjectCode = (subject: ExamSubject) => subject.result_subject_paper_groups?.code ?? subject.subjects.code

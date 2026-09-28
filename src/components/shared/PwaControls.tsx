@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Download, RefreshCw, Share2, Smartphone, WifiOff } from 'lucide-react'
-import { registerSW } from 'virtual:pwa-register'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,7 +27,8 @@ function isIosDevice() {
 }
 
 export function PwaControls() {
-  const updateServiceWorkerRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null)
+  const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null)
+  const reloadForUpdateRef = useRef(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -39,12 +39,29 @@ export function PwaControls() {
   const ios = isIosDevice()
 
   useEffect(() => {
-    updateServiceWorkerRef.current = registerSW({
-      immediate: true,
-      onNeedRefresh: () => setNeedsRefresh(true),
-      onOfflineReady: () => toast.success('The app is ready to open offline.'),
-      onRegisterError: error => console.error('Service worker registration failed:', error),
-    })
+    const handleControllerChange = () => {
+      if (reloadForUpdateRef.current) window.location.reload()
+    }
+
+    if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        serviceWorkerRegistrationRef.current = registration
+        if (registration.waiting && navigator.serviceWorker.controller) setNeedsRefresh(true)
+
+        registration.addEventListener('updatefound', () => {
+          const installing = registration.installing
+          if (!installing) return
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              setNeedsRefresh(true)
+            }
+          })
+        })
+
+        void registration.update()
+      }).catch(error => console.error('Service worker registration failed:', error))
+    }
 
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault()
@@ -64,6 +81,9 @@ export function PwaControls() {
     window.addEventListener('offline', handleOffline)
 
     return () => {
+      if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange)
+      }
       window.removeEventListener('beforeinstallprompt', handleInstallPrompt)
       window.removeEventListener('appinstalled', handleInstalled)
       window.removeEventListener('online', handleOnline)
@@ -83,8 +103,8 @@ export function PwaControls() {
   }
 
   const applyUpdate = async () => {
-    const updateServiceWorker = updateServiceWorkerRef.current
-    if (!updateServiceWorker) {
+    const registration = serviceWorkerRegistrationRef.current
+    if (!registration?.waiting) {
       setUpdateError('The update service is not ready. Please check your connection and try again.')
       return
     }
@@ -92,7 +112,8 @@ export function PwaControls() {
     setIsUpdating(true)
     setUpdateError('')
     try {
-      await updateServiceWorker(true)
+      reloadForUpdateRef.current = true
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' })
     } catch (error) {
       console.error('App update failed:', error)
       setUpdateError('The update could not be installed. Check your connection and try again.')

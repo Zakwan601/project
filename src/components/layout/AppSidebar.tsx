@@ -53,38 +53,6 @@ const bottomNavItems: NavItem[] = [
   { title: 'Profile', href: '/profile', icon: User, roles: ['admin', 'student'] },
 ]
 
-const routePrefetchers: Record<string, () => Promise<unknown>> = {
-  '/dashboard': () => import('@/features/dashboard/DashboardPage'),
-  '/students': () => import('@/features/students/StudentsPage'),
-  '/classes': () => import('@/features/classes/ClassesPage'),
-  '/attendance': () => import('@/features/attendance/AttendancePage'),
-  '/punches': () => import('@/features/punches/RecentPunchesPage'),
-  '/archived-punches': () => import('@/features/punches/ArchivedPunchesPage'),
-  '/report-issue': () => import('@/features/reports/StudentReportsPage'),
-  '/vacations': () => import('@/features/vacations/VacationsPage'),
-  '/reports': () => import('@/features/reports/ReportsPage'),
-  '/results': () => import('@/features/results/ResultsPage'),
-  '/departure-anomalies': () => import('@/features/departure-anomalies/DepartureAnomaliesPage'),
-  '/devices': () => import('@/features/devices/DevicesPage'),
-  '/sms-messages': () => import('@/features/sms/SmsMessagesPage'),
-  '/complaints': () => import('@/features/reports/ComplaintsPage'),
-  '/announcements': () => import('@/features/announcements/AnnouncementsPage'),
-  '/settings': () => import('@/features/settings/SettingsPage'),
-  '/access-control': () => import('@/features/access/AccessControlPage'),
-  '/profile': () => import('@/features/profile/ProfilePage'),
-}
-const routePrefetches = new Map<string, Promise<unknown>>()
-
-function prefetchRoute(href: string) {
-  const load = routePrefetchers[href]
-  if (!load || routePrefetches.has(href)) return
-  const request = load().catch(() => {
-    routePrefetches.delete(href)
-    return undefined
-  })
-  routePrefetches.set(href, request)
-}
-
 const permissionByHref: Partial<Record<string, PermissionKey>> = {
   '/dashboard': 'dashboard',
   '/students': 'students',
@@ -195,8 +163,6 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                       <Link
                         to={item.href}
-                        onPointerEnter={() => prefetchRoute(item.href)}
-                        onFocus={() => prefetchRoute(item.href)}
                         onClick={event => openRoute(event, item.href)}
                       >
                         <item.icon />
@@ -228,8 +194,6 @@ export function AppSidebar() {
                               <SidebarMenuSubButton asChild={true} isActive={isActive}>
                                 <Link
                                   to={item.href}
-                                  onPointerEnter={() => prefetchRoute(item.href)}
-                                  onFocus={() => prefetchRoute(item.href)}
                                   onClick={event => openRoute(event, item.href)}
                                 >
                                   <item.icon />
@@ -261,8 +225,6 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                       <Link
                         to={item.href}
-                        onPointerEnter={() => prefetchRoute(item.href)}
-                        onFocus={() => prefetchRoute(item.href)}
                         onClick={event => openRoute(event, item.href)}
                       >
                         <item.icon />
