@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
@@ -129,7 +129,7 @@ export function AppSidebar() {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()
     closeMobileSidebar()
-    startTransition(() => navigate(href))
+    navigate(href)
   }
 
   return (

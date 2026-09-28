@@ -9,7 +9,7 @@ import { z } from 'zod'
 import { STUDENTS_KEY, useAssignStudentsToClass, useStudents, useUpdateStudent, useDeleteStudent, usePromoteStudents } from '@/hooks/useStudents'
 import { useClasses } from '@/hooks/useClasses'
 import { useAuth } from '@/contexts/AuthContext'
-import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
+import { PageHeader, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,6 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import type { AcademicYear, BloodGroup, ClassGroup, Student, StudentWithClass, SubjectCourseOption } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
@@ -468,7 +469,7 @@ export function StudentsPage() {
     reset({})
   }
 
-  if (isLoading) return <LoadingState />
+  if (isLoading) return <StudentsPageSkeleton />
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
@@ -1322,6 +1323,51 @@ export function StudentsPage() {
         </DialogContent>
       </Dialog>
 
+    </div>
+  )
+}
+
+function StudentsPageSkeleton() {
+  return (
+    <div className="min-w-0" role="status" aria-label="Loading students" aria-busy="true">
+      <PageHeader
+        title="Students"
+        description="Loading enrolled students..."
+        action={(
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="hidden h-9 w-24 sm:block" />
+          </div>
+        )}
+      />
+
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+        <Skeleton className="h-10 flex-1 sm:max-w-sm" />
+        <Skeleton className="h-10 w-full sm:w-56" />
+        <Skeleton className="h-10 w-full sm:w-52" />
+      </div>
+
+      <div className="overflow-hidden rounded-lg border">
+        <div className="grid grid-cols-[2rem_minmax(10rem,1.5fr)_minmax(7rem,.7fr)_minmax(8rem,.8fr)] items-center gap-3 border-b bg-muted/30 px-3 py-3">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+        {Array.from({ length: 8 }, (_, index) => (
+          <div key={index} className="grid min-h-16 grid-cols-[2rem_minmax(10rem,1.5fr)_minmax(7rem,.7fr)_minmax(8rem,.8fr)] items-center gap-3 border-b px-3 last:border-b-0">
+            <Skeleton className="h-4 w-4" />
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-36 max-w-full" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="h-3 w-14" />
+            <Skeleton className="h-7 w-20 rounded-full" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Loading student roster</span>
     </div>
   )
 }

@@ -19,7 +19,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
 import { formatBangladeshDateTime, formatDisplayDate } from '@/lib/dateTime'
-import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
+import { PageHeader, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { DateFilter } from '@/components/shared/DateFilter'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -51,6 +51,7 @@ import {
 import type { AttendanceSessionWithDetails, AttendanceStatus } from '@/types/database'
 import { attendanceStatusLabel } from '@/lib/attendance'
 import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // Handwritten database types do not include all nested relationship selections.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +148,7 @@ function StaffDailyAttendance() {
 
   const activeSession = sessions.find(session => session.id === activeSessionId) ?? null
 
-  if (isLoading) return <LoadingState />
+  if (isLoading) return <StaffAttendanceSkeleton canSync={isAdmin} />
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
@@ -387,6 +388,33 @@ function StaffDailyAttendance() {
   )
 }
 
+function StaffAttendanceSkeleton({ canSync }: { canSync: boolean }) {
+  return (
+    <div role="status" aria-label="Loading daily attendance" aria-busy="true">
+      <PageHeader
+        title="Daily Attendance"
+        description="One biometric result per student, per day"
+        action={canSync ? <Skeleton className="h-9 w-36" /> : undefined}
+      />
+      <div className="mb-4 grid grid-cols-3 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(260px,1.35fr)_minmax(200px,1fr)_minmax(180px,1fr)]">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="col-span-3 h-10 w-full sm:col-span-2 lg:col-span-1" />
+      </div>
+      <div className="grid min-w-0 gap-3 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="hidden rounded-lg border p-3 md:block">
+          <Skeleton className="h-4 w-20" />
+          <div className="mt-4 space-y-2">
+            {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-14 w-full" />)}
+          </div>
+        </div>
+        <AttendanceSheetSkeleton />
+      </div>
+      <span className="sr-only">Loading attendance sessions</span>
+    </div>
+  )
+}
+
 function formatElapsedTime(seconds: number) {
   if (seconds < 60) return `${seconds}s`
   const minutes = Math.floor(seconds / 60)
@@ -408,6 +436,40 @@ function canManuallySendAbsenceNotifications(selectedDate: string, now: Date) {
   return selectedDate < today || (selectedDate === today && hour >= 18)
 }
 
+function AttendanceSheetSkeleton() {
+  return (
+    <div className="min-w-0 overflow-hidden rounded-lg border p-3" role="status" aria-label="Loading attendance records">
+      <Skeleton className="h-5 w-40" />
+      <Skeleton className="mt-2 h-3 w-28" />
+      <div className="my-4 grid grid-cols-4 gap-2">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="rounded-md border p-2">
+            <Skeleton className="h-3 w-12" />
+            <Skeleton className="mt-2 h-6 w-8" />
+          </div>
+        ))}
+      </div>
+      <div className="mb-3 flex gap-2">
+        <Skeleton className="h-10 flex-1" />
+        <Skeleton className="h-10 w-28" />
+      </div>
+      <div className="overflow-hidden rounded-md border">
+        {Array.from({ length: 7 }, (_, index) => (
+          <div key={index} className="flex min-h-14 items-center gap-3 border-b px-3 last:border-b-0">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-3 w-36 max-w-full" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+            <Skeleton className="h-7 w-20 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DailyAttendanceSheet({
   session,
   isAdmin,
@@ -418,7 +480,7 @@ function DailyAttendanceSheet({
   statusFilter: AttendanceStatus | 'all'
 }) {
   const { data: records = [], isLoading, error } = useAttendanceRecords(session.id)
-  const { data: students = [] } = useQuery({
+  const { data: students = [], isLoading: studentsLoading } = useQuery({
     queryKey: ['students_by_class', session.class_id, session.date],
     queryFn: async () => {
       const students = await studentsService.getByClassForPeriod(session.class_id, session.date)
@@ -493,7 +555,7 @@ function DailyAttendanceSheet({
   const allSelected = filteredStudents.length > 0 && selectedStudentIds.size === filteredStudents.length
   const someSelected = selectedStudentIds.size > 0 && !allSelected
 
-  if (isLoading) return <LoadingState />
+  if (isLoading || studentsLoading) return <AttendanceSheetSkeleton />
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
@@ -754,6 +816,48 @@ interface CorrectionTarget {
   currentStatus: AttendanceStatus
 }
 
+function StudentAttendanceSkeleton() {
+  return (
+    <div role="status" aria-label="Loading my attendance" aria-busy="true">
+      <PageHeader title="My Attendance" description="Weekends and holidays are excluded." />
+      <Skeleton className="mb-5 h-10 w-full max-w-xs" />
+
+      <div className="mb-5 rounded-lg border p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mt-2 h-3 w-48" />
+          </div>
+          <Skeleton className="h-7 w-20" />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}
+        </div>
+      </div>
+
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
+        <div className="rounded-lg border p-4">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="mt-2 h-3 w-56 max-w-full" />
+          <div className="mt-5 grid grid-cols-7 gap-2">
+            {Array.from({ length: 35 }, (_, index) => (
+              <Skeleton key={index} className="aspect-square w-full rounded-full" />
+            ))}
+          </div>
+        </div>
+        <div className="rounded-lg border p-4">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="mt-2 h-3 w-44" />
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-20 w-full" />)}
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Loading attendance calendar and fine details</span>
+    </div>
+  )
+}
+
 function StudentDailyAttendance() {
   const { student } = useAuth()
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
@@ -789,7 +893,7 @@ function StudentDailyAttendance() {
     enabled: Boolean(student?.id),
   })
 
-  if (isLoading) return <LoadingState />
+  if (isLoading) return <StudentAttendanceSkeleton />
   if (error) return <ErrorState message={(error as Error).message} />
   if (!student) {
     return <EmptyState title="Student profile not linked" description="Contact your administrator." />

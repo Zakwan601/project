@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import { SimpleDialog } from '@/features/results/ResultControls'
 import type { ClassGroup } from '@/types/database'
 import type { ExamWithDetails } from '@/features/results/result-model'
@@ -192,7 +193,7 @@ export function ExamScheduleManager({
         {canWrite && <Button size="sm" className="w-full self-start sm:w-auto" onClick={openRoutineDialog}>Add routine row</Button>}
       </CardHeader>
       <CardContent className="px-0 sm:px-0">
-        {routineQuery.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Loading routine...</p>
+        {routineQuery.isLoading ? <div className="overflow-hidden rounded-md border">{Array.from({ length: 5 }, (_, index) => <div key={index} className="grid min-h-12 grid-cols-[minmax(8rem,1fr)_7rem_6rem] items-center gap-3 border-b px-3 last:border-b-0"><Skeleton className="h-3 w-36 max-w-full" /><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-16" /></div>)}</div>
           : routineQuery.error ? <p className="py-8 text-center text-sm text-destructive">{(routineQuery.error as Error).message}</p>
             : !routineQuery.data?.some(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id)) ? <p className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">No routine rows added for this class yet.</p>
               : <div className="overflow-x-auto"><Table className="min-w-[480px]"><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{routineQuery.data.filter(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id)).map(row => <TableRow key={row.id}><TableCell><span className="font-medium">{row.subject_name || row.subjects?.name}</span>{!modeCombinesPapers && row.subjects?.code && <span className="ml-2 text-xs text-muted-foreground">{row.subjects.code}</span>}</TableCell><TableCell>{format(new Date(`${row.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell>{displayTime(row.exam_time)}</TableCell></TableRow>)}</TableBody></Table></div>}

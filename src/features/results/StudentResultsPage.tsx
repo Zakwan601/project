@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { CalendarDays, Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { EmptyState, ErrorState, LoadingState, PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState, ErrorState, PageHeader } from '@/components/shared/PageHeader'
 import { ResultSheet } from '@/features/results/ResultSheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { StudentResultPayload } from '@/types/database'
 import type { ExamWithDetails } from '@/features/results/result-model'
 
@@ -29,6 +30,51 @@ function displayRoutineTime(value: string | null) {
   if (!value) return 'Not specified'
   const [hours, minutes] = value.split(':').map(Number)
   return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+function RoutineSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-md border">
+      {Array.from({ length: 5 }, (_, index) => (
+        <div key={index} className="grid min-h-12 grid-cols-[minmax(8rem,1fr)_7rem_6rem] items-center gap-3 border-b px-3 last:border-b-0">
+          <Skeleton className="h-3 w-32 max-w-full" />
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ResultCardSkeleton() {
+  return (
+    <div className="rounded-lg border p-5">
+      <div className="flex justify-between gap-4 border-b pb-4">
+        <div><Skeleton className="h-6 w-48" /><Skeleton className="mt-2 h-3 w-32" /></div>
+        <Skeleton className="h-16 w-24" />
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}
+      </div>
+      <div className="mt-5 space-y-3">
+        {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-10 w-full" />)}
+      </div>
+    </div>
+  )
+}
+
+function StudentResultsPageSkeleton() {
+  return (
+    <div role="status" aria-label="Loading examinations and results" aria-busy="true">
+      <PageHeader title="My Examinations & Results" description="View your examination routine and published results." />
+      <Skeleton className="mb-5 h-10 w-full max-w-md" />
+      <Card className="mb-5">
+        <CardHeader><Skeleton className="h-5 w-44" /><Skeleton className="h-3 w-56" /></CardHeader>
+        <CardContent><RoutineSkeleton /></CardContent>
+      </Card>
+      <ResultCardSkeleton />
+    </div>
+  )
 }
 
 export function StudentResultsPage() {
@@ -77,7 +123,7 @@ export function StudentResultsPage() {
     },
   })
 
-  if (examsQuery.isLoading) return <LoadingState />
+  if (examsQuery.isLoading) return <StudentResultsPageSkeleton />
   if (examsQuery.error) return <ErrorState message={(examsQuery.error as Error).message} />
 
   return <div>
@@ -105,7 +151,7 @@ export function StudentResultsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {routineQuery.isLoading ? <LoadingState message="Loading examination routine..." />
+          {routineQuery.isLoading ? <RoutineSkeleton />
             : routineQuery.error ? <ErrorState message={(routineQuery.error as Error).message} />
               : !routineQuery.data?.length ? <EmptyState title="Routine not available" description="No routine rows have been added for this examination yet." />
                 : <div className="overflow-x-auto">
@@ -123,7 +169,7 @@ export function StudentResultsPage() {
 
       {selectedExam?.status !== 'published'
         ? <EmptyState title="Results not published" description="Your result will appear here after it is published." />
-        : resultQuery.isLoading ? <LoadingState />
+        : resultQuery.isLoading ? <ResultCardSkeleton />
           : resultQuery.error ? <ErrorState message={(resultQuery.error as Error).message} />
             : resultQuery.data ? <ResultSheet result={resultQuery.data} /> : null}
     </>}

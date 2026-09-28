@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useClasses } from '@/hooks/useClasses'
-import { EmptyState, ErrorState, LoadingState } from '@/components/shared/PageHeader'
+import { EmptyState, ErrorState } from '@/components/shared/PageHeader'
 import { ResultSheet } from '@/features/results/ResultSheet'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,6 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { ClassGroup, ResultExamType, StudentResultPayload, Student } from '@/types/database'
 import { downloadCsv } from '@/lib/csv'
 import { MarkInput, SimpleDialog } from '@/features/results/ResultControls'
@@ -59,8 +60,140 @@ const examSubjectCode = (subject: ExamSubject) => subject.result_subject_paper_g
 export function ResultsPage() {
   const { role } = useAuth()
   return role === 'student'
-    ? <Suspense fallback={<LoadingState />}><StudentResultsPage /></Suspense>
+    ? <Suspense fallback={<StudentResultsSkeleton />}><StudentResultsPage /></Suspense>
     : <StaffResults />
+}
+
+function ExaminationsPageSkeleton({ detail }: { detail: boolean }) {
+  return (
+    <div className="min-w-0" role="status" aria-label="Loading examinations" aria-busy="true">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{detail ? 'Examination' : 'Examinations Results'}</h1>
+          <Skeleton className="mt-2 h-3 w-52 max-w-[60vw]" />
+        </div>
+        <div className="hidden gap-2 sm:flex">
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-32" />
+        </div>
+      </div>
+      <ExaminationContentSkeleton detail={detail} />
+      <span className="sr-only">Loading examination workspace</span>
+    </div>
+  )
+}
+
+function ExaminationContentSkeleton({ detail }: { detail: boolean }) {
+  return (
+    <div className="space-y-4">
+      {detail ? (
+        <div className="flex gap-2 border-b pb-2">
+          {['Routine', 'Enter marks', 'All results', 'Report card'].map(label => (
+            <div key={label} className="px-3 py-1.5">
+              <Skeleton className="h-4 w-20" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col justify-end gap-2 sm:flex-row">
+          <Skeleton className="h-10 w-full sm:w-72" />
+          <Skeleton className="h-9 w-full sm:w-32" />
+          <Skeleton className="h-9 w-full sm:w-36" />
+        </div>
+      )}
+      {detail ? <ExamWorkspaceSkeleton /> : <ResultsTableSkeleton />}
+    </div>
+  )
+}
+
+function ResultsTableSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <div className="grid grid-cols-[minmax(10rem,1.5fr)_minmax(7rem,.8fr)_minmax(7rem,.7fr)_minmax(6rem,.5fr)] gap-4 border-b bg-muted/30 px-4 py-3">
+        {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-3 w-20" />)}
+      </div>
+      {Array.from({ length: 7 }, (_, index) => (
+        <div key={index} className="grid min-h-16 grid-cols-[minmax(10rem,1.5fr)_minmax(7rem,.8fr)_minmax(7rem,.7fr)_minmax(6rem,.5fr)] items-center gap-4 border-b px-4 last:border-b-0">
+          <div className="space-y-2"><Skeleton className="h-3 w-36" /><Skeleton className="h-3 w-20" /></div>
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-7 w-24 rounded-full" />
+          <Skeleton className="h-8 w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ExamWorkspaceSkeleton() {
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><Skeleton className="h-4 w-40" /><Skeleton className="mt-2 h-3 w-56 max-w-full" /></div>
+        <Skeleton className="h-9 w-28" />
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Skeleton className="h-10 flex-1" />
+        <Skeleton className="h-10 w-32" />
+      </div>
+      <div className="mt-3 space-y-2">
+        {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}
+      </div>
+    </div>
+  )
+}
+
+function ReportPreviewSkeleton() {
+  return (
+    <div className="rounded-lg border p-5">
+      <div className="flex justify-between gap-4 border-b pb-4">
+        <div><Skeleton className="h-6 w-48" /><Skeleton className="mt-2 h-3 w-36" /></div>
+        <Skeleton className="h-16 w-28" />
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}
+      </div>
+      <div className="mt-5 space-y-3">
+        {Array.from({ length: 7 }, (_, index) => <Skeleton key={index} className="h-10 w-full" />)}
+      </div>
+    </div>
+  )
+}
+
+function SubjectListSkeleton() {
+  return (
+    <div className="divide-y rounded-md border">
+      {Array.from({ length: 7 }, (_, index) => (
+        <div key={index} className="flex min-h-14 items-center gap-3 px-3">
+          <div className="flex-1 space-y-2"><Skeleton className="h-3 w-40" /><Skeleton className="h-3 w-16" /></div>
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-8 w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function StudentResultsSkeleton() {
+  return (
+    <div role="status" aria-label="Loading examinations and results" aria-busy="true">
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Examinations & Results</h1>
+        <Skeleton className="mt-2 h-3 w-64 max-w-[75vw]" />
+      </div>
+      <Skeleton className="mb-5 h-10 w-full max-w-md" />
+      <div className="mb-5 rounded-lg border p-4">
+        <Skeleton className="h-5 w-44" />
+        <div className="mt-4 space-y-2">
+          {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}
+        </div>
+      </div>
+      <ReportPreviewSkeleton />
+      <span className="sr-only">Loading examination routine and result</span>
+    </div>
+  )
 }
 
 function StaffResults() {
@@ -724,7 +857,7 @@ function StaffResults() {
     if (!query) return studentsQuery.data ?? []
     return (studentsQuery.data ?? []).filter(student => `${student.first_name} ${student.last_name} ${student.admission_number} ${student.roll_number ?? ''}`.toLowerCase().includes(query))
   }, [studentSearch, studentsQuery.data])
-  if (classesLoading || (isExamPage && routeExamQuery.isLoading)) return <LoadingState />
+  if (classesLoading || (isExamPage && routeExamQuery.isLoading)) return <ExaminationsPageSkeleton detail={isExamPage} />
   if (isExamPage && routeExamQuery.error) return <ErrorState message="This examination could not be found or you do not have access to it." />
 
   return (
@@ -741,7 +874,7 @@ function StaffResults() {
           {isExamPage && <><div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">{canWrite && selectedExam?.status === 'draft' && <Button size="sm" variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}<Button variant="outline" size="sm" onClick={() => navigate('/results')}><ArrowLeft className="mr-2 h-4 w-4" /> All examinations</Button>{canWrite && selectedExam && <Button size="sm" variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div><div className="sm:hidden"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" aria-label="Exam actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => navigate('/results')}><ArrowLeft /> All examinations</DropdownMenuItem>{canWrite && selectedExam && <><DropdownMenuSeparator />{selectedExam.status === 'draft' && <DropdownMenuItem disabled={!unusedSubjects.length || publishing} onSelect={openSubjectConfiguration}><Plus /> Add subjects</DropdownMenuItem>}<DropdownMenuItem disabled={publishing} onSelect={() => void setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</DropdownMenuItem></>}{activeTab === 'results' && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={exportExamResults}><Download /> Export CSV</DropdownMenuItem><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={printExamResults}><Printer /> Print report</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></>}
         </div>
       </section>
-      {isExamPage && !classId ? <EmptyState title="Select a class" /> : examsQuery.isLoading ? <LoadingState /> : examsQuery.error ? <ErrorState message={(examsQuery.error as Error).message} /> : (
+      {isExamPage && !classId ? <EmptyState title="Select a class" /> : examsQuery.isLoading ? <ExaminationContentSkeleton detail={isExamPage} /> : examsQuery.error ? <ErrorState message={(examsQuery.error as Error).message} /> : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 max-w-full">
           {isExamPage && <div className="mb-3 ">
             <TabsList className=" justify-start gap-1 bg-transparent p-0">
@@ -782,7 +915,7 @@ function StaffResults() {
             </>}
           </TabsContent>
           <TabsContent value="marks" className="mt-0">
-            {examSubjectsQuery.isLoading && <LoadingState message="Loading configured subjects..." />}
+            {examSubjectsQuery.isLoading && <ExamWorkspaceSkeleton />}
             {examSubjectsQuery.error && <ErrorState message={(examSubjectsQuery.error as Error).message} />}
             <div className={examSubjectsQuery.isLoading || examSubjectsQuery.error ? 'hidden' : undefined}>
             {!examSubjectsQuery.data?.length ? <Card className="border-0 bg-transparent shadow-none"><CardContent className="py-14"><EmptyState title="Configure subjects first" description="Add the subjects and component maximums for this examination." />{canWrite && <div className="mt-4 flex justify-center"><Button onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button></div>}</CardContent></Card> : <><div className="mb-3 xl:hidden"><Sheet open={mobileRosterOpen} onOpenChange={setMobileRosterOpen}><SheetTrigger asChild><Button variant="outline" className="w-full justify-between"><span className="flex items-center gap-2"><Users className="h-4 w-4" /> Students</span><span className="flex min-w-0 items-center gap-2 text-muted-foreground"><span className="max-w-48 truncate">{selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name}` : `${studentsQuery.data?.length ?? 0} available`}</span><ChevronRight className="h-4 w-4" /></span></Button></SheetTrigger><SheetContent side="left" className="w-[88%] gap-0 p-0"><SheetHeader className="border-b pr-12"><SheetTitle>Student roster</SheetTitle><SheetDescription>{studentsQuery.data?.length ?? 0} students in this class</SheetDescription><div className="relative pt-2"><Search className="absolute left-3 top-4.5 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="pl-9" /></div></SheetHeader><ScrollArea className="min-h-0 flex-1"><div className="space-y-1 p-2">{filteredStudents.map(student => { const result = examResultRows.find(row => row.id === student.id); const active = student.id === selectedStudentId; const initials = `${student.first_name[0] ?? ''}${student.last_name[0] ?? ''}`.toUpperCase(); return <button type="button" key={student.id} onClick={() => { setSelectedStudentId(student.id); setShareUrl(''); setMobileRosterOpen(false) }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Avatar className="h-9 w-9"><AvatarFallback className={active ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>{initials}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{student.first_name} {student.last_name}</span><span className={`block truncate text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>Roll {student.roll_number ?? '—'} · {student.admission_number}</span></span>{result?.complete && <CheckCircle2 className={`h-4 w-4 ${active ? '' : 'text-emerald-600'}`} />}</button> })}{filteredStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea></SheetContent></Sheet></div><div className="grid min-w-0 xl:grid-cols-[300px_minmax(0,1fr)]">
@@ -832,7 +965,7 @@ function StaffResults() {
                 <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 sm:grid-cols-4"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div><div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div><div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
               </CardHeader>
               <CardContent className="min-w-0 max-w-full p-0">
-                {examMarksQuery.isLoading || studentsQuery.isLoading ? <LoadingState message="Loading all student results..." />
+                {examMarksQuery.isLoading || studentsQuery.isLoading ? <ResultsTableSkeleton />
                   : examMarksQuery.error ? <ErrorState message={(examMarksQuery.error as Error).message} />
                     : studentsQuery.error ? <ErrorState message={(studentsQuery.error as Error).message} />
                       : examResultRows.length === 0 ? <EmptyState title="No students found" description="No students belong to this exam roster." />
@@ -844,7 +977,7 @@ function StaffResults() {
           <TabsContent value="preview" className="mt-0 space-y-4">
             <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-4 px-0 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><Eye className="h-5 w-5 text-muted-foreground" /><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{selectedStudent?.first_name} {selectedStudent?.last_name} · {selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
             {shareUrl && <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-2 px-0 pb-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-sm font-medium">Guardian link copied</p><p className="truncate text-xs text-muted-foreground">{shareUrl}</p></div><Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(shareUrl)}><Copy className="mr-2 h-4 w-4" /> Copy again</Button></CardContent></Card>}
-            {previewQuery.isLoading ? <LoadingState /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden"><ResultSheet result={previewQuery.data} /></div> : null}
+            {previewQuery.isLoading ? <ReportPreviewSkeleton /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden"><ResultSheet result={previewQuery.data} /></div> : null}
           </TabsContent>
         </Tabs>
       )}
@@ -882,7 +1015,7 @@ function StaffResults() {
           </div>
           <div className="flex items-center justify-between px-5 pt-2"><div><p className="font-semibold capitalize">{settingsGroup} subjects</p><p className="text-xs text-muted-foreground">Used by all {settingsGroup} classes and exams.</p></div><Button size="sm" onClick={() => { setEditingSubjectId(null); setSubjectForm({ name: '', code: '', isFourthSubject: false }); setSubjectDialog(true) }}><Plus className="mr-2 h-4 w-4" /> Add subject</Button></div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3">
-            {subjectsQuery.isLoading ? <LoadingState message="Loading subjects..." /> : !subjectsQuery.data?.length ? <EmptyState title="No subjects defined" description={`Add the first subject for ${settingsGroup}.`} /> : <div className="divide-y rounded-md border">{subjectsQuery.data.map(subject => <div key={subject.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></div>{subject.is_fourth_subject && <Badge variant="outline">Elective / fourth</Badge>}<Badge variant={subject.is_active ? 'secondary' : 'outline'}>{subject.is_active ? 'Active' : 'Disabled'}</Badge><Button type="button" variant="ghost" size="icon-sm" onClick={() => editSubject(subject)} aria-label={`Edit ${subject.name}`}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" onClick={() => void toggleSubject(subject)}>{subject.is_active ? 'Disable' : 'Enable'}</Button></div>)}</div>}
+            {subjectsQuery.isLoading ? <SubjectListSkeleton /> : !subjectsQuery.data?.length ? <EmptyState title="No subjects defined" description={`Add the first subject for ${settingsGroup}.`} /> : <div className="divide-y rounded-md border">{subjectsQuery.data.map(subject => <div key={subject.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></div>{subject.is_fourth_subject && <Badge variant="outline">Elective / fourth</Badge>}<Badge variant={subject.is_active ? 'secondary' : 'outline'}>{subject.is_active ? 'Active' : 'Disabled'}</Badge><Button type="button" variant="ghost" size="icon-sm" onClick={() => editSubject(subject)} aria-label={`Edit ${subject.name}`}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" onClick={() => void toggleSubject(subject)}>{subject.is_active ? 'Disable' : 'Enable'}</Button></div>)}</div>}
           </div>
         </DialogContent>
       </Dialog>
