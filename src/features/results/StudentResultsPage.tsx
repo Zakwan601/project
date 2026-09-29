@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { EmptyState, ErrorState, PageHeader } from '@/components/shared/PageHeader'
 import { ResultSheet } from '@/features/results/ResultSheet'
+import { printReportCard } from '@/lib/printReportCard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -130,7 +131,7 @@ export function StudentResultsPage() {
     <PageHeader
       title="My Examinations & Results"
       description="View your examination routine and published results."
-      action={resultQuery.data ? <Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print</Button> : undefined}
+      action={resultQuery.data ? <Button variant="outline" onClick={printReportCard}><Printer className="mr-2 h-4 w-4" /> Print</Button> : undefined}
     />
     {!examsQuery.data?.length ? <EmptyState title="No examinations available" description="Your examination routines and results will appear here." /> : <>
       <div className="mb-5 max-w-md">
@@ -147,6 +148,7 @@ export function StudentResultsPage() {
           <CardDescription className="flex flex-wrap items-center gap-2">
             {selectedExam && <Badge variant={selectedExam.has_regular_classes ? 'secondary' : 'default'}>{selectedExam.has_regular_classes ? 'Exam + classes' : 'Exam only'}</Badge>}
             {selectedExam && <Badge variant="outline">{selectedExam.combine_subject_papers ? 'Combined papers' : 'Separate papers'}</Badge>}
+            {selectedExam && <Badge variant="outline">{selectedExam.count_fourth_subject ? 'Fourth-subject bonus counted' : 'Fourth subject excluded from GPA'}</Badge>}
             <span>{selectedExam?.classes.name}</span>
           </CardDescription>
         </CardHeader>

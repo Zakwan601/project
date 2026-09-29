@@ -462,6 +462,7 @@ export interface ResultExam {
   exam_date: string
   has_regular_classes: boolean
   combine_subject_papers: boolean
+  count_fourth_subject: boolean
   status: ResultExamStatus
   published_at: string | null
   created_by: string | null
@@ -520,6 +521,7 @@ export interface StudentResultPayload {
     grade: string
     section: string
     academic_year: string
+    count_fourth_subject: boolean
   }
   student: {
     id: string

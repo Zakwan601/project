@@ -364,7 +364,7 @@ export function LoginPage() {
               </div>
 
               {turnstileSiteKey ? (
-                <div className="min-h-[65px]">
+                <div className="">
                   <Turnstile
                     ref={turnstileRef}
                     siteKey={turnstileSiteKey}

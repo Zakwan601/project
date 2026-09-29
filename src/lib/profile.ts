@@ -18,6 +18,11 @@ export function normalizeBangladeshMobile(value: string) {
 }
 
 export function isProfileComplete(profile: Profile | null | undefined, student?: Student | null) {
+  // Sub-admin access is controlled by explicit permission grants. Newly created
+  // sub-admins do not have a phone number yet, so treating the phone as an
+  // access prerequisite hides every granted module and leaves only Profile.
+  if (profile?.role === 'sub_admin') return true
+
   if (profile?.role === 'student') {
     return Boolean(
       student

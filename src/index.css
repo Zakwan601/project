@@ -164,6 +164,105 @@
   .result-sheet { max-width: none !important; }
 }
 
+#report-card-print-root {
+  display: none;
+}
+
+@media print {
+  body.report-card-printing {
+    margin: 0 !important;
+    background: white !important;
+  }
+
+  body.report-card-printing > :not(#report-card-print-root) {
+    display: none !important;
+  }
+
+  body.report-card-printing #report-card-print-root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.45 0 0);
+    --destructive: oklch(0.5 0.2 27.325);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(0.82 0 0);
+    display: block !important;
+    box-sizing: border-box;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0;
+    padding: 10mm 12mm;
+    color: var(--foreground);
+    background: white;
+    font-family: Arial, Helvetica, sans-serif;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    border: 1px solid #b8bec8 !important;
+    border-radius: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet > [data-slot=card-content] {
+    padding: 8mm !important;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet img {
+    width: 18mm !important;
+    height: 18mm !important;
+    margin-bottom: 4mm !important;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet thead {
+    display: table-header-group;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet th,
+  body.report-card-printing #report-card-print-root .result-sheet td {
+    position: static !important;
+    padding: 2.5mm 1.5mm !important;
+    border: 1px solid #b8bec8 !important;
+    font-size: 9pt !important;
+    line-height: 1.25 !important;
+    white-space: normal !important;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet th {
+    color: #111827 !important;
+    background: #eef1f5 !important;
+    font-weight: 700;
+  }
+
+  body.report-card-printing #report-card-print-root .result-sheet .sticky {
+    position: static !important;
+  }
+}
+
 .student-report-print {
   display: none;
 }

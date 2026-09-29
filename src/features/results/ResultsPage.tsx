@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useClasses } from '@/hooks/useClasses'
 import { EmptyState, ErrorState } from '@/components/shared/PageHeader'
 import { ResultSheet } from '@/features/results/ResultSheet'
+import { printReportCard } from '@/lib/printReportCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,7 @@ import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
   examSubjectAppliesToStudent,
+  calculateOfficialGpa,
   gradeSubject,
   overallGrade,
   type ClassSubject,
@@ -185,6 +187,8 @@ function StaffResults() {
   const [examId, setExamId] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [studentSearch, setStudentSearch] = useState('')
+  const [previewStudentId, setPreviewStudentId] = useState('')
+  const [previewStudentSearch, setPreviewStudentSearch] = useState('')
   const [examDialog, setExamDialog] = useState(false)
   const [editExamDialog, setEditExamDialog] = useState(false)
   const [subjectDialog, setSubjectDialog] = useState(false)
@@ -192,8 +196,8 @@ function StaffResults() {
   const [configDialog, setConfigDialog] = useState(false)
   const [configureAfterCreateExamId, setConfigureAfterCreateExamId] = useState<string | null>(null)
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null)
-  const [examForm, setExamForm] = useState({ classIds: [] as string[], typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false })
-  const [editExamForm, setEditExamForm] = useState({ typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false })
+  const [examForm, setExamForm] = useState({ classIds: [] as string[], typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false, countFourthSubject: false })
+  const [editExamForm, setEditExamForm] = useState({ typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false, countFourthSubject: false })
   const [subjectForm, setSubjectForm] = useState({ name: '', code: '', isFourthSubject: false })
   const [settingsGroup, setSettingsGroup] = useState<ClassGroup>('science')
   const [configRows, setConfigRows] = useState<Record<string, ExamSubjectConfigDraft>>({})
@@ -204,6 +208,7 @@ function StaffResults() {
   const [shareUrl, setShareUrl] = useState('')
   const [publishing, setPublishing] = useState(false)
   const [mobileRosterOpen, setMobileRosterOpen] = useState(false)
+  const [mobilePreviewRosterOpen, setMobilePreviewRosterOpen] = useState(false)
   const activeExamId = routeExamId || examId
 
   const examClasses = useMemo(
@@ -256,6 +261,18 @@ function StaffResults() {
     setExamId(routeExamId)
     setActiveTab('routine')
   }, [routeExamId, routeExamQuery.data])
+
+  useEffect(() => {
+    setSelectedStudentId('')
+    setStudentSearch('')
+    setPreviewStudentId('')
+    setPreviewStudentSearch('')
+    setShareUrl('')
+  }, [routeExamId])
+
+  useEffect(() => {
+    if (!canWrite && activeTab === 'marks') setActiveTab(isExamPage ? 'results' : 'overview')
+  }, [activeTab, canWrite, isExamPage])
 
   const selectedClassGroup = classes.find(item => item.id === classId)?.class_group
   const subjectGroup = isExamPage ? selectedClassGroup : settingsGroup
@@ -390,9 +407,9 @@ function StaffResults() {
   }, [selectedStudentId, examSubjectsQuery.data, marksQuery.data, studentCurriculumQuery.data, curriculumByStudentId, courseOptionsQuery.data])
 
   const previewQuery = useQuery<StudentResultPayload>({
-    queryKey: ['result-preview', examId, selectedStudentId], enabled: Boolean(examId && selectedStudentId),
+    queryKey: ['result-preview', activeExamId, previewStudentId], enabled: Boolean(activeExamId && previewStudentId),
     queryFn: async () => {
-      const { data, error } = await db.rpc('get_student_result', { p_exam_id: examId, p_student_id: selectedStudentId })
+      const { data, error } = await db.rpc('get_student_result', { p_exam_id: activeExamId, p_student_id: previewStudentId })
       if (error) throw error
       return data as StudentResultPayload
     },
@@ -432,10 +449,18 @@ function StaffResults() {
       })) as Record<string, ExamResultSubjectCell>
       const cells = Object.values(subjectResults)
       const complete = cells.length > 0 && cells.every(cell => cell.complete)
-      const failedSubjects = cells.filter(cell => cell.complete && !cell.passed).length
-      const gpa = complete
-        ? failedSubjects > 0 ? 0 : Number((cells.reduce((sum, cell) => sum + cell.gradePoint, 0) / cells.length).toFixed(2))
-        : null
+      const officialGpa = studentCurriculum
+        ? calculateOfficialGpa(
+          applicableSubjects,
+          subjectResults,
+          studentCurriculum,
+          courseOptionsQuery.data ?? [],
+          paperGroupsQuery.data ?? [],
+          selectedExam?.count_fourth_subject ?? false,
+        )
+        : { gpa: 0, failedMainSubjects: 0 }
+      const failedSubjects = officialGpa.failedMainSubjects
+      const gpa = complete ? officialGpa.gpa : null
       return {
         id: student.id,
         name: `${student.first_name} ${student.last_name}`.trim(),
@@ -462,7 +487,7 @@ function StaffResults() {
         previousTotal = row.totalObtained
       })
     return rows.map(row => ({ ...row, position: positions.get(row.id) ?? null }))
-  }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data, curriculumByStudentId, courseOptionsQuery.data])
+  }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data, curriculumByStudentId, courseOptionsQuery.data, paperGroupsQuery.data, selectedExam?.count_fourth_subject])
 
   const examSubjectResultText = (row: ExamResultReportRow, subject: ExamSubject) => {
     const result = row.subjects[subject.id]
@@ -526,12 +551,13 @@ function StaffResults() {
       p_exam_date: examForm.date,
       p_has_regular_classes: examForm.hasRegularClasses,
       p_combine_subject_papers: examForm.combineSubjectPapers,
+      p_count_fourth_subject: examForm.countFourthSubject,
     })
     if (error) return toast.error(error.message)
     const created = data as Array<{ exam_id: string; class_id: string }>
     const firstExam = created.find(item => item.class_id === classId) ?? created[0]
     await qc.invalidateQueries({ queryKey: ['result-exams'] })
-    setExamDialog(false); setExamForm({ classIds: [], typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false }); setExamId(firstExam?.exam_id ?? ''); setActiveTab('routine')
+    setExamDialog(false); setExamForm({ classIds: [], typeId: '', title: '', date: '', hasRegularClasses: true, combineSubjectPapers: false, countFourthSubject: false }); setExamId(firstExam?.exam_id ?? ''); setActiveTab('routine')
     if (firstExam) {
       setConfigureAfterCreateExamId(firstExam.exam_id)
       navigate(`/results/${firstExam.exam_id}`)
@@ -552,6 +578,7 @@ function StaffResults() {
       date: selectedExam.exam_date,
       hasRegularClasses: selectedExam.has_regular_classes,
       combineSubjectPapers: selectedExam.combine_subject_papers,
+      countFourthSubject: selectedExam.count_fourth_subject,
     })
     setEditExamDialog(true)
   }
@@ -565,6 +592,7 @@ function StaffResults() {
       p_exam_date: editExamForm.date,
       p_has_regular_classes: editExamForm.hasRegularClasses,
       p_combine_subject_papers: editExamForm.combineSubjectPapers,
+      p_count_fourth_subject: editExamForm.countFourthSubject,
     })
     if (error) return toast.error(error.message)
     setEditExamDialog(false)
@@ -822,9 +850,9 @@ function StaffResults() {
   }
 
   const createShareLink = async () => {
-    if (!selectedStudentId) return toast.error('Select a student first')
+    if (!previewStudentId) return toast.error('Select a student first')
     const { data, error } = await db.rpc('create_result_share_link', {
-      p_exam_id: examId, p_student_id: selectedStudentId, p_expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+      p_exam_id: activeExamId, p_student_id: previewStudentId, p_expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
     })
     if (error) return toast.error(error.message)
     const url = `${window.location.origin}/shared-result/${data}`
@@ -865,6 +893,7 @@ function StaffResults() {
   const unusedSubjects = configurableSubjects
   const attachSubjects = saveExamSubjects
   const selectedStudent = studentsQuery.data?.find(student => student.id === selectedStudentId)
+  const previewStudent = studentsQuery.data?.find(student => student.id === previewStudentId)
   const selectedStudentCurriculum = curriculumByStudentId.get(selectedStudentId)
   const applicableExamSubjects = useMemo(
     () => selectedStudentCurriculum
@@ -880,6 +909,11 @@ function StaffResults() {
     if (!query) return studentsQuery.data ?? []
     return (studentsQuery.data ?? []).filter(student => `${student.first_name} ${student.last_name} ${student.admission_number} ${student.roll_number ?? ''}`.toLowerCase().includes(query))
   }, [studentSearch, studentsQuery.data])
+  const filteredPreviewStudents = useMemo(() => {
+    const query = previewStudentSearch.trim().toLowerCase()
+    if (!query) return studentsQuery.data ?? []
+    return (studentsQuery.data ?? []).filter(student => `${student.first_name} ${student.last_name} ${student.admission_number} ${student.roll_number ?? ''}`.toLowerCase().includes(query))
+  }, [previewStudentSearch, studentsQuery.data])
   if (classesLoading || (isExamPage && routeExamQuery.isLoading)) return <ExaminationsPageSkeleton detail={isExamPage} />
   if (isExamPage && routeExamQuery.error) return <ErrorState message="This examination could not be found or you do not have access to it." />
 
@@ -902,9 +936,9 @@ function StaffResults() {
           {isExamPage && <div className="mb-3 ">
             <TabsList className=" justify-start gap-1 bg-transparent p-0">
               <TabsTrigger value="routine" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Routine</TabsTrigger>
-              <TabsTrigger value="marks" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Enter marks</TabsTrigger>
+              {canWrite && <TabsTrigger value="marks" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Enter marks</TabsTrigger>}
               <TabsTrigger value="results" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> All results</TabsTrigger>
-              <TabsTrigger value="preview" disabled={!selectedStudentId} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Report card</TabsTrigger>
+              <TabsTrigger value="preview" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Report card</TabsTrigger>
             </TabsList>
           </div>}
           <TabsContent value="overview" className="mt-0 space-y-5">
@@ -937,7 +971,7 @@ function StaffResults() {
               <ExamScheduleManager examGroupId={selectedExam.exam_group_id} classId={selectedExam.class_id} canWrite={canWrite} hasRegularClasses={selectedExam.has_regular_classes} combineSubjectPapers={selectedExam.combine_subject_papers} />
             </>}
           </TabsContent>
-          <TabsContent value="marks" className="mt-0">
+          {canWrite && <TabsContent value="marks" className="mt-0">
             {examSubjectsQuery.isLoading && <ExamWorkspaceSkeleton />}
             {examSubjectsQuery.error && <ErrorState message={(examSubjectsQuery.error as Error).message} />}
             <div className={examSubjectsQuery.isLoading || examSubjectsQuery.error ? 'hidden' : undefined}>
@@ -977,7 +1011,7 @@ function StaffResults() {
               </div>}
             </div></>}
             </div>
-          </TabsContent>
+          </TabsContent>}
           <TabsContent value="results" className="mt-0 min-w-0 max-w-full overflow-hidden">
             <Card className="min-w-0 max-w-full rounded-none border-0 bg-transparent shadow-none">
               <CardHeader className="border-b px-0 pb-5 pt-0">
@@ -998,14 +1032,32 @@ function StaffResults() {
           </TabsContent>
 
           <TabsContent value="preview" className="mt-0 space-y-4">
-            <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-4 px-0 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><Eye className="h-5 w-5 text-muted-foreground" /><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{selectedStudent?.first_name} {selectedStudent?.last_name} · {selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
+            <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-4 px-0 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{previewStudent ? `${previewStudent.first_name} ${previewStudent.last_name} · ` : ''}{selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && previewStudentId && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button disabled={!previewStudentId || previewQuery.isLoading} onClick={printReportCard}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
+            <div className="hidden xl:block">
+              <Select value={previewStudentId} onValueChange={value => { setPreviewStudentId(value); setShareUrl('') }}>
+                <SelectTrigger className="max-w-md"><SelectValue placeholder="Choose a student to preview" /></SelectTrigger>
+                <SelectContent>{studentsQuery.data?.map(student => <SelectItem key={student.id} value={student.id}>{student.first_name} {student.last_name} · Roll {student.roll_number ?? '—'}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="xl:hidden">
+              <Sheet open={mobilePreviewRosterOpen} onOpenChange={setMobilePreviewRosterOpen}>
+                <SheetTrigger asChild><Button variant="outline" className="w-full justify-between"><span className="flex items-center gap-2"><Users className="h-4 w-4" /> Students</span><span className="flex min-w-0 items-center gap-2 text-muted-foreground"><span className="max-w-48 truncate">{previewStudent ? `${previewStudent.first_name} ${previewStudent.last_name}` : `${studentsQuery.data?.length ?? 0} available`}</span><ChevronRight className="h-4 w-4" /></span></Button></SheetTrigger>
+                <SheetContent side="left" className="w-[88%] gap-0 p-0"><SheetHeader className="border-b pr-12"><SheetTitle>Student roster</SheetTitle><SheetDescription>{studentsQuery.data?.length ?? 0} students in this class</SheetDescription><div className="relative pt-2"><Search className="absolute left-3 top-4.5 h-4 w-4 text-muted-foreground" /><Input value={previewStudentSearch} onChange={event => setPreviewStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="pl-9" /></div></SheetHeader><ScrollArea className="min-h-0 flex-1"><div className="space-y-1 p-2">{filteredPreviewStudents.map(student => { const result = examResultRows.find(row => row.id === student.id); const active = student.id === previewStudentId; const initials = `${student.first_name[0] ?? ''}${student.last_name[0] ?? ''}`.toUpperCase(); return <button type="button" key={student.id} onClick={() => { setPreviewStudentId(student.id); setShareUrl(''); setMobilePreviewRosterOpen(false) }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Avatar className="h-9 w-9"><AvatarFallback className={active ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>{initials}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{student.first_name} {student.last_name}</span><span className={`block truncate text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>Roll {student.roll_number ?? '—'} · {student.admission_number}</span></span>{result?.complete && <CheckCircle2 className={`h-4 w-4 ${active ? '' : 'text-emerald-600'}`} />}</button> })}{filteredPreviewStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea></SheetContent>
+              </Sheet>
+            </div>
             {shareUrl && <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-2 px-0 pb-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-sm font-medium">Guardian link copied</p><p className="truncate text-xs text-muted-foreground">{shareUrl}</p></div><Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(shareUrl)}><Copy className="mr-2 h-4 w-4" /> Copy again</Button></CardContent></Card>}
-            {previewQuery.isLoading ? <ReportPreviewSkeleton /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden"><ResultSheet result={previewQuery.data} /></div> : null}
+            {!previewStudentId ? <Card className="border-0 bg-transparent shadow-none"><CardContent className="py-14"><EmptyState title="Select a student" description="Choose a student to preview and print their report card." /></CardContent></Card> : previewQuery.isLoading ? <ReportPreviewSkeleton /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden"><ResultSheet result={previewQuery.data} /></div> : null}
           </TabsContent>
         </Tabs>
       )}
 
       <SimpleDialog open={examDialog} onOpenChange={setExamDialog} title="Create examination" description="Choose the classes, day mode, and whether subject papers are combined." onSave={createExam} saveLabel={examForm.classIds.length > 1 ? `Create for ${examForm.classIds.length} classes` : 'Create exam'}>
+        <Label>Fourth subject in GPA</Label>
+        <Select value={examForm.countFourthSubject ? 'count' : 'exclude'} onValueChange={value => setExamForm(current => ({ ...current, countFourthSubject: value === 'count' }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="exclude">Do not count fourth subject</SelectItem><SelectItem value="count">Count fourth-subject bonus</SelectItem></SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">When counted, only points above 2 are added: (six main-subject points + fourth-subject points - 2) / 6, capped at 5.00.</p>
         <Label>
           Classes from all sessions
         </Label>
@@ -1013,6 +1065,12 @@ function StaffResults() {
           <label className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm font-medium">
             <Checkbox checked={examClasses.length > 0 && examForm.classIds.length === examClasses.length} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? examClasses.map(item => item.id) : [] }))} /> Select all classes</label>{examClasses.map(item => <label key={item.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm last:border-b-0"><Checkbox checked={examForm.classIds.includes(item.id)} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? [...new Set([...current.classIds, item.id])] : current.classIds.filter(id => id !== item.id) }))} /><span className="min-w-0"><span className="block truncate font-medium">{item.name} ({item.grade}-{item.section})</span><span className="block text-xs text-muted-foreground">{item.academic_years?.name}</span></span></label>)}</div><p className="text-xs text-muted-foreground">{examForm.classIds.length} class{examForm.classIds.length === 1 ? '' : 'es'} selected</p><Label>Exam type</Label><Select value={examForm.typeId} onValueChange={value => setExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select><Label>Custom title (optional)</Label><Input value={examForm.title} onChange={event => setExamForm(current => ({ ...current, title: event.target.value }))} placeholder="e.g. First Monthly Exam" /><Label>Examination mode</Label><Select value={examForm.hasRegularClasses ? 'with_classes' : 'exam_only'} onValueChange={value => setExamForm(current => ({ ...current, hasRegularClasses: value === 'with_classes' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="with_classes">Exam + classes</SelectItem><SelectItem value="exam_only">Exam only</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">This choice applies to every date in the routine.</p><Label>Subject papers</Label><Select value={examForm.combineSubjectPapers ? 'combined' : 'separate'} onValueChange={value => setExamForm(current => ({ ...current, combineSubjectPapers: value === 'combined' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="separate">Take 1st and 2nd papers separately</SelectItem><SelectItem value="combined">Take both papers combined</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">{examForm.combineSubjectPapers ? 'Each 1st/2nd-paper pair will appear as one subject, such as Bangla.' : 'Each paper will be configured as its own subject.'}</p><Label>Reference date</Label><Input type="date" value={examForm.date} min={examDateMin} max={examDateMax} onChange={event => setExamForm(current => ({ ...current, date: event.target.value }))} /></SimpleDialog>
       <SimpleDialog open={editExamDialog} onOpenChange={setEditExamDialog} title="Edit examination" description="Changes apply to every class included in this examination." onSave={updateExam} saveLabel="Save changes">
+        <Label>Fourth subject in GPA</Label>
+        <Select value={editExamForm.countFourthSubject ? 'count' : 'exclude'} onValueChange={value => setEditExamForm(current => ({ ...current, countFourthSubject: value === 'count' }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="exclude">Do not count fourth subject</SelectItem><SelectItem value="count">Count fourth-subject bonus</SelectItem></SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">This changes GPA calculation for every class in the examination.</p>
         <Label>Exam type</Label>
         <Select value={editExamForm.typeId} onValueChange={value => setEditExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active || type.id === editExamForm.typeId).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select>
         <Label>Custom title (optional)</Label>

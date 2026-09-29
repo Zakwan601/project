@@ -25,6 +25,7 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
             {exam.title || exam.exam_type} · {exam.academic_year}
           </p>
           {publicView && <Badge variant="outline" className="mt-2">Guardian copy</Badge>}
+          {exam.count_fourth_subject && <Badge variant="outline" className="ml-2 mt-2">Fourth-subject counted</Badge>}
         </div>
 
         <div className="mb-5 grid grid-cols-2 gap-x-3 gap-y-3 rounded-lg border bg-muted/30 p-3 text-sm sm:p-4 lg:grid-cols-4">

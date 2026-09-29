@@ -81,6 +81,8 @@ export interface ResultSubjectPaperGroup {
   is_active: boolean
 }
 
+export type ExamSubjectRole = 'main' | 'fourth'
+
 export interface ConfigurableExamSubject extends ClassSubject {
   paper_group_id: string | null
 }
@@ -138,19 +140,91 @@ export function examSubjectAppliesToStudent(
   student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id'>,
   courseOptions: SubjectCourseOption[],
 ) {
-  if (!examSubject.subjects.is_fourth_subject) return true
+  return examSubjectRoleForStudent(examSubject, student, courseOptions) !== null
+}
+
+export function examSubjectRoleForStudent(
+  examSubject: ExamSubject,
+  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id'>,
+  courseOptions: SubjectCourseOption[],
+): ExamSubjectRole | null {
+  if (!examSubject.subjects.is_fourth_subject) return 'main'
 
   const optionById = new Map(courseOptions.map(option => [option.id, option]))
-  const selectedSubjectIds = new Set<string>()
-  for (const optionId of [student.group_elective_option_id, student.group_fourth_option_id]) {
-    if (!optionId) continue
-    const option = optionById.get(optionId)
-    if (!option) continue
-    selectedSubjectIds.add(option.first_paper_subject_id)
-    selectedSubjectIds.add(option.second_paper_subject_id)
-  }
-  if (student.fourth_subject_id) selectedSubjectIds.add(student.fourth_subject_id)
-  if (student.optional_subject_2_id) selectedSubjectIds.add(student.optional_subject_2_id)
+  const elective = student.group_elective_option_id
+    ? optionById.get(student.group_elective_option_id)
+    : undefined
+  const fourth = student.group_fourth_option_id
+    ? optionById.get(student.group_fourth_option_id)
+    : undefined
+  const electiveIds = new Set([elective?.first_paper_subject_id, elective?.second_paper_subject_id].filter(Boolean))
+  const fourthIds = new Set([
+    fourth?.first_paper_subject_id,
+    fourth?.second_paper_subject_id,
+    student.fourth_subject_id,
+    student.optional_subject_2_id,
+  ].filter(Boolean))
 
-  return selectedSubjectIds.has(examSubject.subject_id)
+  if (fourthIds.has(examSubject.subject_id)) return 'fourth'
+  if (electiveIds.has(examSubject.subject_id)) return 'main'
+  return null
+}
+
+export function examSubjectCourseKey(examSubject: ExamSubject, paperGroups: ResultSubjectPaperGroup[]) {
+  if (examSubject.paper_group_id) return examSubject.paper_group_id
+  const group = paperGroups.find(item =>
+    item.first_paper_subject_id === examSubject.subject_id
+    || item.second_paper_subject_id === examSubject.subject_id,
+  )
+  return group?.id ?? examSubject.subject_id
+}
+
+export function calculateOfficialGpa(
+  examSubjects: ExamSubject[],
+  subjectResults: Record<string, ExamResultSubjectCell>,
+  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id'>,
+  courseOptions: SubjectCourseOption[],
+  paperGroups: ResultSubjectPaperGroup[],
+  countFourthSubject: boolean,
+) {
+  const courses = new Map<string, {
+    role: ExamSubjectRole
+    obtained: number
+    totalMax: number
+    passMark: number
+    absent: boolean
+    complete: boolean
+  }>()
+
+  for (const subject of examSubjects) {
+    const role = examSubjectRoleForStudent(subject, student, courseOptions)
+    const result = subjectResults[subject.id]
+    if (!role || !result) continue
+    const key = examSubjectCourseKey(subject, paperGroups)
+    const course = courses.get(key) ?? {
+      role, obtained: 0, totalMax: 0, passMark: 0, absent: false, complete: true,
+    }
+    course.obtained += result.obtained
+    course.totalMax += result.totalMax
+    course.passMark += subject.pass_mark
+    course.absent ||= result.absent
+    course.complete &&= result.complete
+    courses.set(key, course)
+  }
+
+  const graded = [...courses.values()].map(course => ({
+    ...course,
+    grade: gradeSubject(course.obtained, course.totalMax, course.passMark, course.absent),
+  }))
+  const main = graded.filter(course => course.role === 'main')
+  const fourth = graded.filter(course => course.role === 'fourth')
+  const failedMainSubjects = main.filter(course => course.complete && !course.grade.passed).length
+  const mainGradePointTotal = main.reduce((sum, course) => sum + course.grade.gradePoint, 0)
+  const fourthGradePoint = fourth.reduce((highest, course) => Math.max(highest, course.grade.gradePoint), 0)
+  const fourthBonus = countFourthSubject ? Math.max(fourthGradePoint - 2, 0) : 0
+  const gpa = failedMainSubjects > 0
+    ? 0
+    : Math.min(5, Number(((mainGradePointTotal + fourthBonus) / 6).toFixed(2)))
+
+  return { gpa, failedMainSubjects, mainSubjectCount: main.length, fourthBonus }
 }
