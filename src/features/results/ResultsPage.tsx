@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Eye, Link2, Pencil, Plus, Printer, Search, Send, Settings, Users } from 'lucide-react'
@@ -28,7 +28,7 @@ import type { ClassGroup, ResultExamType, StudentResultPayload, Student } from '
 import { downloadCsv } from '@/lib/csv'
 import { MarkInput, SimpleDialog } from '@/features/results/ResultControls'
 import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
-import { lazyWithRetry } from '@/lib/lazyWithRetry'
+import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
   gradeSubject,
@@ -49,18 +49,13 @@ import {
 
 
 const db = supabase as any
-const StudentResultsPage = lazyWithRetry(
-  () => import('@/features/results/StudentResultsPage'),
-  module => module.StudentResultsPage,
-)
-
 const examSubjectName = (subject: ExamSubject) => subject.result_subject_paper_groups?.name ?? subject.subjects.name
 const examSubjectCode = (subject: ExamSubject) => subject.result_subject_paper_groups?.code ?? subject.subjects.code
 
 export function ResultsPage() {
   const { role } = useAuth()
   return role === 'student'
-    ? <Suspense fallback={<StudentResultsSkeleton />}><StudentResultsPage /></Suspense>
+    ? <StudentResultsPage />
     : <StaffResults />
 }
 
@@ -172,26 +167,6 @@ function SubjectListSkeleton() {
           <Skeleton className="h-8 w-16" />
         </div>
       ))}
-    </div>
-  )
-}
-
-function StudentResultsSkeleton() {
-  return (
-    <div role="status" aria-label="Loading examinations and results" aria-busy="true">
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Examinations & Results</h1>
-        <Skeleton className="mt-2 h-3 w-64 max-w-[75vw]" />
-      </div>
-      <Skeleton className="mb-5 h-10 w-full max-w-md" />
-      <div className="mb-5 rounded-lg border p-4">
-        <Skeleton className="h-5 w-44" />
-        <div className="mt-4 space-y-2">
-          {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}
-        </div>
-      </div>
-      <ReportPreviewSkeleton />
-      <span className="sr-only">Loading examination routine and result</span>
     </div>
   )
 }

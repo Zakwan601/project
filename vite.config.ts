@@ -59,23 +59,6 @@ export default defineConfig({
       },
     }),
   ],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return
-          if (id.includes("lucide-react")) return "icons"
-          if (id.includes("@radix-ui")) return "radix"
-          if (id.includes("@supabase")) return "supabase"
-          if (id.includes("@tanstack")) return "query"
-          if (id.includes("recharts")) return "charts"
-          if (id.includes("exceljs")) return "exceljs"
-          if (id.includes("date-fns")) return "dates"
-          return "vendor"
-        },
-      },
-    },
-  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
