@@ -1,4 +1,4 @@
-import type { ClassGroup, ResultExam } from '@/types/database'
+import type { ClassGroup, ResultExam, Student, SubjectCourseOption } from '@/types/database'
 
 export interface ExamWithDetails extends ResultExam {
   result_exam_types: { name: string }
@@ -131,4 +131,26 @@ export function overallGrade(gpa: number, failedSubjects: number) {
 
 export function examSubjectTotal(subject: ExamSubject) {
   return subject.creative_max + subject.written_max + subject.practical_max
+}
+
+export function examSubjectAppliesToStudent(
+  examSubject: ExamSubject,
+  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id'>,
+  courseOptions: SubjectCourseOption[],
+) {
+  if (!examSubject.subjects.is_fourth_subject) return true
+
+  const optionById = new Map(courseOptions.map(option => [option.id, option]))
+  const selectedSubjectIds = new Set<string>()
+  for (const optionId of [student.group_elective_option_id, student.group_fourth_option_id]) {
+    if (!optionId) continue
+    const option = optionById.get(optionId)
+    if (!option) continue
+    selectedSubjectIds.add(option.first_paper_subject_id)
+    selectedSubjectIds.add(option.second_paper_subject_id)
+  }
+  if (student.fourth_subject_id) selectedSubjectIds.add(student.fourth_subject_id)
+  if (student.optional_subject_2_id) selectedSubjectIds.add(student.optional_subject_2_id)
+
+  return selectedSubjectIds.has(examSubject.subject_id)
 }

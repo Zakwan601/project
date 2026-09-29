@@ -24,13 +24,14 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { ClassGroup, ResultExamType, StudentResultPayload, Student } from '@/types/database'
+import type { ClassGroup, ResultExamType, StudentResultPayload, Student, SubjectCourseOption } from '@/types/database'
 import { downloadCsv } from '@/lib/csv'
 import { MarkInput, SimpleDialog } from '@/features/results/ResultControls'
 import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
+  examSubjectAppliesToStudent,
   gradeSubject,
   overallGrade,
   type ClassSubject,
@@ -278,6 +279,17 @@ function StaffResults() {
     },
   })
 
+  const courseOptionsQuery = useQuery<SubjectCourseOption[]>({
+    queryKey: ['result-subject-course-options', subjectGroup],
+    enabled: Boolean(subjectGroup && isExamPage),
+    queryFn: async () => {
+      const { data, error } = await db.from('subject_course_options')
+        .select('*').eq('class_group', subjectGroup)
+      if (error) throw error
+      return data as SubjectCourseOption[]
+    },
+  })
+
   const examsQuery = useQuery<ExamWithDetails[]>({
     queryKey: ['result-exams', isExamPage ? classId : classId || 'all'], enabled: !isExamPage || Boolean(classId),
     queryFn: async () => {
@@ -316,6 +328,24 @@ function StaffResults() {
     },
   })
 
+  const studentCurriculumQuery = useQuery<Student[]>({
+    queryKey: ['result-roster-curriculum', selectedExam?.id, studentsQuery.data?.map(student => student.id).join(',')],
+    enabled: Boolean(selectedExam && studentsQuery.data?.length),
+    queryFn: async () => {
+      const studentIds = studentsQuery.data!.map(student => student.id)
+      const { data, error } = await db.from('students')
+        .select('id,class_group,fourth_subject_id,optional_subject_2_id,group_elective_option_id,group_fourth_option_id')
+        .in('id', studentIds)
+      if (error) throw error
+      return data as Student[]
+    },
+  })
+
+  const curriculumByStudentId = useMemo(
+    () => new Map((studentCurriculumQuery.data ?? []).map(student => [student.id, student])),
+    [studentCurriculumQuery.data],
+  )
+
   const marksQuery = useQuery<MarkRow[]>({
     queryKey: ['result-student-marks', examId, selectedStudentId],
     enabled: Boolean(selectedStudentId && examSubjectsQuery.data?.length),
@@ -341,9 +371,14 @@ function StaffResults() {
   })
 
   useEffect(() => {
-    if (!selectedStudentId || !examSubjectsQuery.data) return
+    if (!selectedStudentId || !examSubjectsQuery.data || !studentCurriculumQuery.data) return
+    const studentCurriculum = curriculumByStudentId.get(selectedStudentId)
+    if (!studentCurriculum) return
+    const applicableSubjects = examSubjectsQuery.data.filter(subject =>
+      examSubjectAppliesToStudent(subject, studentCurriculum, courseOptionsQuery.data ?? []),
+    )
     const bySubject = new Map((marksQuery.data ?? []).map(mark => [mark.exam_subject_id, mark]))
-    const nextDrafts = Object.fromEntries(examSubjectsQuery.data.map(examSubject => {
+    const nextDrafts = Object.fromEntries(applicableSubjects.map(examSubject => {
       const mark = bySubject.get(examSubject.id)
       return [examSubject.id, {
         creative: mark?.creative_marks?.toString() ?? '', written: mark?.written_marks?.toString() ?? '',
@@ -352,7 +387,7 @@ function StaffResults() {
     }))
     draftsRef.current = nextDrafts
     setDrafts(nextDrafts)
-  }, [selectedStudentId, examSubjectsQuery.data, marksQuery.data])
+  }, [selectedStudentId, examSubjectsQuery.data, marksQuery.data, studentCurriculumQuery.data, curriculumByStudentId, courseOptionsQuery.data])
 
   const previewQuery = useQuery<StudentResultPayload>({
     queryKey: ['result-preview', examId, selectedStudentId], enabled: Boolean(examId && selectedStudentId),
@@ -370,7 +405,11 @@ function StaffResults() {
       (examMarksQuery.data ?? []).map(mark => [`${mark.student_id}:${mark.exam_subject_id}`, mark]),
     )
     const rows = roster.map(student => {
-      const subjectResults = Object.fromEntries(subjects.map(subject => {
+      const studentCurriculum = curriculumByStudentId.get(student.id)
+      const applicableSubjects = studentCurriculum
+        ? subjects.filter(subject => examSubjectAppliesToStudent(subject, studentCurriculum, courseOptionsQuery.data ?? []))
+        : []
+      const subjectResults = Object.fromEntries(applicableSubjects.map(subject => {
         const mark = marksByStudentAndSubject.get(`${student.id}:${subject.id}`)
         const complete = mark != null && (mark.is_absent || (
           (subject.creative_max <= 0 || mark.creative_marks != null)
@@ -423,7 +462,7 @@ function StaffResults() {
         previousTotal = row.totalObtained
       })
     return rows.map(row => ({ ...row, position: positions.get(row.id) ?? null }))
-  }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data])
+  }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data, curriculumByStudentId, courseOptionsQuery.data])
 
   const examSubjectResultText = (row: ExamResultReportRow, subject: ExamSubject) => {
     const result = row.subjects[subject.id]
@@ -676,7 +715,7 @@ function StaffResults() {
     if (!selectedStudentId || !examId || !examSubjectsQuery.data || selectedExam?.status !== 'draft' || !canWrite) return
     if (marksSaveTimerRef.current !== null) window.clearTimeout(marksSaveTimerRef.current)
     setMarksSaveStatus('saving')
-    const subjects = examSubjectsQuery.data
+    const subjects = applicableExamSubjects
     const studentId = selectedStudentId
     const marksExamId = examId
     marksSaveTimerRef.current = window.setTimeout(() => {
@@ -826,6 +865,15 @@ function StaffResults() {
   const unusedSubjects = configurableSubjects
   const attachSubjects = saveExamSubjects
   const selectedStudent = studentsQuery.data?.find(student => student.id === selectedStudentId)
+  const selectedStudentCurriculum = curriculumByStudentId.get(selectedStudentId)
+  const applicableExamSubjects = useMemo(
+    () => selectedStudentCurriculum
+      ? (examSubjectsQuery.data ?? []).filter(subject =>
+        examSubjectAppliesToStudent(subject, selectedStudentCurriculum, courseOptionsQuery.data ?? []),
+      )
+      : [],
+    [selectedStudentCurriculum, examSubjectsQuery.data, courseOptionsQuery.data],
+  )
   const completedResults = examResultRows.filter(row => row.complete).length
   const filteredStudents = useMemo(() => {
     const query = studentSearch.trim().toLowerCase()
@@ -909,7 +957,7 @@ function StaffResults() {
                 <div className="min-w-0 max-w-full overflow-hidden border-b">
                   <Table className="min-w-[520px] text-[10px] [&_td]:p-1 [&_th]:h-8 [&_th]:px-1 sm:min-w-[720px] sm:text-sm">
                     <TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-28 min-w-28 border-r bg-background text-[10px] sm:w-48 sm:min-w-48 sm:text-sm">Subject</TableHead><TableHead className="w-20">Creative</TableHead><TableHead className="w-20">MCQ</TableHead><TableHead className="w-20">Practical</TableHead><TableHead className="w-14 text-center sm:w-24">Total</TableHead><TableHead className="w-12 text-center sm:w-24">Absent</TableHead></TableRow></TableHeader>
-                    <TableBody>{examSubjectsQuery.data.map(examSubject => {
+                    <TableBody>{applicableExamSubjects.map(examSubject => {
                       const draft = drafts[examSubject.id] ?? { creative: '', written: '', practical: '', absent: false }
                       const total = [draft.creative, draft.written, draft.practical].reduce((sum, value) => sum + (Number(value) || 0), 0)
                       const maximum = examSubject.creative_max + examSubject.written_max + examSubject.practical_max
