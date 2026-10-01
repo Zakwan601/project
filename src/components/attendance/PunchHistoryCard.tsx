@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogIn, LogOut, MoreHorizontal, ScanLine, UserRound } from 'lucide-react'
 import { useDailyPunchesPage, useDashboardPunches } from '@/hooks/useDeviceLogs'
-import type { ClassWithDetails, DashboardPunch } from '@/types/database'
+import type { AttendanceStatus, ClassWithDetails, DashboardPunch } from '@/types/database'
 import type { DailyPunchGroup } from '@/services/deviceLogs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -276,7 +276,7 @@ function AdminPunchTableRow({ day }: { day: DailyPunches }) {
     : ''
   const arrival = splitPunchTime(day.checkIn.punched_at)
   const departure = day.checkOut ? splitPunchTime(day.checkOut.punched_at) : null
-  const arrivalStatus = classifyArrival(day.checkIn.punched_at)
+  const arrivalStatus = day.attendanceStatus ?? classifyArrival(day.checkIn.punched_at)
   const isPresent = arrivalStatus === 'present'
   const isTooLate = arrivalStatus === 'too_late'
   const punchCount = 1 + (day.checkOut ? 1 : 0) + day.extraPunches.length
@@ -354,6 +354,7 @@ interface DailyPunches {
   key: string
   studentBiometricId: string
   student: DashboardPunch['student']
+  attendanceStatus: AttendanceStatus | null
   checkIn: Pick<DashboardPunch, 'id' | 'punched_at'>
   checkOut: Pick<DashboardPunch, 'id' | 'punched_at'> | null
   extraPunches: Array<Pick<DashboardPunch, 'id' | 'punched_at'>>
@@ -364,6 +365,7 @@ function pagedPunchToDailyPunches(group: DailyPunchGroup): DailyPunches {
     key: group.key,
     studentBiometricId: group.studentBiometricId,
     student: group.student,
+    attendanceStatus: group.attendanceStatus,
     checkIn: group.punches[0],
     checkOut: group.punches[1] ?? null,
     extraPunches: group.punches.slice(2),
@@ -380,7 +382,7 @@ function DailyPunchRow({ day }: { day: DailyPunches }) {
     : ''
   const arrival = splitPunchTime(day.checkIn.punched_at)
   const departure = day.checkOut ? splitPunchTime(day.checkOut.punched_at) : null
-  const arrivalStatus = classifyArrival(day.checkIn.punched_at)
+  const arrivalStatus = day.attendanceStatus ?? classifyArrival(day.checkIn.punched_at)
   const isPresent = arrivalStatus === 'present'
   const isTooLate = arrivalStatus === 'too_late'
 
@@ -476,6 +478,7 @@ function groupDailyPunches(punches: DashboardPunch[]): DailyPunches[] {
       key,
       studentBiometricId: ordered[0].student_biometric_id,
       student: ordered[0].student,
+      attendanceStatus: null,
       checkIn: ordered[0],
       checkOut: ordered.length >= 2 ? ordered[1] : null,
       extraPunches: ordered.slice(2),

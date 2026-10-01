@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { DashboardPunch, DeviceLog, DeviceLogWithDevice, Student } from '@/types/database'
+import type { AttendanceStatus, DashboardPunch, DeviceLog, DeviceLogWithDevice, Student } from '@/types/database'
 
 // The handwritten database types do not describe relationship selections.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -10,6 +10,7 @@ export interface DailyPunchGroup {
   studentBiometricId: string
   date: string
   student: DashboardPunch['student']
+  attendanceStatus: AttendanceStatus | null
   punches: Array<{ id: string; punched_at: string }>
 }
 
@@ -171,6 +172,7 @@ export const deviceLogsService = {
                 photo_url: row.photo_url,
               }
             : null,
+          attendanceStatus: null,
           punches: row.punch_times.map((punched_at, index) => ({
             id: row.punch_ids[index] ?? row.student_biometric_id + ':' + punched_at + ':' + index,
             punched_at,
@@ -198,6 +200,7 @@ export const deviceLogsService = {
       first_name: string | null
       last_name: string | null
       photo_url: string | null
+      attendance_status: AttendanceStatus | null
       total_count: number | string
     }>
 
@@ -215,6 +218,7 @@ export const deviceLogsService = {
               photo_url: row.photo_url,
             }
           : null,
+        attendanceStatus: row.attendance_status,
         punches: row.punch_times.map((punched_at, index) => ({
           id: row.punch_ids[index] ?? `${row.student_biometric_id}:${punched_at}:${index}`,
           punched_at,
