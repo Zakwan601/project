@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { useMarkAttendanceVacation } from '@/hooks/useAttendance'
@@ -17,6 +17,8 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
 
+const VACATIONS_PER_PAGE = 10
+
 export function VacationsPage() {
   const { can } = useAuth()
   const canWriteVacations = can('vacations', 'write')
@@ -28,6 +30,7 @@ export function VacationsPage() {
   const [description, setDescription] = useState('')
   const [allClasses, setAllClasses] = useState(true)
   const [selectedClassIds, setSelectedClassIds] = useState<Set<string>>(new Set())
+  const [vacationsPage, setVacationsPage] = useState(1)
   const { data: holidays = [], isLoading, error } = useHolidays()
   const { data: classes = [], isLoading: classesLoading } = useClasses()
   const markVacation = useMarkAttendanceVacation()
@@ -36,6 +39,14 @@ export function VacationsPage() {
     () => [...holidays].sort((a, b) => b.date.localeCompare(a.date)),
     [holidays],
   )
+  const vacationsPageCount = Math.max(1, Math.ceil(sortedHolidays.length / VACATIONS_PER_PAGE))
+  const paginatedHolidays = sortedHolidays.slice(
+    (vacationsPage - 1) * VACATIONS_PER_PAGE,
+    vacationsPage * VACATIONS_PER_PAGE,
+  )
+  useEffect(() => {
+    setVacationsPage(current => Math.min(current, vacationsPageCount))
+  }, [vacationsPageCount])
   const selectedDateIsWeekend = !useDateRange && isWeekend(date)
   const effectiveEndDate = useDateRange ? endDate : date
   const rangeOrderInvalid = useDateRange && Boolean(date && endDate && endDate < date)
@@ -56,7 +67,7 @@ export function VacationsPage() {
         description: description.trim() || undefined,
         classIds: allClasses ? undefined : [...selectedClassIds],
       },
-      { onSuccess: () => { setName(''); setDescription('') } },
+      { onSuccess: () => { setName(''); setDescription(''); setVacationsPage(1) } },
     )
   }
 
@@ -202,11 +213,12 @@ export function VacationsPage() {
           ) : sortedHolidays.length === 0 ? (
             <p className="py-5 text-sm text-muted-foreground">No vacations have been added yet.</p>
           ) : (
-            <div className="divide-y rounded-lg border">
-              {sortedHolidays.map(holiday => {
-                const isPast = holiday.date < today
-                return (
-                  <article key={holiday.id} className="flex items-start justify-between gap-3 p-3 sm:p-4">
+            <div>
+              <div className="divide-y rounded-lg border">
+                {paginatedHolidays.map(holiday => {
+                  const isPast = holiday.date < today
+                  return (
+                    <article key={holiday.id} className="flex items-start justify-between gap-3 p-3 sm:p-4">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold">{holiday.name}</h3>
@@ -241,9 +253,40 @@ export function VacationsPage() {
                       aria-label={`Remove ${holiday.name}`}>
                       <Trash2 />
                     </Button>}
-                  </article>
-                )
-              })}
+                    </article>
+                  )
+                })}
+              </div>
+              {vacationsPageCount > 1 && (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-center text-xs text-muted-foreground sm:text-left">
+                    Showing {(vacationsPage - 1) * VACATIONS_PER_PAGE + 1}-{Math.min(vacationsPage * VACATIONS_PER_PAGE, sortedHolidays.length)} of {sortedHolidays.length}
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={vacationsPage === 1}
+                      onClick={() => setVacationsPage(current => Math.max(1, current - 1))}
+                    >
+                      <ChevronLeft /> Previous
+                    </Button>
+                    <span className="min-w-20 text-center text-xs font-medium">
+                      Page {vacationsPage} of {vacationsPageCount}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={vacationsPage === vacationsPageCount}
+                      onClick={() => setVacationsPage(current => Math.min(vacationsPageCount, current + 1))}
+                    >
+                      Next <ChevronRight />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

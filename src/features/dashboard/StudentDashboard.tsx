@@ -147,7 +147,7 @@ export function StudentDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Missed Exams</CardTitle>
-            <CardDescription>Exams marked missed by attendance or an absent result</CardDescription>
+            <CardDescription></CardDescription>
           </CardHeader>
           <CardContent>
             {exceptionsLoading ? <Skeleton className="h-24 w-full" />
@@ -168,18 +168,20 @@ export function StudentDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Too Late Attendance</CardTitle>
-            <CardDescription>Arrivals marked too late count as absent</CardDescription>
+            <CardDescription>Arrivals after 9:00 AM is considered too late which is counted as absent.</CardDescription>
           </CardHeader>
           <CardContent>
             {exceptionsLoading ? <Skeleton className="h-24 w-full" />
               : exceptionsError ? <p className="text-sm text-destructive">Could not load too-late attendance.</p>
                 : exceptions?.tooLateAttendance.length ? (
-                  <ul className="max-h-72 space-y-3 overflow-y-auto">
+                  <ul className="max-h-72 divide-y overflow-y-auto">
                     {exceptions.tooLateAttendance.map(record => (
-                      <li key={record.id} className="rounded-lg border p-3 text-sm">
-                        <p className="font-semibold">{formatDisplayDate(record.date)}</p>
-                        {record.subject && <p>{record.subject}</p>}
-                        <p className="mt-1 text-muted-foreground">
+                      <li key={record.id} className="flex items-start justify-between gap-4 py-3 text-sm first:pt-0 last:pb-0">
+                        <div className="min-w-0">
+                          <p className="font-medium">{formatDisplayDate(record.date)}</p>
+                          {record.subject && <p className="truncate text-xs text-muted-foreground">{record.subject}</p>}
+                        </div>
+                        <p className="shrink-0 text-right text-xs text-muted-foreground">
                           {record.checkInAt ? `Arrival: ${splitBangladeshDateTime(record.checkInAt).time}` : 'Arrival time not recorded'}
                         </p>
                       </li>
