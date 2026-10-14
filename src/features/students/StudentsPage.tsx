@@ -85,8 +85,18 @@ const studentSchema = z.object({
   message: 'Choose two different optional subjects',
   path: ['optional_subject_2_id'],
 }).superRefine((data, context) => {
-  if (data.class_group !== 'science' && !data.group_elective_option_id) {
+  if (data.class_group === 'business' && !data.group_elective_option_id) {
     context.addIssue({ code: 'custom', message: 'Choose an elective subject', path: ['group_elective_option_id'] })
+  }
+  if (data.class_group === 'humanities') {
+    const fields = ['humanities_main_option_1_id', 'humanities_main_option_2_id', 'humanities_main_option_3_id'] as const
+    const selected = fields.map(field => data[field])
+    fields.forEach(field => {
+      if (!data[field]) context.addIssue({ code: 'custom', message: 'Choose an elective subject', path: [field] })
+      else if (selected.filter(id => id === data[field]).length > 1 || data[field] === data.group_fourth_option_id) {
+        context.addIssue({ code: 'custom', message: 'All elective and fourth subjects must be different', path: [field] })
+      }
+    })
   }
   if (!data.group_fourth_option_id) {
     context.addIssue({ code: 'custom', message: 'Choose a fourth subject', path: ['group_fourth_option_id'] })
@@ -167,6 +177,7 @@ export function StudentsPage() {
   const groupFourthOptions = courseOptions.filter(option => option.class_group === classGroup && option.available_as_fourth)
   const groupElectiveOptionId = watch('group_elective_option_id')
   const groupFourthOptionId = watch('group_fourth_option_id')
+  const humanitiesElectiveIds = watch(['humanities_main_option_1_id', 'humanities_main_option_2_id', 'humanities_main_option_3_id'])
   const guardianPhone = watch('guardian_phone')
   const secondaryPhone = watch('secondary_phone')
   const bloodGroup = watch('blood_group')
@@ -432,12 +443,12 @@ export function StudentsPage() {
       class_group: data.class_group,
       fourth_subject_id: null,
       optional_subject_2_id: null,
-      group_elective_option_id: data.class_group === 'science' ? null : data.group_elective_option_id || null,
+      group_elective_option_id: data.class_group === 'business' ? data.group_elective_option_id || null : null,
       group_fourth_option_id: data.group_fourth_option_id || null,
-      humanities_main_option_1_id: null,
-      humanities_main_option_2_id: null,
-      humanities_main_option_3_id: null,
-      humanities_fourth_option_id: null,
+      humanities_main_option_1_id: data.class_group === 'humanities' ? data.humanities_main_option_1_id || null : null,
+      humanities_main_option_2_id: data.class_group === 'humanities' ? data.humanities_main_option_2_id || null : null,
+      humanities_main_option_3_id: data.class_group === 'humanities' ? data.humanities_main_option_3_id || null : null,
+      humanities_fourth_option_id: data.class_group === 'humanities' ? data.group_fourth_option_id || null : null,
       roll_number: data.roll_number ?? null,
       guardian_phone: data.guardian_phone?.trim() || null,
       biometric_id: data.biometric_id || null,
@@ -1154,7 +1165,32 @@ export function StudentsPage() {
                 {classId && <p className="text-xs text-muted-foreground">Group follows the assigned class.</p>}
                 {errors.class_group && <p className="text-xs text-destructive">{errors.class_group.message}</p>}
               </div>
-              {classGroup !== 'science' ? (
+              {classGroup === 'humanities' ? (
+                <div className="col-span-2 space-y-4">
+                  <div>
+                    <p className="text-sm font-medium">Humanities subject choices</p>
+                    <p className="text-xs text-muted-foreground">Bangla, English and ICT are compulsory. Choose three electives and one different fourth subject; the other three courses are left out. Both papers follow each course.</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {(['humanities_main_option_1_id', 'humanities_main_option_2_id', 'humanities_main_option_3_id', 'group_fourth_option_id'] as const).map((field, index) => {
+                      const current = index === 3 ? groupFourthOptionId : humanitiesElectiveIds[index]
+                      const selectedIds = [...humanitiesElectiveIds, groupFourthOptionId]
+                      const available = (index === 3 ? groupFourthOptions : groupElectiveOptions)
+                        .filter(option => option.id === current || !selectedIds.includes(option.id))
+                      return (
+                        <div key={field} className="space-y-2">
+                          <Label>{index === 3 ? 'Fourth subject' : `Elective subject ${index + 1}`} *</Label>
+                          <Select value={current || ''} onValueChange={value => setValue(field, value, { shouldValidate: true })}>
+                            <SelectTrigger aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
+                            <SelectContent>{available.map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                          {errors[field] && <p className="text-xs text-destructive">{errors[field]?.message}</p>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : classGroup !== 'science' ? (
                 <div className="col-span-2 space-y-4">
                   <div>
                     <p className="text-sm font-medium">Group subject choices</p>

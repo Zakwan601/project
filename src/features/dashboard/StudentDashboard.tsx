@@ -3,14 +3,14 @@ import { CheckCircle, UserX, Clock, TrendingUp, AlarmClock, Banknote, MessageSqu
 import { format } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { useStudentDashboardStats, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
+import { useStudentAttendanceExceptions, useStudentDashboardStats, useStudentWeeklyAttendance } from '@/hooks/useStudentDashboard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { StudentNotices } from '@/components/dashboard/StudentNotices'
-import { formatDisplayDate } from '@/lib/dateTime'
+import { formatDisplayDate, splitBangladeshDateTime } from '@/lib/dateTime'
 import { calculateAttendanceFine, formatFine } from '@/lib/attendanceFine'
 const chartConfig = {
   present: { label: 'Present', color: 'var(--chart-2)' },
@@ -61,6 +61,7 @@ export function StudentDashboard() {
   const studentId = student?.id
   const { data: stats, isLoading: statsLoading, error } = useStudentDashboardStats(studentId)
   const { data: weekly, isLoading: weeklyLoading, error: weeklyError } = useStudentWeeklyAttendance(studentId)
+  const { data: exceptions, isLoading: exceptionsLoading, error: exceptionsError } = useStudentAttendanceExceptions(studentId)
   const dashboardLoading = statsLoading
   const fine = calculateAttendanceFine(
     stats?.fineRecordedAbsences ?? 0,
@@ -141,6 +142,53 @@ export function StudentDashboard() {
           Could not load your attendance summary.
         </p>
       )}
+
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Missed Exams</CardTitle>
+            <CardDescription>Exams marked missed by attendance or an absent result</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {exceptionsLoading ? <Skeleton className="h-24 w-full" />
+              : exceptionsError ? <p className="text-sm text-destructive">Could not load missed exams.</p>
+                : exceptions?.missedExams.length ? (
+                  <ul className="max-h-72 space-y-3 overflow-y-auto">
+                    {exceptions.missedExams.map(exam => (
+                      <li key={exam.id} className="rounded-lg border p-3 text-sm">
+                        <p className="font-semibold">{exam.exam}</p>
+                        <p>{exam.subject}</p>
+                        <p className="mt-1 text-muted-foreground">{formatDisplayDate(exam.date)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-sm text-muted-foreground">No missed exams recorded.</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Too Late Attendance</CardTitle>
+            <CardDescription>Arrivals marked too late count as absent</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {exceptionsLoading ? <Skeleton className="h-24 w-full" />
+              : exceptionsError ? <p className="text-sm text-destructive">Could not load too-late attendance.</p>
+                : exceptions?.tooLateAttendance.length ? (
+                  <ul className="max-h-72 space-y-3 overflow-y-auto">
+                    {exceptions.tooLateAttendance.map(record => (
+                      <li key={record.id} className="rounded-lg border p-3 text-sm">
+                        <p className="font-semibold">{formatDisplayDate(record.date)}</p>
+                        {record.subject && <p>{record.subject}</p>}
+                        <p className="mt-1 text-muted-foreground">
+                          {record.checkInAt ? `Arrival: ${splitBangladeshDateTime(record.checkInAt).time}` : 'Arrival time not recorded'}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-sm text-muted-foreground">No too-late attendance recorded.</p>}
+          </CardContent>
+        </Card>
+      </div>
 
       <StudentNotices />
 

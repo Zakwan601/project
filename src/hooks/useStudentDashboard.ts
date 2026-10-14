@@ -41,3 +41,12 @@ export function useStudentWeeklyAttendance(studentId: string | undefined) {
     refetchInterval: 300_000,
   })
 }
+
+export function useStudentAttendanceExceptions(studentId: string | undefined) {
+  return useQuery({
+    queryKey: ['student_attendance_exceptions', studentId],
+    queryFn: () => studentDashboardService.getAttendanceExceptions(studentId!),
+    enabled: !!studentId,
+    refetchInterval: 300_000,
+  })
+}

@@ -62,7 +62,18 @@ export interface WeeklyAttendanceDay {
   late: number
 }
 
+export interface StudentAttendanceExceptions {
+  missedExams: Array<{ id: string; date: string; exam: string; subject: string }>
+  tooLateAttendance: Array<{ id: string; date: string; subject: string | null; checkInAt: string | null }>
+}
+
 export const studentDashboardService = {
+  async getAttendanceExceptions(studentId: string): Promise<StudentAttendanceExceptions> {
+    const { data, error } = await db.rpc('get_student_attendance_exceptions', { p_student_id: studentId })
+    if (error) throw error
+    return data as StudentAttendanceExceptions
+  },
+
   async getAttendanceStatistics(studentId: string): Promise<StudentAttendanceStatistics> {
     const [statisticsResponse, fineResponse] = await Promise.all([
       db.rpc('get_student_attendance_statistics', { p_student_id: studentId }),

@@ -351,7 +351,7 @@ function StaffResults() {
     queryFn: async () => {
       const studentIds = studentsQuery.data!.map(student => student.id)
       const { data, error } = await db.from('students')
-        .select('id,class_group,fourth_subject_id,optional_subject_2_id,group_elective_option_id,group_fourth_option_id')
+        .select('id,class_group,fourth_subject_id,optional_subject_2_id,group_elective_option_id,group_fourth_option_id,humanities_main_option_1_id,humanities_main_option_2_id,humanities_main_option_3_id')
         .in('id', studentIds)
       if (error) throw error
       return data as Student[]

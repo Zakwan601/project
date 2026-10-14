@@ -137,7 +137,7 @@ export function examSubjectTotal(subject: ExamSubject) {
 
 export function examSubjectAppliesToStudent(
   examSubject: ExamSubject,
-  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id'>,
+  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id'>,
   courseOptions: SubjectCourseOption[],
 ) {
   return examSubjectRoleForStudent(examSubject, student, courseOptions) !== null
@@ -145,7 +145,7 @@ export function examSubjectAppliesToStudent(
 
 export function examSubjectRoleForStudent(
   examSubject: ExamSubject,
-  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id'>,
+  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id'>,
   courseOptions: SubjectCourseOption[],
 ): ExamSubjectRole | null {
   if (!examSubject.subjects.is_fourth_subject) return 'main'
@@ -157,7 +157,9 @@ export function examSubjectRoleForStudent(
   const fourth = student.group_fourth_option_id
     ? optionById.get(student.group_fourth_option_id)
     : undefined
-  const electiveIds = new Set([elective?.first_paper_subject_id, elective?.second_paper_subject_id].filter(Boolean))
+  const electives = [elective, ...[student.humanities_main_option_1_id, student.humanities_main_option_2_id, student.humanities_main_option_3_id]
+    .map(id => id ? optionById.get(id) : undefined)]
+  const electiveIds = new Set(electives.flatMap(option => [option?.first_paper_subject_id, option?.second_paper_subject_id]).filter(Boolean))
   const fourthIds = new Set([
     fourth?.first_paper_subject_id,
     fourth?.second_paper_subject_id,
@@ -182,7 +184,7 @@ export function examSubjectCourseKey(examSubject: ExamSubject, paperGroups: Resu
 export function calculateOfficialGpa(
   examSubjects: ExamSubject[],
   subjectResults: Record<string, ExamResultSubjectCell>,
-  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id'>,
+  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id'>,
   courseOptions: SubjectCourseOption[],
   paperGroups: ResultSubjectPaperGroup[],
   countFourthSubject: boolean,

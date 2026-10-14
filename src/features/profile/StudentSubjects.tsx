@@ -120,7 +120,7 @@ export function StudentSubjects({ student }: StudentSubjectsProps) {
   if (student.class_group !== 'science') {
     const optionById = new Map(options.map(option => [option.id, option]))
     const mainOptions = [
-      student.group_elective_option_id,
+      ...(student.class_group === 'humanities' ? [student.humanities_main_option_1_id, student.humanities_main_option_2_id, student.humanities_main_option_3_id] : [student.group_elective_option_id]),
     ].map(id => id ? optionById.get(id) : undefined)
       .filter((option): option is SubjectCourseOption => Boolean(option))
     const fourthOption = student.group_fourth_option_id
@@ -134,7 +134,7 @@ export function StudentSubjects({ student }: StudentSubjectsProps) {
           <p className="mt-1 text-sm text-muted-foreground">{student.class_group === 'business' ? 'Business Studies' : 'Humanities'} - Read only</p>
         </div>
         <SubjectList title="Compulsory subjects" subjects={compulsory} emptyText="No compulsory subjects found." />
-        <CourseList title="Elective subject" options={mainOptions} subjects={subjects} emptyText="An elective subject has not been assigned." />
+        <CourseList title={student.class_group === 'humanities' ? 'Elective subjects' : 'Elective subject'} options={mainOptions} subjects={subjects} emptyText="An elective subject has not been assigned." />
         <CourseList title="Fourth subject" options={fourthOption ? [fourthOption] : []} subjects={subjects} emptyText="A fourth subject has not been assigned." />
       </section>
     )
