@@ -137,16 +137,18 @@ export function examSubjectTotal(subject: ExamSubject) {
 
 export function examSubjectAppliesToStudent(
   examSubject: ExamSubject,
-  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id'>,
+  student: Pick<Student, 'class_group' | 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id' | 'humanities_fourth_option_id'>,
   courseOptions: SubjectCourseOption[],
+  paperGroups: ResultSubjectPaperGroup[],
 ) {
-  return examSubjectRoleForStudent(examSubject, student, courseOptions) !== null
+  return examSubjectRoleForStudent(examSubject, student, courseOptions, paperGroups) !== null
 }
 
 export function examSubjectRoleForStudent(
   examSubject: ExamSubject,
-  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id'>,
+  student: Pick<Student, 'class_group' | 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id' | 'humanities_fourth_option_id'>,
   courseOptions: SubjectCourseOption[],
+  paperGroups: ResultSubjectPaperGroup[],
 ): ExamSubjectRole | null {
   if (!examSubject.subjects.is_fourth_subject) return 'main'
 
@@ -154,8 +156,9 @@ export function examSubjectRoleForStudent(
   const elective = student.group_elective_option_id
     ? optionById.get(student.group_elective_option_id)
     : undefined
-  const fourth = student.group_fourth_option_id
-    ? optionById.get(student.group_fourth_option_id)
+  const fourthOptionId = student.group_fourth_option_id ?? student.humanities_fourth_option_id
+  const fourth = fourthOptionId
+    ? optionById.get(fourthOptionId)
     : undefined
   const electives = [elective, ...[student.humanities_main_option_1_id, student.humanities_main_option_2_id, student.humanities_main_option_3_id]
     .map(id => id ? optionById.get(id) : undefined)]
@@ -166,9 +169,20 @@ export function examSubjectRoleForStudent(
     student.fourth_subject_id,
     student.optional_subject_2_id,
   ].filter(Boolean))
+  const paperGroup = examSubject.paper_group_id
+    ? paperGroups.find(group => group.id === examSubject.paper_group_id)
+    : undefined
+  const representedSubjectIds = [
+    examSubject.subject_id,
+    paperGroup?.first_paper_subject_id,
+    paperGroup?.second_paper_subject_id,
+  ].filter(Boolean)
 
-  if (fourthIds.has(examSubject.subject_id)) return 'fourth'
-  if (electiveIds.has(examSubject.subject_id)) return 'main'
+  if (representedSubjectIds.some(subjectId => fourthIds.has(subjectId))) return 'fourth'
+  // Science students take both Biology and Higher Mathematics. Their profile
+  // choice determines which course is fourth; the other remains a main course.
+  if (student.class_group === 'science') return 'main'
+  if (representedSubjectIds.some(subjectId => electiveIds.has(subjectId))) return 'main'
   return null
 }
 
@@ -184,7 +198,7 @@ export function examSubjectCourseKey(examSubject: ExamSubject, paperGroups: Resu
 export function calculateOfficialGpa(
   examSubjects: ExamSubject[],
   subjectResults: Record<string, ExamResultSubjectCell>,
-  student: Pick<Student, 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id'>,
+  student: Pick<Student, 'class_group' | 'fourth_subject_id' | 'optional_subject_2_id' | 'group_elective_option_id' | 'group_fourth_option_id' | 'humanities_main_option_1_id' | 'humanities_main_option_2_id' | 'humanities_main_option_3_id' | 'humanities_fourth_option_id'>,
   courseOptions: SubjectCourseOption[],
   paperGroups: ResultSubjectPaperGroup[],
   countFourthSubject: boolean,
@@ -199,7 +213,7 @@ export function calculateOfficialGpa(
   }>()
 
   for (const subject of examSubjects) {
-    const role = examSubjectRoleForStudent(subject, student, courseOptions)
+    const role = examSubjectRoleForStudent(subject, student, courseOptions, paperGroups)
     const result = subjectResults[subject.id]
     if (!role || !result) continue
     const key = examSubjectCourseKey(subject, paperGroups)
