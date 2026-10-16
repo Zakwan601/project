@@ -36,7 +36,7 @@ Deno.serve(async (req: Request) => {
     // Check caller's role
     const { data: callerProfile, error: profileErr } = await adminClient
       .from("profiles")
-      .select("role")
+      .select("role, is_active")
       .eq("id", userData.user.id)
       .maybeSingle();
 
@@ -44,13 +44,47 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(403, { error: "Profile not found" });
     }
 
-    if (callerProfile.role !== "admin") {
-      return jsonResponse(403, { error: "Only admins can create accounts" });
+    if (callerProfile.role !== "admin" || !callerProfile.is_active) {
+      return jsonResponse(403, { error: "Only active administrators can manage login accounts" });
     }
 
     // Parse request body
     const body = await req.json();
-    const { action = "create", email, password, full_name, role, extra, student_id } = body;
+    const { action = "create", email, password, full_name, role, extra, student_id, profile_id } = body;
+
+    if (action === "reset-sub-admin-password") {
+      if (typeof profile_id !== "string" || !profile_id) {
+        return jsonResponse(400, { error: "Missing required field: profile_id" });
+      }
+      if (typeof password !== "string" || password.length < 8) {
+        return jsonResponse(400, { error: "Password must be at least 8 characters" });
+      }
+
+      const { data: targetProfile, error: targetError } = await adminClient
+        .from("profiles")
+        .select("id, role")
+        .eq("id", profile_id)
+        .maybeSingle();
+
+      if (targetError || !targetProfile || targetProfile.role !== "sub_admin") {
+        return jsonResponse(404, { error: "Sub-admin account not found" });
+      }
+
+      const { data: linkedUser, error: linkedUserError } = await adminClient.auth.admin.getUserById(profile_id);
+      if (linkedUserError || !linkedUser.user) {
+        return jsonResponse(404, { error: "The linked login account could not be found" });
+      }
+
+      const { error: resetError } = await adminClient.auth.admin.updateUserById(profile_id, { password });
+      if (resetError) return jsonResponse(400, { error: resetError.message });
+
+      return jsonResponse(200, {
+        success: true,
+        user_id: linkedUser.user.id,
+        email: linkedUser.user.email,
+        password_reset: true,
+      });
+    }
 
     if (action === "get-student-login" || action === "reset-student-password") {
       if (!student_id) {
@@ -113,6 +147,10 @@ Deno.serve(async (req: Request) => {
     }
 
     if (role === "sub_admin") {
+      const subAdminLabel = body.sub_admin_label ?? "sub_admin";
+      if (subAdminLabel !== "sub_admin" && subAdminLabel !== "teacher") {
+        return jsonResponse(400, { error: "Choose Sub-administrator or Teacher" });
+      }
       const { data: newUserData, error: createErr } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -131,6 +169,7 @@ Deno.serve(async (req: Request) => {
           id: newUserId,
           full_name,
           role: "sub_admin",
+          sub_admin_label: subAdminLabel,
           is_active: true,
         }, { onConflict: "id" });
 

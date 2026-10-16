@@ -183,6 +183,7 @@ function StaffResults() {
   const { user, can, role } = useAuth()
   const canWrite = can('results', 'write')
   const canPublishResults = role === 'admin'
+  const canEditExamination = role === 'admin'
   const qc = useQueryClient()
   const { data: classes = [], isLoading: classesLoading } = useClasses()
   const [activeTab, setActiveTab] = useState(isExamPage ? 'routine' : 'overview')
@@ -581,6 +582,7 @@ function StaffResults() {
   }
 
   const openEditExamDialog = () => {
+    if (!canEditExamination) return
     if (!selectedExam) return
     setEditExamForm({
       typeId: selectedExam.exam_type_id,
@@ -594,6 +596,7 @@ function StaffResults() {
   }
 
   const updateExam = async () => {
+    if (!canEditExamination) return toast.error('Only a full administrator can edit examination details')
     if (!selectedExam || !editExamForm.typeId || !editExamForm.date) return toast.error('Exam type and reference date are required')
     const { error } = await db.rpc('update_result_exam_group_settings', {
       p_exam_group_id: selectedExam.exam_group_id,
@@ -988,7 +991,7 @@ function StaffResults() {
           </TabsContent>
           <TabsContent value="routine" className="mt-0">
             {selectedExam && <>
-              {canWrite && selectedExam.status === 'draft' && <div className="mb-3 flex justify-end"><Button type="button" variant="outline" size="sm" onClick={openEditExamDialog}><Pencil className="mr-2 h-4 w-4" /> Edit examination</Button></div>}
+              {canEditExamination && selectedExam.status === 'draft' && <div className="mb-3 flex justify-end"><Button type="button" variant="outline" size="sm" onClick={openEditExamDialog}><Pencil className="mr-2 h-4 w-4" /> Edit examination</Button></div>}
               <ExamScheduleManager examGroupId={selectedExam.exam_group_id} classId={selectedExam.class_id} canWrite={canWrite} hasRegularClasses={selectedExam.has_regular_classes} combineSubjectPapers={selectedExam.combine_subject_papers} />
             </>}
           </TabsContent>
@@ -1092,7 +1095,7 @@ function StaffResults() {
         <div className="max-h-52 overflow-y-auto rounded-md border">
           <label className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm font-medium">
             <Checkbox checked={examClasses.length > 0 && examForm.classIds.length === examClasses.length} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? examClasses.map(item => item.id) : [] }))} /> Select all classes</label>{examClasses.map(item => <label key={item.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 text-sm last:border-b-0"><Checkbox checked={examForm.classIds.includes(item.id)} onCheckedChange={checked => setExamForm(current => ({ ...current, classIds: checked ? [...new Set([...current.classIds, item.id])] : current.classIds.filter(id => id !== item.id) }))} /><span className="min-w-0"><span className="block truncate font-medium">{item.name} ({item.grade}-{item.section})</span><span className="block text-xs text-muted-foreground">{item.academic_years?.name}</span></span></label>)}</div><p className="text-xs text-muted-foreground">{examForm.classIds.length} class{examForm.classIds.length === 1 ? '' : 'es'} selected</p><Label>Exam type</Label><Select value={examForm.typeId} onValueChange={value => setExamForm(current => ({ ...current, typeId: value }))}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{examTypesQuery.data?.filter(type => type.is_active).map(type => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}</SelectContent></Select><Label>Custom title (optional)</Label><Input value={examForm.title} onChange={event => setExamForm(current => ({ ...current, title: event.target.value }))} placeholder="e.g. First Monthly Exam" /><Label>Examination mode</Label><Select value={examForm.hasRegularClasses ? 'with_classes' : 'exam_only'} onValueChange={value => setExamForm(current => ({ ...current, hasRegularClasses: value === 'with_classes' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="with_classes">Exam + classes</SelectItem><SelectItem value="exam_only">Exam only</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">This choice applies to every date in the routine.</p><Label>Subject papers</Label><Select value={examForm.combineSubjectPapers ? 'combined' : 'separate'} onValueChange={value => setExamForm(current => ({ ...current, combineSubjectPapers: value === 'combined' }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="separate">Take 1st and 2nd papers separately</SelectItem><SelectItem value="combined">Take both papers combined</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">{examForm.combineSubjectPapers ? 'Each 1st/2nd-paper pair will appear as one subject, such as Bangla.' : 'Each paper will be configured as its own subject.'}</p><Label>Reference date</Label><Input type="date" value={examForm.date} min={examDateMin} max={examDateMax} onChange={event => setExamForm(current => ({ ...current, date: event.target.value }))} /></SimpleDialog>
-      <SimpleDialog open={editExamDialog} onOpenChange={setEditExamDialog} title="Edit examination" description="Changes apply to every class included in this examination." onSave={updateExam} saveLabel="Save changes">
+      <SimpleDialog open={canEditExamination && editExamDialog} onOpenChange={setEditExamDialog} title="Edit examination" description="Changes apply to every class included in this examination." onSave={updateExam} saveLabel="Save changes">
         <Label>Fourth subject in GPA</Label>
         <Select value={editExamForm.countFourthSubject ? 'count' : 'exclude'} onValueChange={value => setEditExamForm(current => ({ ...current, countFourthSubject: value === 'count' }))}>
           <SelectTrigger><SelectValue /></SelectTrigger>

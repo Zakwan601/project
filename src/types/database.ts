@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'sub_admin' | 'student'
+export type SubAdminLabel = 'sub_admin' | 'teacher'
 
 export type PermissionKey =
   | 'dashboard'
@@ -120,6 +121,7 @@ export interface Database {
 export interface Profile {
   id: string
   role: UserRole
+  sub_admin_label: SubAdminLabel
   full_name: string
   avatar_url: string | null
   birth_certificate_path: string | null

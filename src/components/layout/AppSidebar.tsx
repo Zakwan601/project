@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useAdminUnreadComplaintCount } from '@/hooks/useStudentReports'
 import { isProfileComplete } from '@/lib/profile'
+import { getSubAdminLabel } from '@/lib/subAdminLabel'
 
 interface NavItem {
   title: string
@@ -249,7 +250,7 @@ export function AppSidebar() {
             <span className="text-sm font-medium truncate">{accountName}</span>
             {role && (
               <Badge variant="secondary" className={`text-xs w-fit mt-0.5 capitalize ${roleColors[role]}`}>
-                {role === 'sub_admin' ? 'Sub-admin' : role}
+                {role === 'sub_admin' ? getSubAdminLabel(profile?.sub_admin_label) : role}
               </Badge>
             )}
           </div>

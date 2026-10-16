@@ -6,6 +6,7 @@ import { Check, Circle, Clock3, Eye, EyeOff, Loader2, Save, X } from 'lucide-rea
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
+import { getSubAdminLabel } from '@/lib/subAdminLabel'
 import { isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
@@ -329,7 +330,7 @@ export function ProfilePage() {
               <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{displayName}</h1>
               {role && (
                 <Badge className={'text-[11px] capitalize ' + (roleColors[role] ?? '')}>
-                  {role === 'sub_admin' ? 'Sub-admin' : role}
+                  {role === 'sub_admin' ? getSubAdminLabel(profile?.sub_admin_label) : role}
                 </Badge>
               )}
             </div>

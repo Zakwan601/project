@@ -1,5 +1,8 @@
 project_id = "attendance-project"
 
+[functions.create-user]
+verify_jwt = false
+
 [functions.sync-attendance]
 verify_jwt = false
 
