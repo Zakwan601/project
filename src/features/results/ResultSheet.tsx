@@ -19,24 +19,21 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
             alt="NMDC Logo"
             className="mx-auto h-20 w-20 object-contain mb-4"
           />
-          <p className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">New Model Degree College (NMDC)</p>
+          <p className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">New Model Degree College</p>
+          <p className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Rasel Square, Sukrabad Rd, Dhaka 1207</p>
           <h1 className="mt-1 text-2xl font-bold">Student Assessment Report</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {exam.title || exam.exam_type} · {exam.academic_year}
           </p>
           {publicView && <Badge variant="outline" className="mt-2">Guardian copy</Badge>}
-          {exam.count_fourth_subject && <Badge variant="outline" className="ml-2 mt-2">Fourth-subject counted</Badge>}
+          
         </div>
 
         <div className="mb-5 grid grid-cols-2 gap-x-3 gap-y-3 rounded-lg border bg-muted/30 p-3 text-sm sm:p-4 lg:grid-cols-4">
           <div className="min-w-0"><span className="text-muted-foreground">Student</span><p className="break-words font-semibold">{student.full_name}</p></div>
           <div className="min-w-0"><span className="text-muted-foreground">Student ID</span><p className="break-words font-semibold">{student.admission_number}</p></div>
           <div className="min-w-0"><span className="text-muted-foreground">Class</span><p className="break-words font-semibold">{exam.class_name} ({exam.grade}-{exam.section})</p></div>
-          <div className="min-w-0"><span className="text-muted-foreground">Roll</span><p className="break-words font-semibold">{student.roll_number ?? '—'}</p></div>
-          <div className="min-w-0"><span className="text-muted-foreground">Exam</span><p className="break-words font-semibold">{exam.exam_type}</p></div>
           <div className="min-w-0"><span className="text-muted-foreground">Exam date</span><p className="break-words font-semibold">{exam.exam_date}</p></div>
-          <div className="min-w-0"><span className="text-muted-foreground">Session</span><p className="break-words font-semibold">{exam.academic_year}</p></div>
-          <div className="min-w-0"><span className="text-muted-foreground">Status</span><p className="break-words font-semibold capitalize">{exam.status}</p></div>
         </div>
 
         <div className="my-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
@@ -67,9 +64,9 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
                     <span className="block">{subject.name}</span>
                     <span className="mt-0.5 block text-[10px] text-muted-foreground sm:text-xs">{subject.code}</span>
                   </TableCell>
-                  <TableCell className="text-center">{showMark(subject.creative_marks, subject.creative_max, subject.is_absent)}{subject.creative_max > 0 && !subject.is_absent ? ` / ${subject.creative_max}` : ''}</TableCell>
-                  <TableCell className="text-center">{showMark(subject.written_marks, subject.written_max, subject.is_absent)}{subject.written_max > 0 && !subject.is_absent ? ` / ${subject.written_max}` : ''}</TableCell>
-                  <TableCell className="text-center">{showMark(subject.practical_marks, subject.practical_max, subject.is_absent)}{subject.practical_max > 0 && !subject.is_absent ? ` / ${subject.practical_max}` : ''}</TableCell>
+                  <SectionMark value={subject.creative_marks} maximum={subject.creative_max} passMark={subject.creative_pass_mark} absent={subject.is_absent} />
+                  <SectionMark value={subject.written_marks} maximum={subject.written_max} passMark={subject.written_pass_mark} absent={subject.is_absent} />
+                  <SectionMark value={subject.practical_marks} maximum={subject.practical_max} passMark={subject.practical_pass_mark} absent={subject.is_absent} />
                   <TableCell className="text-center font-semibold">{subject.is_absent ? 'Absent' : `${subject.obtained} / ${subject.total_max}`}</TableCell>
                   <TableCell className="text-center"><Badge variant={subject.passed ? 'secondary' : 'destructive'}>{subject.letter_grade}</Badge></TableCell>
                   <TableCell className="text-center font-semibold">{subject.grade_point}</TableCell>
@@ -87,6 +84,16 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function SectionMark({ value, maximum, passMark, absent }: { value: number | null; maximum: number; passMark: number; absent: boolean }) {
+  const failed = !absent && maximum > 0 && value != null && value < passMark
+  return (
+    <TableCell className={`text-center ${failed ? 'font-semibold text-destructive' : ''}`}>
+      {showMark(value, maximum, absent)}{maximum > 0 && !absent ? ` / ${maximum}` : ''}
+      {maximum > 0 && passMark > 0 && <span className="mt-0.5 block text-[10px] text-muted-foreground">Pass {passMark}{failed ? ' (Fail)' : ''}</span>}
+    </TableCell>
   )
 }
 

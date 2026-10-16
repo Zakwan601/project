@@ -15,6 +15,9 @@ export interface ExamSubject {
   written_max: number
   practical_max: number
   pass_mark: number
+  creative_pass_mark: number
+  written_pass_mark: number
+  practical_pass_mark: number
   sort_order: number
   subjects: { id: string; name: string; code: string; is_fourth_subject: boolean }
   result_subject_paper_groups: { name: string; code: string } | null
@@ -33,6 +36,9 @@ export interface MarkRow {
 
 export interface ExamResultSubjectCell {
   obtained: number
+  creativeMarks: number
+  writtenMarks: number
+  practicalMarks: number
   totalMax: number
   absent: boolean
   complete: boolean
@@ -93,6 +99,9 @@ export interface ExamSubjectConfigDraft {
   written: string
   practical: string
   pass: string
+  creativePass: string
+  writtenPass: string
+  practicalPass: string
   total: string
 }
 
@@ -109,8 +118,8 @@ export interface ResultShareLink {
   expires_at: string | null
 }
 
-export function gradeSubject(obtained: number, totalMax: number, passMark: number, absent: boolean) {
-  if (absent || obtained < passMark) return { passed: false, gradePoint: 0 }
+export function gradeSubject(obtained: number, totalMax: number, passMark: number, absent: boolean, sectionsPassed = true) {
+  if (absent || !sectionsPassed || obtained < passMark) return { passed: false, gradePoint: 0 }
   const percentage = totalMax > 0 ? obtained * 100 / totalMax : 0
   if (percentage >= 80) return { passed: true, gradePoint: 5 }
   if (percentage >= 70) return { passed: true, gradePoint: 4 }
@@ -142,6 +151,15 @@ export function examSubjectAppliesToStudent(
   paperGroups: ResultSubjectPaperGroup[],
 ) {
   return examSubjectRoleForStudent(examSubject, student, courseOptions, paperGroups) !== null
+}
+
+export function subjectSectionsPassed(
+  subject: Pick<ExamSubject, 'creative_max' | 'written_max' | 'practical_max' | 'creative_pass_mark' | 'written_pass_mark' | 'practical_pass_mark'>,
+  marks: { creativeMarks: number; writtenMarks: number; practicalMarks: number },
+) {
+  return (subject.creative_max <= 0 || marks.creativeMarks >= subject.creative_pass_mark)
+    && (subject.written_max <= 0 || marks.writtenMarks >= subject.written_pass_mark)
+    && (subject.practical_max <= 0 || marks.practicalMarks >= subject.practical_pass_mark)
 }
 
 export function examSubjectRoleForStudent(
@@ -210,6 +228,15 @@ export function calculateOfficialGpa(
     passMark: number
     absent: boolean
     complete: boolean
+    creative_max: number
+    written_max: number
+    practical_max: number
+    creative_pass_mark: number
+    written_pass_mark: number
+    practical_pass_mark: number
+    creativeMarks: number
+    writtenMarks: number
+    practicalMarks: number
   }>()
 
   for (const subject of examSubjects) {
@@ -219,10 +246,22 @@ export function calculateOfficialGpa(
     const key = examSubjectCourseKey(subject, paperGroups)
     const course = courses.get(key) ?? {
       role, obtained: 0, totalMax: 0, passMark: 0, absent: false, complete: true,
+      creative_max: 0, written_max: 0, practical_max: 0,
+      creative_pass_mark: 0, written_pass_mark: 0, practical_pass_mark: 0,
+      creativeMarks: 0, writtenMarks: 0, practicalMarks: 0,
     }
     course.obtained += result.obtained
     course.totalMax += result.totalMax
     course.passMark += subject.pass_mark
+    course.creative_max += subject.creative_max
+    course.written_max += subject.written_max
+    course.practical_max += subject.practical_max
+    course.creative_pass_mark += subject.creative_pass_mark
+    course.written_pass_mark += subject.written_pass_mark
+    course.practical_pass_mark += subject.practical_pass_mark
+    course.creativeMarks += result.creativeMarks
+    course.writtenMarks += result.writtenMarks
+    course.practicalMarks += result.practicalMarks
     course.absent ||= result.absent
     course.complete &&= result.complete
     courses.set(key, course)
@@ -230,7 +269,7 @@ export function calculateOfficialGpa(
 
   const graded = [...courses.values()].map(course => ({
     ...course,
-    grade: gradeSubject(course.obtained, course.totalMax, course.passMark, course.absent),
+    grade: gradeSubject(course.obtained, course.totalMax, course.passMark, course.absent, subjectSectionsPassed(course, course)),
   }))
   const main = graded.filter(course => course.role === 'main')
   const fourth = graded.filter(course => course.role === 'fourth')

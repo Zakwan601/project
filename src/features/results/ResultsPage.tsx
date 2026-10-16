@@ -36,6 +36,7 @@ import {
   examSubjectRoleForStudent,
   calculateOfficialGpa,
   gradeSubject,
+  subjectSectionsPassed,
   overallGrade,
   type ClassSubject,
   type ConfigurableExamSubject,
@@ -181,6 +182,7 @@ function StaffResults() {
   const isExamPage = Boolean(routeExamId)
   const { user, can, role } = useAuth()
   const canWrite = can('results', 'write')
+  const canPublishResults = role === 'admin'
   const qc = useQueryClient()
   const { data: classes = [], isLoading: classesLoading } = useClasses()
   const [activeTab, setActiveTab] = useState(isExamPage ? 'routine' : 'overview')
@@ -439,9 +441,15 @@ function StaffResults() {
           + Number(mark?.written_marks ?? 0)
           + Number(mark?.practical_marks ?? 0)
         const totalMax = examSubjectTotal(subject)
-        const grade = gradeSubject(obtained, totalMax, subject.pass_mark, Boolean(mark?.is_absent))
+        const componentMarks = {
+          creativeMarks: Number(mark?.creative_marks ?? 0),
+          writtenMarks: Number(mark?.written_marks ?? 0),
+          practicalMarks: Number(mark?.practical_marks ?? 0),
+        }
+        const grade = gradeSubject(obtained, totalMax, subject.pass_mark, Boolean(mark?.is_absent), subjectSectionsPassed(subject, componentMarks))
         return [subject.id, {
           obtained,
+          ...componentMarks,
           totalMax,
           absent: Boolean(mark?.is_absent),
           complete,
@@ -642,6 +650,9 @@ function StaffResults() {
         written: current ? String(current.written_max) : '',
         practical: current ? String(current.practical_max) : '',
         pass: current ? String(current.pass_mark) : '',
+        creativePass: current?.creative_pass_mark ? String(current.creative_pass_mark) : '',
+        writtenPass: current?.written_pass_mark ? String(current.written_pass_mark) : '',
+        practicalPass: current?.practical_pass_mark ? String(current.practical_pass_mark) : '',
         total: current ? String(examSubjectTotal(current)) : '',
       }]
     })))
@@ -660,18 +671,22 @@ function StaffResults() {
     if (!selected.length) return toast.error('Select at least one subject')
     const rows = selected.map((subject, index) => {
       const row = configRows[subject.id]
-      const values = [row.creative, row.written, row.practical, row.pass, row.total].map(Number)
+      const values = [row.creative, row.written, row.practical, row.pass, row.total, row.creativePass, row.writtenPass, row.practicalPass].map(Number)
       return { subject, row, values, index }
     })
-    const invalid = rows.find(({ values }) => values.some(value => Number.isNaN(value) || value < 0)
+    const invalid = rows.find(({ values }) => values.some(value => !Number.isFinite(value) || value < 0)
       || values[4] <= 0
       || Math.abs(values[0] + values[1] + values[2] - values[4]) > 0.009
-      || values[3] > values[4])
+      || values[3] <= 0 || values[3] > values[4]
+      || [0, 1, 2].some(index => values[index] > 0
+        ? values[index + 5] <= 0 || values[index + 5] > values[index]
+        : values[index + 5] !== 0))
     if (invalid) return toast.error(`Check the marks configuration for ${invalid.subject.name}`)
     const { error } = await db.from('result_exam_subjects').upsert(rows.map(({ subject, values, index }) => ({
       exam_id: examId, subject_id: subject.id,
       paper_group_id: subject.paper_group_id,
       creative_max: values[0], written_max: values[1], practical_max: values[2], pass_mark: values[3],
+      creative_pass_mark: values[5], written_pass_mark: values[6], practical_pass_mark: values[7],
       sort_order: index * 10,
     })), { onConflict: 'exam_id,subject_id' })
     if (error) return toast.error(error.message)
@@ -823,6 +838,7 @@ function StaffResults() {
   }
 
   const setStatus = async (status: 'draft' | 'published') => {
+    if (!canPublishResults) return toast.error('Only a full administrator can publish or unpublish results')
     if (publishing) return
     if (status === 'published') setPublishing(true)
     try {
@@ -930,7 +946,10 @@ function StaffResults() {
               </div>
             </div>
           </div>
-          {isExamPage && <><div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">{canWrite && selectedExam?.status === 'draft' && <Button size="sm" variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}<Button variant="outline" size="sm" onClick={() => navigate('/results')}><ArrowLeft className="mr-2 h-4 w-4" /> All examinations</Button>{canWrite && selectedExam && <Button size="sm" variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div><div className="sm:hidden"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" aria-label="Exam actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => navigate('/results')}><ArrowLeft /> All examinations</DropdownMenuItem>{canWrite && selectedExam && <><DropdownMenuSeparator />{selectedExam.status === 'draft' && <DropdownMenuItem disabled={!unusedSubjects.length || publishing} onSelect={openSubjectConfiguration}><Plus /> Add subjects</DropdownMenuItem>}<DropdownMenuItem disabled={publishing} onSelect={() => void setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</DropdownMenuItem></>}{activeTab === 'results' && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={exportExamResults}><Download /> Export CSV</DropdownMenuItem><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={printExamResults}><Printer /> Print report</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></>}
+          {isExamPage && <><div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">{canWrite && selectedExam?.status === 'draft' && 
+            <Button size="sm" variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}
+          <Button variant="outline" size="sm" onClick={() => navigate('/results')}><ArrowLeft className="mr-2 h-4 w-4" /> All examinations</Button>
+          {canPublishResults && selectedExam && <Button size="sm" variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div><div className="sm:hidden"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" aria-label="Exam actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => navigate('/results')}><ArrowLeft /> All examinations</DropdownMenuItem>{canWrite && selectedExam && <>{(selectedExam.status === 'draft' || canPublishResults) && <DropdownMenuSeparator />}{selectedExam.status === 'draft' && <DropdownMenuItem disabled={!unusedSubjects.length || publishing} onSelect={openSubjectConfiguration}><Plus /> Add subjects</DropdownMenuItem>}{canPublishResults && <DropdownMenuItem disabled={publishing} onSelect={() => void setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</DropdownMenuItem>}</>}{activeTab === 'results' && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={exportExamResults}><Download /> Export CSV</DropdownMenuItem><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={printExamResults}><Printer /> Print report</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></>}
         </div>
       </section>
       {isExamPage && !classId ? <EmptyState title="Select a class" /> : examsQuery.isLoading ? <ExaminationContentSkeleton detail={isExamPage} /> : examsQuery.error ? <ErrorState message={(examsQuery.error as Error).message} /> : (
@@ -1003,7 +1022,11 @@ function StaffResults() {
                       const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
                       const disabled = draft.absent || selectedExam?.status === 'published' || !canWrite
                       return <TableRow key={examSubject.id} className={draft.absent ? 'opacity-60' : undefined}>
-                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><div className="flex flex-wrap items-center gap-1"><p className="font-medium">{examSubjectName(examSubject)}</p>{subjectRole === 'fourth' && <Badge variant="outline" className="h-4 px-1 text-[8px] font-medium sm:h-5 sm:text-[10px]">Fourth subject</Badge>}</div><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubjectCode(examSubject)} · Pass {examSubject.pass_mark}</p></TableCell>
+                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><div className="flex flex-wrap items-center gap-1"><p className="font-medium">{examSubjectName(examSubject)}</p>{subjectRole === 'fourth' && <Badge variant="outline" className="h-4 px-1 text-[8px] font-medium sm:h-5 sm:text-[10px]">Fourth subject</Badge>}</div><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubjectCode(examSubject)} · Total pass {examSubject.pass_mark}</p><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{[
+                          examSubject.creative_max > 0 && examSubject.creative_pass_mark > 0 ? `CQ pass ${examSubject.creative_pass_mark}` : null,
+                          examSubject.written_max > 0 && examSubject.written_pass_mark > 0 ? `MCQ pass ${examSubject.written_pass_mark}` : null,
+                          examSubject.practical_max > 0 && examSubject.practical_pass_mark > 0 ? `Practical pass ${examSubject.practical_pass_mark}` : null,
+                        ].filter(Boolean).join(' / ')}</p></TableCell>
                         <TableCell><MarkInput label={`${examSubjectName(examSubject)} creative marks`} value={draft.creative} max={examSubject.creative_max} disabled={disabled} onChange={value => update('creative', value)} /></TableCell>
                         <TableCell><MarkInput label={`${examSubjectName(examSubject)} MCQ marks`} value={draft.written} max={examSubject.written_max} disabled={disabled} onChange={value => update('written', value)} /></TableCell>
                         <TableCell><MarkInput label={`${examSubjectName(examSubject)} practical marks`} value={draft.practical} max={examSubject.practical_max} disabled={disabled} onChange={value => update('practical', value)} /></TableCell>
@@ -1108,15 +1131,19 @@ function StaffResults() {
       <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) { setEditingSubjectId(null); setSubjectForm({ name: '', code: '', isFourthSubject: false }) } }} title={editingSubjectId ? 'Edit group subject' : 'Add group subject'} description={`This subject belongs to the ${settingsGroup} group and will be available to all its exams.`} onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /><label className="flex items-center gap-2 text-sm"><Checkbox checked={subjectForm.isFourthSubject} onCheckedChange={checked => setSubjectForm(current => ({ ...current, isFourthSubject: checked === true }))} /><span> Available as optional subject</span></label></SimpleDialog>
       <Dialog open={configDialog} onOpenChange={setConfigDialog}>
         <DialogContent className="flex h-[90dvh] max-h-[90dvh] flex-col overflow-hidden p-0 sm:h-auto sm:max-w-5xl">
-          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>{selectedExam?.combine_subject_papers ? 'Paired 1st and 2nd papers are combined into one subject. Define one marks configuration for each combined subject.' : 'Select subjects and define their creative, MCQ, practical, and pass marks.'}</DialogDescription></DialogHeader>
+          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>{selectedExam?.combine_subject_papers ? 'Paired 1st and 2nd papers are combined into one subject. Define one marks configuration for each combined subject.' : 'Select subjects and define their creative, MCQ, practical, and pass marks.'} Each active section and the overall total must pass independently. Enter a pass mark for every active section.</DialogDescription></DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Pass mark</TableHead><TableHead className="w-32">Total max</TableHead></TableRow></TableHeader>
+            <Table className="min-w-[1350px]">
+              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Creative pass</TableHead><TableHead className="w-32">MCQ pass</TableHead><TableHead className="w-32">Practical pass</TableHead><TableHead className="w-32">Total pass</TableHead><TableHead className="w-32">Total max</TableHead></TableRow></TableHeader>
               <TableBody>{unusedSubjects.map(subject => {
-                const row = configRows[subject.id] ?? { selected: false, creative: '40', written: '40', practical: '20', pass: '33', total: '100' }
+                const row = configRows[subject.id] ?? { selected: false, creative: '', written: '', practical: '', creativePass: '', writtenPass: '', practicalPass: '', pass: '', total: '' }
                 const update = (field: keyof ExamSubjectConfigDraft, value: string | boolean) => setConfigRows(current => ({ ...current, [subject.id]: { ...row, [field]: value } }))
                 const updateComponent = (field: 'creative' | 'written' | 'practical', value: string) => {
                   const next = { ...row, [field]: value }
+                  if (Number(value) <= 0) {
+                    const passField = { creative: 'creativePass', written: 'writtenPass', practical: 'practicalPass' } as const
+                    next[passField[field]] = ''
+                  }
                   next.total = String((Number(next.creative) || 0) + (Number(next.written) || 0) + (Number(next.practical) || 0))
                   setConfigRows(current => ({ ...current, [subject.id]: next }))
                 }
@@ -1134,9 +1161,20 @@ function StaffResults() {
                   const pass = Math.round(((Number(row.pass) || 0) / currentTotal) * requested * 100) / 100
                   setConfigRows(current => ({ ...current, [subject.id]: {
                     ...row, total: value, creative: String(creative), written: String(written), practical: String(practical), pass: String(pass),
+                    creativePass: row.creativePass ? String(Math.round(Number(row.creativePass) * requested / currentTotal * 100) / 100) : '',
+                    writtenPass: row.writtenPass ? String(Math.round(Number(row.writtenPass) * requested / currentTotal * 100) / 100) : '',
+                    practicalPass: row.practicalPass ? String(Math.round(Number(row.practicalPass) * requested / currentTotal * 100) / 100) : '',
                   } }))
                 }
-                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}{subject.is_fourth_subject ? ' · Fourth subject' : ''}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => updateComponent('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => updateComponent('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => updateComponent('practical', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} max={row.total} step="0.01" value={row.pass} disabled={!row.selected} onChange={event => update('pass', event.target.value)} /></TableCell><TableCell><Input type="number" min={0.01} step="0.01" value={row.total} disabled={!row.selected} onChange={event => updateTotal(event.target.value)} /></TableCell></TableRow>
+                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}{subject.is_fourth_subject ? ' · Fourth subject' : ''}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => updateComponent('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => updateComponent('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => updateComponent('practical', event.target.value)} /></TableCell>{([
+                    ['creativePass', 'creative', 'Creative'],
+                    ['writtenPass', 'written', 'MCQ'],
+                    ['practicalPass', 'practical', 'Practical'],
+                  ] as const).map(([passField, maxField, label]) => (
+                    <TableCell key={passField}>
+                      <Input aria-label={`${subject.name} ${label} pass mark`} type="number" min={0.01} max={Number(row[maxField]) || 0} step="0.01" value={row[passField]} placeholder={Number(row[maxField]) > 0 ? 'Required' : 'N/A'} disabled={!row.selected || Number(row[maxField]) <= 0} onChange={event => update(passField, event.target.value)} />
+                    </TableCell>
+                  ))}<TableCell><Input type="number" min={0} max={row.total} step="0.01" value={row.pass} disabled={!row.selected} onChange={event => update('pass', event.target.value)} /></TableCell><TableCell><Input type="number" min={0.01} step="0.01" value={row.total} disabled={!row.selected} onChange={event => updateTotal(event.target.value)} /></TableCell></TableRow>
               })}</TableBody>
             </Table>
           </div>

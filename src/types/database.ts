@@ -500,6 +500,9 @@ export interface ResultPayloadSubject {
   practical_max: number
   practical_marks: number | null
   pass_mark: number
+  creative_pass_mark: number
+  written_pass_mark: number
+  practical_pass_mark: number
   obtained: number
   total_max: number
   is_absent: boolean
