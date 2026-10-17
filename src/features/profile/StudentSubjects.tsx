@@ -42,31 +42,12 @@ function CourseList({ title, options, subjects, emptyText }: {
   emptyText: string
 }) {
   const subjectById = new Map(subjects.map(subject => [subject.id, subject]))
-  return (
-    <div>
-      <h3 className="text-sm font-medium">{title}</h3>
-      {options.length > 0 ? (
-        <div className="mt-2 space-y-3">
-          {options.map(option => {
-            const papers = [
-              subjectById.get(option.first_paper_subject_id),
-              subjectById.get(option.second_paper_subject_id),
-            ].filter((paper): paper is Subject => Boolean(paper))
-            return (
-              <div key={option.id}>
-                <p className="text-sm">{option.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {papers.map(paper => `${paper.name} (${paper.code})`).join(' � ')}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-muted-foreground">{emptyText}</p>
-      )}
-    </div>
-  )
+  const papers = options.flatMap(option => [
+    subjectById.get(option.first_paper_subject_id),
+    subjectById.get(option.second_paper_subject_id),
+  ]).filter((paper): paper is Subject => Boolean(paper))
+
+  return <SubjectList title={title} subjects={papers} emptyText={emptyText} />
 }
 
 export function StudentSubjects({ student }: StudentSubjectsProps) {
