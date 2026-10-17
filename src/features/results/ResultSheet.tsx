@@ -92,7 +92,7 @@ function SectionMark({ value, maximum, passMark, absent }: { value: number | nul
   return (
     <TableCell className={`text-center ${failed ? 'font-semibold text-destructive' : ''}`}>
       {showMark(value, maximum, absent)}{maximum > 0 && !absent ? ` / ${maximum}` : ''}
-      {maximum > 0 && passMark > 0 && <span className="mt-0.5 block text-[10px] text-muted-foreground">Pass {passMark}{failed ? ' (Fail)' : ''}</span>}
+      {failed && <span className="mt-0.5 block text-[10px]">Pass mark: {passMark}</span>}
     </TableCell>
   )
 }

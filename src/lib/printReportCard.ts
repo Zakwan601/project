@@ -4,6 +4,11 @@ const PAGE_STYLE_ID = 'report-card-page-style'
 export function printReportCard() {
   const source = document.querySelector<HTMLElement>('.result-sheet')
   if (!source) return
+  printReportCards([source])
+}
+
+export function printReportCards(sources: HTMLElement[]) {
+  if (!sources.length) return
 
   document.getElementById(PRINT_ROOT_ID)?.remove()
   document.getElementById(PAGE_STYLE_ID)?.remove()
@@ -11,7 +16,12 @@ export function printReportCard() {
   const printRoot = document.createElement('div')
   printRoot.id = PRINT_ROOT_ID
   printRoot.setAttribute('aria-hidden', 'true')
-  printRoot.appendChild(source.cloneNode(true))
+  for (const source of sources) {
+    const page = document.createElement('div')
+    page.className = 'report-card-print-page'
+    page.appendChild(source.cloneNode(true))
+    printRoot.appendChild(page)
+  }
 
   const pageStyle = document.createElement('style')
   pageStyle.id = PAGE_STYLE_ID

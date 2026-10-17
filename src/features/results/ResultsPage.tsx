@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Link2, Pencil, Plus, Printer, Search, Send, Settings, Users } from 'lucide-react'
@@ -9,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useClasses } from '@/hooks/useClasses'
 import { EmptyState, ErrorState } from '@/components/shared/PageHeader'
 import { ResultSheet } from '@/features/results/ResultSheet'
-import { printReportCard } from '@/lib/printReportCard'
+import { printReportCard, printReportCards } from '@/lib/printReportCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -192,6 +193,7 @@ function StaffResults() {
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [studentSearch, setStudentSearch] = useState('')
   const [previewStudentId, setPreviewStudentId] = useState('')
+  const [preparingReportCards, setPreparingReportCards] = useState(false)
   const [previewStudentSearch, setPreviewStudentSearch] = useState('')
   const [examDialog, setExamDialog] = useState(false)
   const [editExamDialog, setEditExamDialog] = useState(false)
@@ -419,6 +421,34 @@ function StaffResults() {
       return data as StudentResultPayload
     },
   })
+
+  async function printAllReportCards() {
+    const roster = studentsQuery.data ?? []
+    if (!activeExamId || !roster.length || preparingReportCards) return
+    setPreparingReportCards(true)
+    try {
+      const results: StudentResultPayload[] = []
+      // Limit concurrent requests for larger classes while preserving roster order.
+      for (let offset = 0; offset < roster.length; offset += 5) {
+        const batch = await Promise.all(roster.slice(offset, offset + 5).map(async student => {
+          const { data, error } = await db.rpc('get_student_result', {
+            p_exam_id: activeExamId, p_student_id: student.id,
+          })
+          if (error) throw error
+          if (!data) throw new Error(`Report card unavailable for ${student.first_name} ${student.last_name}`)
+          return data as StudentResultPayload
+        }))
+        results.push(...batch)
+      }
+      const container = document.createElement('div')
+      container.innerHTML = renderToStaticMarkup(<>{results.map((result, index) => <ResultSheet key={index} result={result} />)}</>)
+      printReportCards(Array.from(container.querySelectorAll<HTMLElement>('.result-sheet')))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to prepare all report cards. Please try again.')
+    } finally {
+      setPreparingReportCards(false)
+    }
+  }
 
   const examResultRows = useMemo<ExamResultReportRow[]>(() => {
     const roster = studentsQuery.data ?? []
@@ -1063,7 +1093,7 @@ function StaffResults() {
           </TabsContent>
 
           <TabsContent value="preview" className="mt-0 space-y-4">
-            <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-4 px-0 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{previewStudent ? `${previewStudent.first_name} ${previewStudent.last_name} · ` : ''}{selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && previewStudentId && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button disabled={!previewStudentId || previewQuery.isLoading} onClick={printReportCard}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
+            <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-4 px-0 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{previewStudent ? `${previewStudent.first_name} ${previewStudent.last_name} · ` : ''}{selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && previewStudentId && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button variant="outline" disabled={!studentsQuery.data?.length || studentsQuery.isFetching || studentsQuery.isError || preparingReportCards} onClick={() => void printAllReportCards()}><Printer className="mr-2 h-4 w-4" /> {preparingReportCards ? 'Preparing report cards…' : 'Print all report cards'}</Button><Button disabled={!previewQuery.data || previewQuery.isLoading || previewQuery.isError || preparingReportCards} onClick={printReportCard}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
             <div className="hidden xl:block">
               <Select value={previewStudentId} onValueChange={value => { setPreviewStudentId(value); setShareUrl('') }}>
                 <SelectTrigger className="max-w-md"><SelectValue placeholder="Choose a student to preview" /></SelectTrigger>
