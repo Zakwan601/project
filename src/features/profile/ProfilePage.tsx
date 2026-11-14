@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Check, Circle, Clock3, Eye, EyeOff, Loader2, Save, X } from 'lucide-react'
+import { ArrowRight, Check, Circle, Clock3, Eye, EyeOff, Loader2, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
 import { getSubAdminLabel } from '@/lib/subAdminLabel'
-import { isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
+import { hasProfilePhoto, isProfileComplete, isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
+import { hasRequiredStudentSubjects } from '@/lib/studentSubjects'
+import { Link } from 'react-router-dom'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 import { toast } from 'sonner'
@@ -26,10 +28,14 @@ import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { ProfileUploads } from './ProfileUploads'
 import { StudentSubjects } from './StudentSubjects'
+import { useAutosave } from '@/hooks/useAutosave'
+import { AutosaveStatus } from '@/components/shared/AutosaveStatus'
+import type { Profile, Student } from '@/types/database'
 
 const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
+const profileTabClassName = 'h-10 rounded-none px-3 text-sm text-muted-foreground shadow-none hover:bg-background/60 hover:text-foreground data-[state=active]:border-transparent! data-[state=active]:bg-primary! data-[state=active]:text-primary-foreground! data-[state=active]:font-semibold'
 
 const profileSchema = z.object({
   full_name: z.string().trim().min(2, 'Required'),
@@ -49,6 +55,7 @@ const studentProfileSchema = profileSchema.extend({
   phone: z.string(),
 })
 type ProfileForm = z.infer<typeof profileSchema>
+type PersonalUpdates = Partial<Pick<Profile, 'full_name' | 'phone' | 'father_name' | 'mother_name' | 'blood_group' | 'secondary_phone'>>
 
 const passwordSchema = z.object({
   oldPassword: z.string().min(1, 'Current password required'),
@@ -74,8 +81,8 @@ const passwordRequirements = [
 ]
 
 export function ProfilePage() {
-  const { profile, student, user, refreshProfile, role, loading, profileError } = useAuth()
-  const [saving, setSaving] = useState(false)
+  const { profile, student, user, refreshProfile, applySavedProfileChanges, role, loading, profileError } = useAuth()
+  const [activeTab, setActiveTab] = useState('personal')
   const [changingPwd, setChangingPwd] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({ old: false, new: false, confirm: false })
   const passwordTurnstileRef = useRef<TurnstileInstance>(null)
@@ -83,6 +90,49 @@ export function ProfilePage() {
   const passwordTurnstileFailedRef = useRef(false)
   const passwordTurnstileResetAttemptedRef = useRef(false)
   const phoneManagedByAdmin = role === 'student'
+  const needsPhoto = role === 'student' && !hasProfilePhoto(profile, student)
+  const needsSubjects = role === 'student' && !hasRequiredStudentSubjects(student)
+  const profileComplete = isProfileComplete(profile, student)
+  const avatarUrl = student?.photo_url ?? profile?.avatar_url
+  const personalIdentityRef = useRef<string | null>(null)
+  const profileId = profile?.id
+  const savePersonalChanges = useCallback(async (updates: PersonalUpdates) => {
+    if (!profileId) throw new Error('Profile unavailable')
+    const { data, error } = await db.from('profiles').update(updates).eq('id', profileId)
+      .select(['id', ...Object.keys(updates)].join(',')).single()
+    if (error) throw new Error(error.message || 'Unable to save profile')
+    const syncedFields = ['father_name', 'mother_name', 'blood_group', 'secondary_phone']
+    const studentChanges = Object.fromEntries(Object.entries(data).filter(([key]) => syncedFields.includes(key))) as Partial<Student>
+    applySavedProfileChanges(profileId, data, studentChanges)
+  }, [profileId, applySavedProfileChanges])
+  const personalAutosave = useAutosave(savePersonalChanges, 350)
+
+  const queuePersonalField = (field: keyof ProfileForm, value: string) => {
+    if (role === 'student' && (field === 'full_name' || field === 'phone')) return
+    const parsed = (role === 'student' ? studentProfileSchema : profileSchema).shape[field].safeParse(value)
+    if (!parsed.success) return
+    const normalized = field === 'phone' || field === 'secondary_phone'
+      ? parsed.data ? normalizeBangladeshMobile(parsed.data) : null
+      : parsed.data || null
+    personalAutosave.enqueue({ [field]: normalized } as PersonalUpdates)
+  }
+
+  const goToPhotoUpload = () => {
+    setActiveTab('personal')
+    requestAnimationFrame(() => {
+      const photoInput = document.getElementById('profile-photo-upload')
+      photoInput?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      photoInput?.focus({ preventScroll: true })
+    })
+  }
+  const goToSubjects = () => {
+    setActiveTab('academics')
+    requestAnimationFrame(() => {
+      const section = document.getElementById('profile-subjects')
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      section?.focus({ preventScroll: true })
+    })
+  }
   const { data: enrollmentHistory = [], isLoading: historyLoading } = useStudentEnrollmentHistory(
     role === 'student' ? student?.id : undefined,
   )
@@ -94,11 +144,10 @@ export function ProfilePage() {
 
   const {
     register: regProfile,
-    handleSubmit: handleProfile,
     reset: resetProfile,
     watch: watchProfile,
     setValue: setProfileValue,
-    formState: { errors: profileErrors },
+    formState: { errors: profileErrors, dirtyFields: profileDirtyFields },
   } = useForm<ProfileForm>({
     resolver: zodResolver(role === 'student' ? studentProfileSchema : profileSchema),
     mode: 'onChange',
@@ -124,7 +173,11 @@ export function ProfilePage() {
       mother_name: profile?.mother_name ?? '',
       blood_group: profile?.blood_group ?? '',
       secondary_phone: profile?.secondary_phone ?? '',
+    }, {
+      keepDirtyValues: personalIdentityRef.current === profile?.id,
+      keepErrors: personalIdentityRef.current === profile?.id,
     })
+    personalIdentityRef.current = profile?.id ?? null
   }, [profile, resetProfile, role, student])
 
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { errors: pwdErrors } } = useForm<PasswordForm>({
@@ -190,39 +243,6 @@ export function ProfilePage() {
       if (passwordTurnstileRejectRef.current === rejectFailure) {
         passwordTurnstileRejectRef.current = null
       }
-    }
-  }
-
-  const saveProfile = async (data: ProfileForm) => {
-    setSaving(true)
-    try {
-      if (!profile) throw new Error('Your profile record could not be found. Please contact an administrator.')
-
-      const personalDetails = {
-        father_name: data.father_name.trim() || null,
-        mother_name: data.mother_name.trim() || null,
-        blood_group: data.blood_group || null,
-        secondary_phone: data.secondary_phone ? normalizeBangladeshMobile(data.secondary_phone) : null,
-      }
-      const updates = role === 'student'
-        ? personalDetails
-        : {
-            full_name: data.full_name.trim(),
-            phone: normalizeBangladeshMobile(data.phone),
-            ...personalDetails,
-          }
-
-      const { error } = await db
-        .from('profiles')
-        .update(updates)
-        .eq('id', profile.id)
-      if (error) throw error
-      await refreshProfile()
-      toast.success('Profile updated')
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -319,10 +339,43 @@ export function ProfilePage() {
   }
   return (
     <div className="w-full max-w-6xl">
-      <Tabs defaultValue="personal" className="w-full">
+      {role === 'student' && (
+        <section className="px-5 py-4 sm:px-7" aria-label="Profile completion" aria-live="polite">
+          {profileComplete ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Profile complete</p>
+              <Button variant="ghost" size="sm" asChild><Link to="/dashboard">Go to dashboard <ArrowRight /></Link></Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <h2 className="text-sm font-semibold">Complete your profile to access the dashboard</h2>
+              </div>
+              <ul className="mt-2 divide-y divide-border/60">
+                {needsPhoto && (
+                  <li className="flex items-center justify-between gap-3 py-2">
+                    <span className="text-sm text-destructive">Profile photo required</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={goToPhotoUpload}>Upload photo <ArrowRight /></Button>
+                  </li>
+                )}
+                {needsSubjects && (
+                  <li className="flex items-center justify-between gap-3 py-2">
+                    <span className="text-sm text-destructive">Subject choices required</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={goToSubjects}>Choose subjects <ArrowRight /></Button>
+                  </li>
+                )}
+                {!isValidBangladeshMobile(student?.guardian_phone) && (
+                  <li className="py-3 text-sm text-destructive">Ask an administrator to add a valid guardian phone number.</li>
+                )}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <header className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7 sm:py-6">
           <Avatar className="h-16 w-16 border-2 border-background shadow-sm sm:h-20 sm:w-20">
-            {profile.avatar_url && <AvatarImage src={profile.avatar_url} alt={displayName + "'s profile"} />}
+            {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName + "'s profile"} />}
             <AvatarFallback className="bg-muted text-xl font-semibold">{initials}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
@@ -349,23 +402,30 @@ export function ProfilePage() {
           </div>
         </header>
 
-        <div className="border-b px-5 sm:px-7">
-          <TabsList className="h-12 w-full justify-start gap-6 rounded-none bg-transparent p-0">
-            <TabsTrigger value="personal" className="h-12 rounded-none border-b-2 border-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Personal</TabsTrigger>
+        <div className=" px-5 pb-4 sm:px-7">
+          <TabsList className={`grid h-auto! w-full grid-cols-2 gap-1 rounded-none bg-muted p-1 ${role === 'student' ? 'sm:grid-cols-4' : ''}`}>
+            <TabsTrigger value="personal" className={profileTabClassName}>Personal</TabsTrigger>
             {role === 'student' && (
-              <TabsTrigger value="academics" className="h-12 rounded-none border-b-2 border-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Academics</TabsTrigger>
+              <>
+                <TabsTrigger value="academics" className={profileTabClassName}>Academics</TabsTrigger>
+                <TabsTrigger value="fine-details" className={profileTabClassName}>Fine Details</TabsTrigger>
+              </>
             )}
-            <TabsTrigger value="security" className="h-12 rounded-none border-b-2 border-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Security</TabsTrigger>
+            <TabsTrigger value="security" className={profileTabClassName}>Security</TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="personal" className="m-0">
-          <form onSubmit={handleProfile(saveProfile)}>
+        <TabsContent value="personal" forceMount className="m-0 data-[state=inactive]:hidden">
+          <form onSubmit={event => { event.preventDefault(); void personalAutosave.flush() }} onBlur={() => void personalAutosave.flush()} onChange={event => {
+            if (!(event.target instanceof HTMLInputElement)) return
+            const input = event.target
+            if (Object.hasOwn(profileSchema.shape, input.name)) queuePersonalField(input.name as keyof ProfileForm, input.value)
+          }}>
             <div className="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
               <section className="p-5 sm:p-7 lg:border-r">
                 <div className="mb-6">
                   <h2 className="text-base font-semibold">Personal information</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Your identity and family details.</p>
+                  <div className="mt-1"><AutosaveStatus {...personalAutosave} invalid={Object.keys(profileDirtyFields).length > 0 && Object.keys(profileErrors).length > 0} /></div>
                 </div>
                 <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2">
@@ -373,7 +433,7 @@ export function ProfilePage() {
                       <Label>Full name</Label>
                       {role === 'student' && <span className="text-xs text-muted-foreground">Managed by admin</span>}
                     </div>
-                    <Input {...regProfile('full_name')} readOnly={role === 'student'} className={role === 'student' ? 'bg-muted/40' : undefined} aria-invalid={!!profileErrors.full_name} />
+                    <Input {...regProfile('full_name')} readOnly={role === 'student'} className={role === 'student' ? 'bg-muted/40 opacity-50 cursor-not-allowed' : undefined} aria-invalid={!!profileErrors.full_name} />
                     {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
                   </div>
                   <div className="space-y-2">
@@ -390,7 +450,12 @@ export function ProfilePage() {
                     <Label>Blood group <span className="font-normal text-muted-foreground">(optional)</span></Label>
                     <Select
                       value={bloodGroup || 'not-specified'}
-                      onValueChange={value => setProfileValue('blood_group', value === 'not-specified' ? '' : value as ProfileForm['blood_group'], { shouldValidate: true })}
+                      onValueChange={value => {
+                        const group = value === 'not-specified' ? '' : value as ProfileForm['blood_group']
+                        setProfileValue('blood_group', group, { shouldValidate: true, shouldDirty: true })
+                        queuePersonalField('blood_group', group)
+                        void personalAutosave.flush()
+                      }}
                     >
                       <SelectTrigger aria-invalid={!!profileErrors.blood_group}><SelectValue placeholder="Select blood group" /></SelectTrigger>
                       <SelectContent>
@@ -405,7 +470,7 @@ export function ProfilePage() {
                       <Label>{role === 'student' ? 'Guardian phone' : 'Phone'}</Label>
                       {role === 'student' && <span className="text-xs text-muted-foreground">Managed by admin</span>}
                     </div>
-                    <Input type="tel" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" readOnly={phoneManagedByAdmin} className={phoneManagedByAdmin ? 'bg-muted/40' : undefined} {...regProfile('phone')} aria-invalid={!!profileErrors.phone} />
+                    <Input type="tel" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" readOnly={phoneManagedByAdmin} className={phoneManagedByAdmin ? 'bg-muted/40 opacity-50 cursor-not-allowed' : undefined} {...regProfile('phone')} aria-invalid={!!profileErrors.phone} />
                     {profileErrors.phone && <p className="text-xs text-destructive">{profileErrors.phone.message}</p>}
                     {!phoneManagedByAdmin && parentPhone && !profileErrors.phone && parentPhoneIsValid && (
                       <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number</p>
@@ -429,34 +494,16 @@ export function ProfilePage() {
               <section className="border-t p-5 sm:p-7 lg:border-t-0">
                 <div className="mb-6">
                   <h2 className="text-base font-semibold">Documents & photo</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Optional files linked to your profile.</p>
+                  <p className={`mt-1 text-sm ${needsPhoto ? 'text-destructive' : 'text-muted-foreground'}`}>{role === 'student' ? 'Uploading photo is compulsory.' : 'Optional files linked to your profile.'}</p>
                 </div>
-                {user && <ProfileUploads profile={profile} userId={user.id} refreshProfile={refreshProfile} stacked />}
+                {user && <ProfileUploads profile={profile} student={role === 'student' ? student ?? undefined : undefined} userId={user.id} refreshProfile={refreshProfile} stacked />}
               </section>
-            </div>
-            <div className="flex justify-end bg-muted/15 px-5 py-4 sm:px-7">
-              <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Save changes
-              </Button>
             </div>
           </form>
         </TabsContent>
 
         {role === 'student' && student && (
-          <TabsContent value="academics" className="m-0">
-            <div className="border-b p-5 sm:p-7">
-              <AttendanceFineCard
-                absentCount={attendanceStats?.fineRecordedAbsences ?? 0}
-                lateCount={attendanceStats?.fineLateDays ?? 0}
-                finePerAbsentDay={Number(attendanceStats?.finePerAbsentDay ?? 0)}
-                examMissedCount={attendanceStats?.examMissedCount ?? 0}
-                examMissedFineAmount={Number(attendanceStats?.examMissedFineAmount ?? 0)}
-                periodLabel="Lifetime attendance fine breakdown"
-                loading={attendanceStatsLoading}
-                error={Boolean(attendanceStatsError)}
-              />
-            </div>
+          <TabsContent value="academics" forceMount className="m-0 data-[state=inactive]:hidden">
             <div className="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
               <div className="p-5 sm:p-7 lg:border-r [&_section]:border-0 [&_section]:pt-0">
                 <StudentSubjects student={student} />
@@ -488,6 +535,23 @@ export function ProfilePage() {
                 )}
               </section>
             </div>
+          </TabsContent>
+        )}
+
+        {role === 'student' && student && (
+          <TabsContent value="fine-details" className="m-0">
+            <section className="p-5 sm:p-7">
+              <AttendanceFineCard
+                absentCount={attendanceStats?.fineRecordedAbsences ?? 0}
+                lateCount={attendanceStats?.fineLateDays ?? 0}
+                finePerAbsentDay={Number(attendanceStats?.finePerAbsentDay ?? 0)}
+                examMissedCount={attendanceStats?.examMissedCount ?? 0}
+                examMissedFineAmount={Number(attendanceStats?.examMissedFineAmount ?? 0)}
+                periodLabel="Lifetime attendance fine breakdown"
+                loading={attendanceStatsLoading}
+                error={Boolean(attendanceStatsError)}
+              />
+            </section>
           </TabsContent>
         )}
 

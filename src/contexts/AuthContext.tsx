@@ -17,6 +17,7 @@ interface AuthContextValue {
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  applySavedProfileChanges: (userId: string, profileChanges: Partial<Profile>, studentChanges?: Partial<Student>) => void
 }
 
 interface ProfileLoad {
@@ -114,6 +115,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await hydrateProfile(user.id)
   }, [hydrateProfile, user])
 
+  const applySavedProfileChanges = useCallback((userId: string, profileChanges: Partial<Profile>, studentChanges: Partial<Student> = {}) => {
+    if (activeUserIdRef.current !== userId) return
+    setProfile(current => current?.id === userId ? { ...current, ...profileChanges } : current)
+    setStudent(current => current?.profile_id === userId ? { ...current, ...studentChanges } : current)
+  }, [])
+
   useEffect(() => {
     const deferredProfileLoads = new Set<number>()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
@@ -199,7 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, student, role: profile?.role ?? null, permissions, can,
-      loading, profileError, signIn, signUp, signOut, refreshProfile,
+      loading, profileError, signIn, signUp, signOut, refreshProfile, applySavedProfileChanges,
     }}>
       {children}
     </AuthContext.Provider>

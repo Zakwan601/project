@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
   BarChart3, CalendarOff, Cpu, Settings, User, LogOut, ScanLine, MessageSquareWarning, MessageSquareText, Megaphone, ShieldAlert, ChevronRight, UserCog, FileSpreadsheet, Archive,
@@ -95,14 +96,9 @@ export function AppSidebar() {
     return item.roles.includes(role)
   }
 
-  const filteredNav = profileComplete
-    ? navItems.filter(canAccessNavItem)
-    : []
-  const filteredAdvancedNav = profileComplete
-    ? advancedNavItems.filter(canAccessNavItem)
-    : []
-  const filteredBottom = bottomNavItems.filter(item => canAccessNavItem(item)
-    && (profileComplete || item.href === '/profile'))
+  const filteredNav = navItems.filter(canAccessNavItem)
+  const filteredAdvancedNav = advancedNavItems.filter(canAccessNavItem)
+  const filteredBottom = bottomNavItems.filter(canAccessNavItem)
   const isAdvancedActive = filteredAdvancedNav.some(item => location.pathname.startsWith(item.href))
   const [advancedOpen, setAdvancedOpen] = useState(isAdvancedActive)
 
@@ -126,11 +122,16 @@ export function AppSidebar() {
     if (isMobile) setOpenMobile(false)
   }
 
+  const navigationHref = (href: string) => profileComplete ? href : '/profile'
+
   const openRoute = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()
     closeMobileSidebar()
-    navigate(href)
+    if (role === 'student' && !profileComplete && href !== '/profile') {
+      toast.warning('Complete your student profile', { id: 'student-profile-incomplete' })
+    }
+    navigate(navigationHref(href))
   }
 
   return (
@@ -163,7 +164,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                       <Link
-                        to={item.href}
+                        to={navigationHref(item.href)}
                         onClick={event => openRoute(event, item.href)}
                       >
                         <item.icon />
@@ -194,7 +195,7 @@ export function AppSidebar() {
                             <SidebarMenuSubItem key={item.href}>
                               <SidebarMenuSubButton asChild={true} isActive={isActive}>
                                 <Link
-                                  to={item.href}
+                                  to={navigationHref(item.href)}
                                   onClick={event => openRoute(event, item.href)}
                                 >
                                   <item.icon />
@@ -225,7 +226,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                       <Link
-                        to={item.href}
+                        to={navigationHref(item.href)}
                         onClick={event => openRoute(event, item.href)}
                       >
                         <item.icon />

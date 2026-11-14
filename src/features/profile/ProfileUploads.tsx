@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ExternalLink, FileText, Loader2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -44,6 +44,8 @@ export function ProfileUploads({ profile, student, userId, refreshProfile, stack
   const avatarUrl = student?.photo_url ?? profile?.avatar_url ?? null
   const birthCertificatePath = student?.birth_certificate_path ?? profile?.birth_certificate_path ?? null
   const recordId = student?.id ?? profile!.id
+  const photoRequired = profile?.role === 'student' || Boolean(student)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const updateMedia = async (updates: { avatar_url?: string | null; birth_certificate_path?: string | null }) => {
     if (student) {
@@ -192,25 +194,25 @@ export function ProfileUploads({ profile, student, userId, refreshProfile, stack
   return (
     <div className={stacked ? "grid gap-7" : "grid gap-6 sm:grid-cols-2"}>
       <div className="space-y-2">
-        <Label>Profile Image <span className="font-normal text-muted-foreground">(optional)</span></Label>
+        <Label className={photoRequired && !avatarUrl?.trim() ? 'text-destructive' : undefined}>Profile photo <span className={`font-normal ${photoRequired && !avatarUrl?.trim() ? 'text-destructive' : 'text-muted-foreground'}`}>{photoRequired ? '(required)' : '(optional)'}</span></Label>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" asChild disabled={uploadingAvatar || removingAvatar}>
-            <label className="cursor-pointer">
-              {uploadingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              {avatarUrl ? 'Replace Image' : 'Upload Image'}
-              <input
-                type="file"
-                className="sr-only"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={uploadingAvatar || removingAvatar}
-                onChange={event => {
-                  const file = event.target.files?.[0]
-                  event.target.value = ''
-                  if (file) void uploadAvatar(file)
-                }}
-              />
-            </label>
+          <Button id="profile-photo-upload" type="button" variant="outline" onClick={() => photoInputRef.current?.click()} disabled={uploadingAvatar || removingAvatar}>
+            {uploadingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+            {avatarUrl ? 'Replace photo' : 'Upload photo'}
           </Button>
+          <input
+            ref={photoInputRef}
+            aria-label="Choose profile photo"
+            type="file"
+            className="hidden"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={uploadingAvatar || removingAvatar}
+            onChange={event => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void uploadAvatar(file)
+            }}
+          />
           {avatarUrl && (
             <Button type="button" variant="ghost" size="sm" onClick={() => void removeAvatar()} disabled={uploadingAvatar || removingAvatar}>
               {removingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}

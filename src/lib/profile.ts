@@ -1,4 +1,5 @@
 import type { Profile, Student } from '@/types/database'
+import { hasRequiredStudentSubjects } from './studentSubjects'
 
 function compactPhone(value: string) {
   return value.replace(/[\s()-]/g, '')
@@ -17,6 +18,10 @@ export function normalizeBangladeshMobile(value: string) {
   return phone
 }
 
+export function hasProfilePhoto(profile: Profile | null | undefined, student?: Student | null) {
+  return Boolean((student?.photo_url ?? profile?.avatar_url)?.trim())
+}
+
 export function isProfileComplete(profile: Profile | null | undefined, student?: Student | null) {
   // Sub-admin access is controlled by explicit permission grants. Newly created
   // sub-admins do not have a phone number yet, so treating the phone as an
@@ -26,7 +31,9 @@ export function isProfileComplete(profile: Profile | null | undefined, student?:
   if (profile?.role === 'student') {
     return Boolean(
       student
-        && isValidBangladeshMobile(student.guardian_phone),
+        && isValidBangladeshMobile(student.guardian_phone)
+        && hasProfilePhoto(profile, student)
+        && hasRequiredStudentSubjects(student),
     )
   }
 

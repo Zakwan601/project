@@ -1,6 +1,4 @@
-import { Banknote } from 'lucide-react'
 import { calculateAttendanceFine, formatFine } from '@/lib/attendanceFine'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface AttendanceFineCardProps {
@@ -27,51 +25,64 @@ export function AttendanceFineCard({
   const fine = calculateAttendanceFine(absentCount, lateCount, finePerAbsentDay, examMissedCount, examMissedFineAmount)
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b ">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Banknote className="h-4 w-4 text-amber-600" /> Fine Details
-            </CardTitle>
-            <CardDescription>{periodLabel}</CardDescription>
-          </div>
-          {loading ? <Skeleton className="h-8 w-24" /> : !error && <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{formatFine(fine.totalFine)}</p>}
+    <section className="w-full max-w-3xl" aria-label="Fine details" aria-busy={loading}>
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
+        <div>
+          <h2 className="text-base font-semibold">Fine Details</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{periodLabel}</p>
         </div>
-      </CardHeader>
-      <CardContent className="pt-4">
+        {loading ? <Skeleton className="h-8 w-24" /> : !error && (
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Total fine</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{formatFine(fine.totalFine)}</p>
+          </div>
+        )}
+      </div>
+      <div>
         {error ? (
-          <p className="text-sm text-destructive">Could not load attendance fine details.</p>
+          <p className="py-4 text-sm text-destructive">Could not load attendance fine details.</p>
         ) : loading ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[0, 1, 2, 3].map(item => <Skeleton key={item} className="h-14" />)}
+          <div className="space-y-5 py-5" role="status" aria-label="Loading fine details">
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-full" />
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <FineDetail label="Absent + too late" value={fine.recordedAbsences} />
-              <FineDetail label="Late-day penalty" value={`+${fine.latePenaltyAbsences}`} hint={`${fine.lateDays} late day${fine.lateDays === 1 ? '' : 's'}`} />
-              <FineDetail label="Attendance fine" value={formatFine(fine.attendanceFine)} hint={`${fine.fineableAbsences} × ${formatFine(fine.finePerAbsentDay)}`} />
-              <FineDetail label="Exams missed" value={fine.examMissedCount} />
-              <FineDetail label="Exam fine rate" value={formatFine(fine.examMissedFineAmount)} />
-              <FineDetail label="Exam missed fine" value={formatFine(fine.examMissedFine)} />
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Exam + classes applies both fines. Exam-only days apply only the exam missed fine. Approved leave does not incur a fine.
+            <dl className="divide-y">
+              <FineDetail
+                label="Attendance fine"
+                value={formatFine(fine.attendanceFine)}
+                detail={`${fine.recordedAbsences} absent or too late · ${fine.lateDays} late days (+${fine.latePenaltyAbsences} penalty absences)`}
+                calculation={`${fine.fineableAbsences} × ${formatFine(fine.finePerAbsentDay)}`}
+              />
+              <FineDetail
+                label="Missed exam fine"
+                value={formatFine(fine.examMissedFine)}
+                detail={`${fine.examMissedCount} missed exam${fine.examMissedCount === 1 ? '' : 's'}`}
+                calculation={`${fine.examMissedCount} × ${formatFine(fine.examMissedFineAmount)}`}
+              />
+            </dl>
+            <p className="border-t pt-4 text-xs leading-relaxed text-muted-foreground">
+              Both fines apply on exam days with classes. Exam-only days carry only the missed exam fine. Approved leave is exempt.
             </p>
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }
 
-function FineDetail({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+function FineDetail({ label, value, detail, calculation }: { label: string; value: string; detail: string; calculation: string }) {
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    <div className="flex items-start justify-between gap-4 py-4">
+      <div>
+        <dt className="text-sm font-medium">{label}</dt>
+        <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</dd>
+      </div>
+      <div className="shrink-0 text-right">
+        <dd className="text-sm font-semibold tabular-nums">{value}</dd>
+        <dd className="mt-1 text-xs tabular-nums text-muted-foreground">{calculation}</dd>
+      </div>
     </div>
   )
 }

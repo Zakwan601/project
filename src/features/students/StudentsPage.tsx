@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import type { AcademicYear, BloodGroup, ClassGroup, Student, StudentWithClass, SubjectCourseOption } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
 import { isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
+import { getStudentSubjectErrors } from '@/lib/studentSubjects'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -85,24 +86,8 @@ const studentSchema = z.object({
   message: 'Choose two different optional subjects',
   path: ['optional_subject_2_id'],
 }).superRefine((data, context) => {
-  if (data.class_group === 'business' && !data.group_elective_option_id) {
-    context.addIssue({ code: 'custom', message: 'Choose an elective subject', path: ['group_elective_option_id'] })
-  }
-  if (data.class_group === 'humanities') {
-    const fields = ['humanities_main_option_1_id', 'humanities_main_option_2_id', 'humanities_main_option_3_id'] as const
-    const selected = fields.map(field => data[field])
-    fields.forEach(field => {
-      if (!data[field]) context.addIssue({ code: 'custom', message: 'Choose an elective subject', path: [field] })
-      else if (selected.filter(id => id === data[field]).length > 1 || data[field] === data.group_fourth_option_id) {
-        context.addIssue({ code: 'custom', message: 'All elective and fourth subjects must be different', path: [field] })
-      }
-    })
-  }
-  if (!data.group_fourth_option_id) {
-    context.addIssue({ code: 'custom', message: 'Choose a fourth subject', path: ['group_fourth_option_id'] })
-  }
-  if (data.group_elective_option_id && data.group_elective_option_id === data.group_fourth_option_id) {
-    context.addIssue({ code: 'custom', message: 'Elective and fourth subjects must be different', path: ['group_fourth_option_id'] })
+  for (const [field, message] of Object.entries(getStudentSubjectErrors(data, undefined, false))) {
+    context.addIssue({ code: 'custom', message, path: [field] })
   }
 })
 type StudentForm = z.infer<typeof studentSchema>
@@ -1169,7 +1154,7 @@ export function StudentsPage() {
                 <div className="col-span-2 space-y-4">
                   <div>
                     <p className="text-sm font-medium">Humanities subject choices</p>
-                    <p className="text-xs text-muted-foreground">Bangla, English and ICT are compulsory. Choose three electives and one different fourth subject; the other three courses are left out. Both papers follow each course.</p>
+                    <p className="text-xs text-muted-foreground">Optional for admins. Students must choose three different electives and a fourth subject in their profile. Bangla, English and ICT are compulsory; both papers follow each chosen course.</p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {(['humanities_main_option_1_id', 'humanities_main_option_2_id', 'humanities_main_option_3_id', 'group_fourth_option_id'] as const).map((field, index) => {
@@ -1179,7 +1164,7 @@ export function StudentsPage() {
                         .filter(option => option.id === current || !selectedIds.includes(option.id))
                       return (
                         <div key={field} className="space-y-2">
-                          <Label>{index === 3 ? 'Fourth subject' : `Elective subject ${index + 1}`} *</Label>
+                          <Label>{index === 3 ? 'Fourth subject' : `Elective subject ${index + 1}`} (optional)</Label>
                           <Select value={current || ''} onValueChange={value => setValue(field, value, { shouldValidate: true })}>
                             <SelectTrigger aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
                             <SelectContent>{available.map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
@@ -1194,7 +1179,7 @@ export function StudentsPage() {
                 <div className="col-span-2 space-y-4">
                   <div>
                     <p className="text-sm font-medium">Group subject choices</p>
-                    <p className="text-xs text-muted-foreground">Choose one elective and one different fourth subject.</p>
+                    <p className="text-xs text-muted-foreground">Optional for admins. Students must choose one elective and a different fourth subject in their profile.</p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {([
@@ -1206,7 +1191,7 @@ export function StudentsPage() {
                         : groupFourthOptions.filter(option => option.id !== groupElectiveOptionId)
                       return (
                         <div key={field} className="space-y-2">
-                          <Label>{label} *</Label>
+                          <Label>{label} (optional)</Label>
                           <Select value={current || ''} onValueChange={value => setValue(field, value, { shouldValidate: true })}>
                             <SelectTrigger aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
                             <SelectContent>{available.map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
@@ -1219,14 +1204,14 @@ export function StudentsPage() {
                 </div>
               ) : (
                 <div className="col-span-2 space-y-2">
-                  <Label>Fourth / optional subject *</Label>
+                  <Label>Fourth subject (optional for admins)</Label>
                   <Select value={groupFourthOptionId || ''} onValueChange={value => setValue('group_fourth_option_id', value, { shouldValidate: true })}>
                     <SelectTrigger aria-invalid={!!errors.group_fourth_option_id}><SelectValue placeholder="Select subject" /></SelectTrigger>
                     <SelectContent>
                       {groupFourthOptions.filter(option => option.id !== groupElectiveOptionId).map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">Both papers are assigned as the fourth subject.</p>
+                  <p className="text-xs text-muted-foreground">Students must choose their fourth subject in their profile. Both papers follow the choice; the other Science course remains a main subject.</p>
                   {groupFourthOptions.length === 0 && <p className="text-xs text-destructive">No fourth-subject options are configured for this group.</p>}
                   {errors.group_fourth_option_id && <p className="text-xs text-destructive">{errors.group_fourth_option_id.message}</p>}
                 </div>
