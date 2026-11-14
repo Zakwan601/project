@@ -24,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import type { AcademicYear, BloodGroup, ClassGroup, Student, StudentWithClass, SubjectCourseOption } from '@/types/database'
 import { DatePickerInput } from '@/components/shared/DatePickerInput'
-import { isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
+import { getStudentProfileMissingRequirements, isValidBangladeshMobile, normalizeBangladeshMobile } from '@/lib/profile'
 import { getStudentSubjectErrors } from '@/lib/studentSubjects'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -92,6 +92,21 @@ const studentSchema = z.object({
 })
 type StudentForm = z.infer<typeof studentSchema>
 type StudentLoginProgressStage = 'creating' | 'downloading' | 'success' | 'error'
+
+function StudentProfileStatus({ student }: { student: Student }) {
+  const missing = getStudentProfileMissingRequirements(student)
+  const complete = missing.length === 0
+  const Icon = complete ? Check : AlertCircle
+  return (
+    <span
+      className={`inline-flex items-center gap-1 whitespace-nowrap text-xs ${complete ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
+      title={complete ? 'Profile photo, guardian phone and subject choices are complete' : `Missing: ${missing.join(', ')}`}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {complete ? 'Complete' : 'Incomplete'}
+    </span>
+  )
+}
 
 export function StudentsPage() {
   const { data: students, isLoading, error } = useStudents()
@@ -696,6 +711,10 @@ export function StudentsPage() {
         Status
       </TableHead>
 
+      <TableHead className="px-2 text-xs sm:px-3 sm:text-sm">
+        Profile
+      </TableHead>
+
       <TableHead className="px-2 text-right text-xs sm:px-3 sm:text-sm">
         Actions
       </TableHead>
@@ -772,6 +791,10 @@ export function StudentsPage() {
           >
             {student.is_active ? 'Active' : 'Inactive'}
           </Badge>
+        </TableCell>
+
+        <TableCell className="px-2 py-1.5 sm:px-3 sm:py-2">
+          <StudentProfileStatus student={student} />
         </TableCell>
 
         {/* Actions */}

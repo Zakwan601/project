@@ -11,7 +11,7 @@ const subjectsUrl = `data:text/javascript;base64,${Buffer.from(subjectsCompiled)
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText.replace('./studentSubjects', subjectsUrl)
-const { isProfileComplete } = await import(
+const { isProfileComplete, getStudentProfileMissingRequirements } = await import(
   `data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`
 )
 
@@ -31,5 +31,10 @@ assert.equal(isProfileComplete({ role: 'admin', phone: student.guardian_phone })
 assert.equal(isProfileComplete({ role: 'admin', phone: '' }), false, 'Admin phone requirements remain in effect')
 assert.equal(isProfileComplete({ role: 'sub_admin' }), true, 'Sub-admin access remains governed by permissions')
 assert.equal(isProfileComplete(null), false, 'Missing profiles remain locked')
+assert.deepEqual(getStudentProfileMissingRequirements(student), ['Profile photo'], 'Admin status identifies the missing photo')
+const completeStudent = { ...student, photo_url: 'https://example.com/photo.jpg' }
+assert.deepEqual(getStudentProfileMissingRequirements(completeStudent), [], 'Complete records are marked complete in the admin list')
+assert.equal(isProfileComplete(profile, completeStudent), getStudentProfileMissingRequirements(completeStudent).length === 0, 'Admin list and dashboard use the same completion rule')
+assert.deepEqual(getStudentProfileMissingRequirements({ ...student, guardian_phone: '', group_fourth_option_id: null }), ['Profile photo', 'Guardian phone', 'Subject choices'], 'Incomplete rows explain every missing requirement')
 
 console.log('Passed photo and subject requirements, removal, guardian phone, missing records, and staff access checks.')

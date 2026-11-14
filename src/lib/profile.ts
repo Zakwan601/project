@@ -22,6 +22,15 @@ export function hasProfilePhoto(profile: Profile | null | undefined, student?: S
   return Boolean((student?.photo_url ?? profile?.avatar_url)?.trim())
 }
 
+export function getStudentProfileMissingRequirements(student: Student | null | undefined, profile?: Profile | null) {
+  if (!student) return ['Student record']
+  const missing: string[] = []
+  if (!hasProfilePhoto(profile, student)) missing.push('Profile photo')
+  if (!isValidBangladeshMobile(student.guardian_phone)) missing.push('Guardian phone')
+  if (!hasRequiredStudentSubjects(student)) missing.push('Subject choices')
+  return missing
+}
+
 export function isProfileComplete(profile: Profile | null | undefined, student?: Student | null) {
   // Sub-admin access is controlled by explicit permission grants. Newly created
   // sub-admins do not have a phone number yet, so treating the phone as an
@@ -29,12 +38,7 @@ export function isProfileComplete(profile: Profile | null | undefined, student?:
   if (profile?.role === 'sub_admin') return true
 
   if (profile?.role === 'student') {
-    return Boolean(
-      student
-        && isValidBangladeshMobile(student.guardian_phone)
-        && hasProfilePhoto(profile, student)
-        && hasRequiredStudentSubjects(student),
-    )
+    return getStudentProfileMissingRequirements(student, profile).length === 0
   }
 
   return Boolean(
