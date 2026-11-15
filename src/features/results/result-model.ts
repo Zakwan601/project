@@ -93,6 +93,34 @@ export interface ConfigurableExamSubject extends ClassSubject {
   paper_group_id: string | null
 }
 
+export function buildExamSubjectCatalogue(
+  subjects: ClassSubject[],
+  paperGroups: ResultSubjectPaperGroup[],
+  combinePapers: boolean,
+): ConfigurableExamSubject[] {
+  if (!combinePapers) return subjects.map(subject => ({ ...subject, paper_group_id: null }))
+
+  const byId = new Map(subjects.map(subject => [subject.id, subject]))
+  const pairedIds = new Set<string>()
+  const combined = paperGroups.flatMap(group => {
+    const first = byId.get(group.first_paper_subject_id)
+    const second = byId.get(group.second_paper_subject_id)
+    if (first?.class_group === group.class_group) pairedIds.add(first.id)
+    if (second?.class_group === group.class_group) pairedIds.add(second.id)
+    if (!group.is_active || !first || !second || first.class_group !== group.class_group || second.class_group !== group.class_group) return []
+    return [{
+      ...first, name: group.name, code: group.code,
+      is_fourth_subject: first.is_fourth_subject || second.is_fourth_subject,
+      paper_group_id: group.id,
+    }]
+  })
+  // Keep genuine single-paper courses (such as ICT), never orphaned individual papers.
+  const unpaired = subjects.filter(subject => !pairedIds.has(subject.id)
+    && !/\b(?:1st|first|2nd|second)\s+paper\b/i.test(subject.name))
+    .map(subject => ({ ...subject, paper_group_id: null }))
+  return [...unpaired, ...combined].sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export interface ExamSubjectConfigDraft {
   selected: boolean
   creative: string

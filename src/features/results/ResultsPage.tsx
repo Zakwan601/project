@@ -33,6 +33,7 @@ import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
+  buildExamSubjectCatalogue,
   examSubjectAppliesToStudent,
   examSubjectRoleForStudent,
   calculateOfficialGpa,
@@ -297,7 +298,7 @@ function StaffResults() {
     enabled: Boolean(subjectGroup && isExamPage),
     queryFn: async () => {
       const { data, error } = await db.from('result_subject_paper_groups')
-        .select('*').eq('class_group', subjectGroup).eq('is_active', true).order('name')
+        .select('*').eq('class_group', subjectGroup).order('name')
       if (error) throw error
       return data as ResultSubjectPaperGroup[]
     },
@@ -674,6 +675,8 @@ function StaffResults() {
   }
 
   const openSubjectConfiguration = () => {
+    if (subjectsQuery.isPending || paperGroupsQuery.isPending || examSubjectsQuery.isPending) return toast.info('Loading subject choices…')
+    if (subjectsQuery.error || paperGroupsQuery.error || examSubjectsQuery.error) return toast.error('Subject choices could not be loaded. Please try again.')
     const configured = new Map((examSubjectsQuery.data ?? []).map(item => [item.subject_id, item]))
     setConfigRows(Object.fromEntries(configurableSubjects.map(subject => {
       const current = configured.get(subject.id)
@@ -693,10 +696,10 @@ function StaffResults() {
   }
 
   useEffect(() => {
-    if (!configureAfterCreateExamId || examId !== configureAfterCreateExamId || subjectsQuery.isLoading || paperGroupsQuery.isLoading || examSubjectsQuery.isLoading) return
+    if (!configureAfterCreateExamId || examId !== configureAfterCreateExamId || subjectsQuery.isPending || paperGroupsQuery.isPending || examSubjectsQuery.isPending) return
     openSubjectConfiguration()
     setConfigureAfterCreateExamId(null)
-  }, [configureAfterCreateExamId, examId, subjectsQuery.isLoading, paperGroupsQuery.isLoading, examSubjectsQuery.isLoading])
+  }, [configureAfterCreateExamId, examId, subjectsQuery.isPending, paperGroupsQuery.isPending, examSubjectsQuery.isPending])
 
   const saveExamSubjects = async () => {
     const available = configurableSubjects
@@ -915,30 +918,7 @@ function StaffResults() {
   const configurableSubjects = useMemo<ConfigurableExamSubject[]>(() => {
     const configuredIds = new Set((examSubjectsQuery.data ?? []).map(item => item.subject_id))
     const catalogue = (subjectsQuery.data ?? []).filter(subject => subject.is_active || configuredIds.has(subject.id))
-    if (!selectedExam?.combine_subject_papers) {
-      return catalogue.map(subject => ({ ...subject, paper_group_id: null }))
-    }
-
-    const byId = new Map(catalogue.map(subject => [subject.id, subject]))
-    const pairedSubjectIds = new Set<string>()
-    const combined = (paperGroupsQuery.data ?? []).flatMap(paperGroup => {
-      const firstPaper = byId.get(paperGroup.first_paper_subject_id)
-      const secondPaper = byId.get(paperGroup.second_paper_subject_id)
-      if (!firstPaper || !secondPaper) return []
-      pairedSubjectIds.add(firstPaper.id)
-      pairedSubjectIds.add(secondPaper.id)
-      return [{
-        ...firstPaper,
-        name: paperGroup.name,
-        code: paperGroup.code,
-        is_fourth_subject: firstPaper.is_fourth_subject || secondPaper.is_fourth_subject,
-        paper_group_id: paperGroup.id,
-      }]
-    })
-    const unpaired = catalogue
-      .filter(subject => !pairedSubjectIds.has(subject.id))
-      .map(subject => ({ ...subject, paper_group_id: null }))
-    return [...unpaired, ...combined].sort((a, b) => a.name.localeCompare(b.name))
+    return buildExamSubjectCatalogue(catalogue, paperGroupsQuery.data ?? [], Boolean(selectedExam?.combine_subject_papers))
   }, [subjectsQuery.data, examSubjectsQuery.data, paperGroupsQuery.data, selectedExam?.combine_subject_papers])
   // Kept as a local alias while the compact exam-action markup is transitioned.
   const unusedSubjects = configurableSubjects

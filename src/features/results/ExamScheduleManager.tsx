@@ -12,26 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SimpleDialog } from '@/features/results/ResultControls'
-import type { ClassGroup } from '@/types/database'
-import type { ExamWithDetails } from '@/features/results/result-model'
+import { buildExamSubjectCatalogue, type ClassSubject, type ExamWithDetails, type ResultSubjectPaperGroup } from '@/features/results/result-model'
 
 const db = supabase as any
-
-interface RoutineSubject {
-  id: string
-  name: string
-  code: string
-  class_group: ClassGroup
-}
-
-interface RoutinePaperGroup {
-  id: string
-  name: string
-  code: string
-  class_group: ClassGroup
-  first_paper_subject_id: string
-  second_paper_subject_id: string
-}
 
 interface ExamRoutineRow {
   id: string
@@ -83,27 +66,25 @@ export function ExamScheduleManager({
     },
   })
 
-  const subjectsQuery = useQuery<RoutineSubject[]>({
+  const subjectsQuery = useQuery<ClassSubject[]>({
     queryKey: ['result-routine-subjects'],
     queryFn: async () => {
       const { data, error } = await db.from('subjects')
-        .select('id,name,code,class_group')
-        .eq('is_active', true)
+        .select('id,name,code,class_group,is_active,is_fourth_subject')
         .order('name')
       if (error) throw error
-      return data as RoutineSubject[]
+      return data as ClassSubject[]
     },
   })
 
-  const paperGroupsQuery = useQuery<RoutinePaperGroup[]>({
+  const paperGroupsQuery = useQuery<ResultSubjectPaperGroup[]>({
     queryKey: ['result-routine-paper-groups'],
     queryFn: async () => {
       const { data, error } = await db.from('result_subject_paper_groups')
-        .select('id,name,code,class_group,first_paper_subject_id,second_paper_subject_id')
-        .eq('is_active', true)
+        .select('id,name,code,class_group,first_paper_subject_id,second_paper_subject_id,is_active')
         .order('name')
       if (error) throw error
-      return data as RoutinePaperGroup[]
+      return data as ResultSubjectPaperGroup[]
     },
   })
 
@@ -123,27 +104,19 @@ export function ExamScheduleManager({
   const groupExams = examsQuery.data ?? []
   const currentExam = groupExams.find(exam => exam.class_id === classId)
   const selectedExams = currentExam ? [currentExam] : []
-  const selectedGroups = new Set(selectedExams.map(exam => exam.classes.class_group))
-  const modeCombinesPapers = groupExams[0]?.combine_subject_papers ?? combineSubjectPapers
+  const selectedClassGroup = currentExam?.classes.class_group
+  const modeCombinesPapers = currentExam?.combine_subject_papers ?? combineSubjectPapers
   const availableSubjects = useMemo(() => {
-    const catalogue = (subjectsQuery.data ?? []).filter(subject => !selectedGroups.size
-      || (selectedGroups.size === 1 && selectedGroups.has(subject.class_group)))
-    if (!modeCombinesPapers) return catalogue
-
-    const byId = new Map(catalogue.map(subject => [subject.id, subject]))
-    const pairedIds = new Set<string>()
-    const combined = (paperGroupsQuery.data ?? []).flatMap(group => {
-      const first = byId.get(group.first_paper_subject_id)
-      const second = byId.get(group.second_paper_subject_id)
-      if (!first || !second) return []
-      pairedIds.add(first.id)
-      pairedIds.add(second.id)
-      return [{ ...first, name: group.name, code: group.code }]
-    })
-    return [...catalogue.filter(subject => !pairedIds.has(subject.id)), ...combined]
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [modeCombinesPapers, paperGroupsQuery.data, selectedGroups, subjectsQuery.data])
-  const modeHasClasses = groupExams[0]?.has_regular_classes ?? hasRegularClasses
+    const catalogue = (subjectsQuery.data ?? []).filter(subject => subject.is_active && subject.class_group === selectedClassGroup)
+    return buildExamSubjectCatalogue(catalogue, paperGroupsQuery.data ?? [], modeCombinesPapers)
+  }, [modeCombinesPapers, paperGroupsQuery.data, selectedClassGroup, subjectsQuery.data])
+  const routineSubjectName = (row: ExamRoutineRow) => {
+    const group = modeCombinesPapers ? paperGroupsQuery.data?.find(group =>
+      group.first_paper_subject_id === row.subject_id || group.second_paper_subject_id === row.subject_id,
+    ) : undefined
+    return group?.name || row.subject_name || row.subjects?.name
+  }
+  const modeHasClasses = currentExam?.has_regular_classes ?? hasRegularClasses
   const dateMin = selectedExams.reduce<string | undefined>((latest, exam) => {
     const start = exam.academic_years.start_date
     return start && (!latest || start > latest) ? start : latest
@@ -154,12 +127,15 @@ export function ExamScheduleManager({
   }, undefined)
 
   const openRoutineDialog = () => {
+    if (examsQuery.isLoading || subjectsQuery.isLoading || paperGroupsQuery.isLoading) return toast.info('Loading subject choices…')
+    if (examsQuery.error || subjectsQuery.error || paperGroupsQuery.error) return toast.error('Subject choices could not be loaded. Please try again.')
     setForm({ ...emptyForm, examIds: currentExam ? [currentExam.id] : [] })
     setDialogOpen(true)
   }
 
   const createRoutineRow = async () => {
     if (!currentExam || !form.subjectId || !form.date) return toast.error('Select a subject and a date')
+    if (!availableSubjects.some(subject => subject.id === form.subjectId)) return toast.error('Choose a subject for the current paper mode')
     if (!modeHasClasses && !form.time) return toast.error('Exam time is required for an exam-only examination')
     setSaving(true)
     const { error } = await db.rpc('create_result_exam_routine_entry', {
@@ -196,7 +172,7 @@ export function ExamScheduleManager({
         {routineQuery.isLoading ? <div className="overflow-hidden rounded-md border">{Array.from({ length: 5 }, (_, index) => <div key={index} className="grid min-h-12 grid-cols-[minmax(8rem,1fr)_7rem_6rem] items-center gap-3 border-b px-3 last:border-b-0"><Skeleton className="h-3 w-36 max-w-full" /><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-16" /></div>)}</div>
           : routineQuery.error ? <p className="py-8 text-center text-sm text-destructive">{(routineQuery.error as Error).message}</p>
             : !routineQuery.data?.some(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id)) ? <p className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">No routine rows added for this class yet.</p>
-              : <div className="overflow-x-auto"><Table className="min-w-[480px]"><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{routineQuery.data.filter(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id)).map(row => <TableRow key={row.id}><TableCell><span className="font-medium">{row.subject_name || row.subjects?.name}</span>{!modeCombinesPapers && row.subjects?.code && <span className="ml-2 text-xs text-muted-foreground">{row.subjects.code}</span>}</TableCell><TableCell>{format(new Date(`${row.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell>{displayTime(row.exam_time)}</TableCell></TableRow>)}</TableBody></Table></div>}
+              : <div className="overflow-x-auto"><Table className="min-w-[480px]"><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{routineQuery.data.filter(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id)).map(row => <TableRow key={row.id}><TableCell><span className="font-medium">{routineSubjectName(row)}</span>{!modeCombinesPapers && row.subjects?.code && <span className="ml-2 text-xs text-muted-foreground">{row.subjects.code}</span>}</TableCell><TableCell>{format(new Date(`${row.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell>{displayTime(row.exam_time)}</TableCell></TableRow>)}</TableBody></Table></div>}
       </CardContent>
     </Card>
 
