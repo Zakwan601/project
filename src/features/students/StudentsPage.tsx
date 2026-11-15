@@ -158,6 +158,8 @@ export function StudentsPage() {
   const [isSyncingUsers, setIsSyncingUsers] = useState(false)
   const [syncSummary, setSyncSummary] = useState<ZktecoSyncSummary | null>(null)
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false)
+  const [reissueLoginsOpen, setReissueLoginsOpen] = useState(false)
+  const [loginExportMode, setLoginExportMode] = useState<'create' | 'reissue'>('create')
   const [creatingStudentLogins, setCreatingStudentLogins] = useState(false)
   const [pendingLoginExport, setPendingLoginExport] = useState<BulkStudentLoginResult | null>(null)
   const [loginProgressOpen, setLoginProgressOpen] = useState(false)
@@ -344,7 +346,9 @@ export function StudentsPage() {
     }
   }
 
-  const createStudentLogins = async () => {
+  const createStudentLogins = async (mode: 'create' | 'reissue' = 'create') => {
+    if (creatingStudentLogins) return
+    if (!pendingLoginExport) setLoginExportMode(mode)
     if (!session) {
       toast.error('Your session has expired. Please sign in again.')
       return
@@ -378,7 +382,7 @@ export function StudentsPage() {
       }
 
       const domain = (import.meta.env.VITE_STUDENT_LOGIN_DOMAIN || 'nmdc.edu').trim()
-      const result = await createBulkStudentLogins(session, studentIds, domain)
+      const result = await createBulkStudentLogins(session, studentIds, domain, mode)
       exportReady = result
       setPendingLoginExport(result)
       setLoginProgressResult(result)
@@ -493,7 +497,7 @@ export function StudentsPage() {
             {isFullAdmin && <Button
               size="sm"
               variant="outline"
-              onClick={createStudentLogins}
+              onClick={() => void createStudentLogins()}
               disabled={creatingStudentLogins || (!pendingLoginExport && filtered.length === 0)}
             >
               <KeyRound className="mr-1.5 h-4 w-4" />
@@ -504,6 +508,12 @@ export function StudentsPage() {
                   : selectedStudentIds.length > 0
                     ? `Create logins (${selectedStudentIds.length})`
                     : 'Create student logins'}
+            </Button>}
+            {isFullAdmin && <Button size="sm" variant="outline"
+              onClick={() => setReissueLoginsOpen(true)}
+              disabled={creatingStudentLogins || Boolean(pendingLoginExport) || selectedStudentIds.length === 0}
+            >
+              <Download className="mr-1.5 h-4 w-4" /> Download login CSV{selectedStudentIds.length > 0 ? ` (${selectedStudentIds.length})` : ''}
             </Button>}
             {isFullAdmin && <Button size="sm" variant="outline" onClick={() => setBulkUpdateOpen(true)}>
               <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Bulk edit
@@ -525,6 +535,21 @@ export function StudentsPage() {
           </div>
         ) : undefined}
       />
+
+      <AlertDialog open={reissueLoginsOpen} onOpenChange={setReissueLoginsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Generate login CSV for {selectedStudentIds.length} students?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Existing accounts will keep their email and receive a new temporary password, replacing their current password. Students without an account will get a new login. The CSV includes each student's email and temporary password.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void createStudentLogins('reissue')}>Generate and download</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         open={loginProgressOpen}
@@ -563,7 +588,7 @@ export function StudentsPage() {
 
           <div className="space-y-2 rounded-lg border p-3">
             <StudentLoginProgressStep
-              label="Create secure login accounts"
+              label={loginExportMode === 'reissue' ? 'Generate new temporary passwords' : 'Create secure login accounts'}
               status={loginProgressStage === 'creating' ? 'active' : loginProgressResult ? 'complete' : loginProgressStage === 'error' ? 'error' : 'pending'}
             />
             <StudentLoginProgressStep
@@ -580,7 +605,7 @@ export function StudentsPage() {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30">
                 <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-400">{loginProgressResult.created}</p>
-                <p className="text-xs text-muted-foreground">Created</p>
+                <p className="text-xs text-muted-foreground">{loginExportMode === 'reissue' ? 'Prepared' : 'Created'}</p>
               </div>
               <div className="rounded-md bg-muted p-2">
                 <p className="text-lg font-semibold">{loginProgressResult.skipped}</p>
@@ -593,9 +618,13 @@ export function StudentsPage() {
             </div>
           )}
 
+          {Boolean(loginProgressResult?.failures.length) && <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-destructive">
+            {loginProgressResult?.failures.map(failure => <li key={failure.student_id}>{failure.name}: {failure.error}</li>)}
+          </ul>}
+
           <DialogFooter>
             {loginProgressStage === 'error' && pendingLoginExport && (
-              <Button onClick={createStudentLogins} disabled={creatingStudentLogins}>
+              <Button onClick={() => void createStudentLogins()} disabled={creatingStudentLogins}>
                 <Download className="mr-2 h-4 w-4" /> Retry credentials download
               </Button>
             )}

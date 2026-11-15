@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", userData.user.id)
       .maybeSingle();
     if (!caller || caller.role !== "admin" || caller.is_active === false) {
-      return jsonResponse(403, { error: "Only active administrators can create student logins" });
+      return jsonResponse(403, { error: "Only active administrators can manage student logins" });
     }
 
     await cleanupExpiredExports(adminClient);
@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
     if (body.action === "download") {
       return downloadOnce(adminClient, userData.user.id, body.export_id);
     }
-    if (body.action !== "create") {
+    if (body.action !== "create" && body.action !== "reissue") {
       return jsonResponse(400, { error: "Unsupported action" });
     }
 
@@ -100,7 +100,9 @@ Deno.serve(async (req: Request) => {
 
     for (let index = 0; index < students.length; index += 5) {
       const results = await Promise.all(students.slice(index, index + 5).map(student =>
-        createStudentLogin(adminClient, student, domain)
+        body.action === "reissue" && student.profile_id
+          ? reissueStudentLogin(adminClient, student)
+          : createStudentLogin(adminClient, student, domain)
       ));
       for (const result of results) {
         if (result.status === "created") credentials.push(result.credential);
@@ -112,7 +114,7 @@ Deno.serve(async (req: Request) => {
     if (credentials.length === 0) {
       return jsonResponse(409, {
         error: failures.length > 0
-          ? "No student logins were created. Review the reported failures."
+          ? "No login credentials were prepared. Review the reported failures."
           : "All selected students already have login accounts.",
         created: 0,
         skipped,
@@ -237,6 +239,43 @@ async function createStudentLogin(
       rollNumber: student.roll_number,
       className,
       email,
+      password,
+    },
+  };
+}
+
+async function reissueStudentLogin(
+  adminClient: ReturnType<typeof createClient>,
+  student: StudentRow,
+) {
+  const name = `${student.first_name} ${student.last_name}`.trim();
+  const failure = (error: string) => ({
+    status: "failed" as const,
+    failure: { student_id: student.id, name, error },
+  });
+  const { data: profile, error: profileError } = await adminClient.from("profiles")
+    .select("role, is_active").eq("id", student.profile_id!).maybeSingle();
+  if (profileError || !profile || profile.role !== "student" || profile.is_active === false) {
+    return failure("The linked account must be an active student account");
+  }
+  const { data, error } = await adminClient.auth.admin.getUserById(student.profile_id!);
+  if (error || !data.user?.email) return failure("The linked login email could not be found");
+  const password = makePassword();
+  const { error: resetError } = await adminClient.auth.admin.updateUserById(student.profile_id!, {
+    password,
+    user_metadata: { ...data.user.user_metadata, must_change_password: true },
+  });
+  if (resetError) return failure(resetError.message);
+  const relatedClass = Array.isArray(student.classes) ? student.classes[0] : student.classes;
+  return {
+    status: "created" as const,
+    credential: {
+      name,
+      rollNumber: student.roll_number,
+      className: relatedClass
+        ? [relatedClass.name, relatedClass.section && `Section ${relatedClass.section}`].filter(Boolean).join(" - ")
+        : "",
+      email: data.user.email,
       password,
     },
   };

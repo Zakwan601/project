@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.archive-device-logs]
 verify_jwt = false
+
+[functions.bulk-student-logins]
+verify_jwt = false

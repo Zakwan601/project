@@ -31,12 +31,13 @@ export async function createBulkStudentLogins(
   session: Session,
   studentIds: string[],
   domain: string,
+  action: 'create' | 'reissue' = 'create',
 ) {
   const response = await fetch(functionUrl(), {
     method: 'POST',
     headers: headers(session),
     body: JSON.stringify({
-      action: 'create',
+      action,
       student_ids: studentIds,
       domain,
     }),
