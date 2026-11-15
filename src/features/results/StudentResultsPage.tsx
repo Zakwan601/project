@@ -16,6 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import type { StudentResultPayload } from '@/types/database'
 import type { ExamWithDetails } from '@/features/results/result-model'
+import { groupExamRoutineSlots } from '@/features/results/routine-model'
+import { studentSubjectUpdate } from '@/lib/studentSubjects'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
@@ -101,16 +103,12 @@ export function StudentResultsPage() {
   const selectedExam = examsQuery.data?.find(exam => exam.id === examId)
 
   const routineQuery = useQuery<StudentRoutineRow[]>({
-    queryKey: ['student-exam-routine', examId],
-    enabled: Boolean(examId),
+    queryKey: ['student-exam-routine', examId, student?.id, student?.class_group, student ? studentSubjectUpdate(student) : null],
+    enabled: Boolean(examId && student?.id),
     queryFn: async () => {
-      const { data, error } = await db.from('result_exam_schedules')
-        .select('id,subject_name,exam_date,exam_time,result_exam_schedule_classes!inner(exam_id)')
-        .eq('result_exam_schedule_classes.exam_id', examId)
-        .order('exam_date')
-        .order('exam_time')
+      const { data, error } = await db.rpc('get_student_exam_routine', { p_exam_id: examId })
       if (error) throw error
-      return data as StudentRoutineRow[]
+      return groupExamRoutineSlots(data as StudentRoutineRow[])
     },
   })
 
@@ -155,7 +153,7 @@ export function StudentResultsPage() {
         <CardContent>
           {routineQuery.isLoading ? <RoutineSkeleton />
             : routineQuery.error ? <ErrorState message={(routineQuery.error as Error).message} />
-              : !routineQuery.data?.length ? <EmptyState title="Routine not available" description="No routine rows have been added for this examination yet." />
+              : !routineQuery.data?.length ? <EmptyState title="No exams scheduled" description="No exams are scheduled for your subject choices yet." />
                 : <div className="overflow-x-auto">
                   <Table>
                     <TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>

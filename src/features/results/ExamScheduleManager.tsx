@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SimpleDialog } from '@/features/results/ResultControls'
 import { buildExamSubjectCatalogue, type ClassSubject, type ExamWithDetails, type ResultSubjectPaperGroup } from '@/features/results/result-model'
+import { groupExamRoutineSlots } from '@/features/results/routine-model'
 
 const db = supabase as any
 
@@ -28,7 +29,7 @@ interface ExamRoutineRow {
   result_exam_schedule_classes: Array<{ exam_id: string; result_exams: ExamWithDetails }>
 }
 
-const emptyForm = { examIds: [] as string[], subjectId: '', date: '', time: '' }
+const emptyForm = { subjectIds: [] as string[], date: '', time: '' }
 
 function displayTime(value: string | null) {
   if (!value) return 'Not required'
@@ -117,6 +118,9 @@ export function ExamScheduleManager({
     return group?.name || row.subject_name || row.subjects?.name
   }
   const modeHasClasses = currentExam?.has_regular_classes ?? hasRegularClasses
+  const routineSlots = groupExamRoutineSlots((routineQuery.data ?? [])
+    .filter(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id))
+    .map(row => ({ ...row, subject_name: routineSubjectName(row) ?? '' })))
   const dateMin = selectedExams.reduce<string | undefined>((latest, exam) => {
     const start = exam.academic_years.start_date
     return start && (!latest || start > latest) ? start : latest
@@ -129,30 +133,39 @@ export function ExamScheduleManager({
   const openRoutineDialog = () => {
     if (examsQuery.isLoading || subjectsQuery.isLoading || paperGroupsQuery.isLoading) return toast.info('Loading subject choices…')
     if (examsQuery.error || subjectsQuery.error || paperGroupsQuery.error) return toast.error('Subject choices could not be loaded. Please try again.')
-    setForm({ ...emptyForm, examIds: currentExam ? [currentExam.id] : [] })
+    setForm({ ...emptyForm })
     setDialogOpen(true)
   }
 
   const createRoutineRow = async () => {
-    if (!currentExam || !form.subjectId || !form.date) return toast.error('Select a subject and a date')
-    if (!availableSubjects.some(subject => subject.id === form.subjectId)) return toast.error('Choose a subject for the current paper mode')
+    if (saving) return
+    if (!currentExam || !form.subjectIds.length || !form.date) return toast.error('Select subjects and a date')
+    if (form.subjectIds.some(id => !availableSubjects.some(subject => subject.id === id))) return toast.error('Choose subjects for the current paper mode')
     if (!modeHasClasses && !form.time) return toast.error('Exam time is required for an exam-only examination')
     setSaving(true)
-    const { error } = await db.rpc('create_result_exam_routine_entry', {
-      p_exam_ids: [currentExam.id],
-      p_subject_id: form.subjectId,
-      p_exam_date: form.date,
-      p_exam_time: form.time || null,
-    })
-    setSaving(false)
-    if (error) return toast.error(error.message)
-    await qc.invalidateQueries({ queryKey: ['result-exam-routine', examGroupId] })
-    await qc.invalidateQueries({ queryKey: ['student_attendance_statistics'] })
-    await qc.invalidateQueries({ queryKey: ['student_attendance_fine_details'] })
-    await qc.invalidateQueries({ queryKey: ['class_attendance_fine_details'] })
-    setDialogOpen(false)
-    setForm({ ...emptyForm })
-    toast.success('Routine row added')
+    try {
+      const { error } = await db.rpc('create_result_exam_routine_entries', {
+        p_exam_id: currentExam.id,
+        p_subject_ids: form.subjectIds,
+        p_exam_date: form.date,
+        p_exam_time: form.time || null,
+      })
+      if (error) throw new Error(error.message)
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['result-exam-routine', examGroupId] }),
+        qc.invalidateQueries({ queryKey: ['student-exam-routine'] }),
+        qc.invalidateQueries({ queryKey: ['student_attendance_statistics'] }),
+        qc.invalidateQueries({ queryKey: ['student_attendance_fine_details'] }),
+        qc.invalidateQueries({ queryKey: ['class_attendance_fine_details'] }),
+      ])
+      setDialogOpen(false)
+      setForm({ ...emptyForm })
+      toast.success('Routine row added')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save the routine. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return <>
@@ -171,21 +184,31 @@ export function ExamScheduleManager({
       <CardContent className="px-0 sm:px-0">
         {routineQuery.isLoading ? <div className="overflow-hidden rounded-md border">{Array.from({ length: 5 }, (_, index) => <div key={index} className="grid min-h-12 grid-cols-[minmax(8rem,1fr)_7rem_6rem] items-center gap-3 border-b px-3 last:border-b-0"><Skeleton className="h-3 w-36 max-w-full" /><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-16" /></div>)}</div>
           : routineQuery.error ? <p className="py-8 text-center text-sm text-destructive">{(routineQuery.error as Error).message}</p>
-            : !routineQuery.data?.some(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id)) ? <p className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">No routine rows added for this class yet.</p>
-              : <div className="overflow-x-auto"><Table className="min-w-[480px]"><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{routineQuery.data.filter(row => row.result_exam_schedule_classes.some(link => link.exam_id === currentExam?.id)).map(row => <TableRow key={row.id}><TableCell><span className="font-medium">{routineSubjectName(row)}</span>{!modeCombinesPapers && row.subjects?.code && <span className="ml-2 text-xs text-muted-foreground">{row.subjects.code}</span>}</TableCell><TableCell>{format(new Date(`${row.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell>{displayTime(row.exam_time)}</TableCell></TableRow>)}</TableBody></Table></div>}
+            : !routineSlots.length ? <p className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">No routine rows added for this class yet.</p>
+              : <div className="overflow-x-auto"><Table className="min-w-[480px]"><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{routineSlots.map(row => <TableRow key={row.id}><TableCell><span className="font-medium">{row.subject_name}</span></TableCell><TableCell>{format(new Date(`${row.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell>{displayTime(row.exam_time)}</TableCell></TableRow>)}</TableBody></Table></div>}
       </CardContent>
     </Card>
 
-    <SimpleDialog open={dialogOpen} onOpenChange={setDialogOpen} title="Add routine row" description={`Add this row only to ${currentExam?.classes.name ?? 'the current class'}.`} onSave={createRoutineRow} saveLabel={saving ? 'Adding...' : 'Add to routine'}>
-      <Label>Subject</Label>
-      <Select value={form.subjectId} onValueChange={subjectId => setForm(current => ({ ...current, subjectId }))}>
-        <SelectTrigger><SelectValue placeholder="Choose subject" /></SelectTrigger>
-        <SelectContent>{availableSubjects.map(subject => <SelectItem key={subject.id} value={subject.id}>{subject.name} ({subject.code})</SelectItem>)}</SelectContent>
-      </Select>
+    <SimpleDialog open={dialogOpen} onOpenChange={open => { if (!saving) setDialogOpen(open) }} title="Add routine row" description={`Add this row only to ${currentExam?.classes.name ?? 'the current class'}.`} onSave={createRoutineRow} saveLabel={saving ? 'Adding...' : 'Add to routine'}>
+      <fieldset className="space-y-2" disabled={saving}>
+        <legend className="text-sm font-medium">Subjects at this time</legend>
+        <p className="text-xs text-muted-foreground">Select the alternative subjects held together. Students see the subjects they take.</p>
+        <div className="max-h-60 divide-y overflow-y-auto border-y">
+          {availableSubjects.map(subject => (
+            <label key={subject.id} className="flex cursor-pointer items-start gap-3 py-2.5 text-sm">
+              <Checkbox className="mt-0.5" checked={form.subjectIds.includes(subject.id)} onCheckedChange={checked => setForm(current => ({
+                ...current, subjectIds: checked === true ? [...new Set([...current.subjectIds, subject.id])] : current.subjectIds.filter(id => id !== subject.id),
+              }))} />
+              <span>{subject.name} <span className="text-xs text-muted-foreground">({subject.code})</span></span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{form.subjectIds.length} selected</p>
+      </fieldset>
       <Label>Date</Label>
-      <Input type="date" value={form.date} min={dateMin} max={dateMax} onChange={event => setForm(current => ({ ...current, date: event.target.value }))} />
+      <Input type="date" disabled={saving} value={form.date} min={dateMin} max={dateMax} onChange={event => setForm(current => ({ ...current, date: event.target.value }))} />
       <Label>Exam time {modeHasClasses ? '(optional)' : '(required)'}</Label>
-      <Input type="time" value={form.time} onChange={event => setForm(current => ({ ...current, time: event.target.value }))} />
+      <Input type="time" disabled={saving} value={form.time} onChange={event => setForm(current => ({ ...current, time: event.target.value }))} />
     </SimpleDialog>
   </>
 }
