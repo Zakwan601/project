@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { StudentProfileReviewNotice } from '@/components/dashboard/StudentProfileReviewNotice'
 import { AUTH_CAPTCHA_ENABLED } from '@/lib/authCaptcha'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -83,7 +85,7 @@ const passwordRequirements = [
 
 export function ProfilePage() {
   const { profile, student, user, refreshProfile, applySavedProfileChanges, role, loading, profileError } = useAuth()
-  const [activeTab, setActiveTab] = useState('personal')
+  const [activeTab, setActiveTab] = useState(() => new URLSearchParams(window.location.search).get('review') === 'subjects' ? 'academics' : 'personal')
   const [changingPwd, setChangingPwd] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({ old: false, new: false, confirm: false })
   const passwordTurnstileRef = useRef<TurnstileInstance>(null)
@@ -97,19 +99,36 @@ export function ProfilePage() {
   const avatarUrl = student?.photo_url ?? profile?.avatar_url
   const personalIdentityRef = useRef<string | null>(null)
   const profileId = profile?.id
+  const studentId = student?.id
+  const queryClient = useQueryClient()
   const savePersonalChanges = useCallback(async (updates: PersonalUpdates) => {
     if (!profileId) throw new Error('Profile unavailable')
+    if (role === 'student' && Object.hasOwn(updates, 'full_name')) {
+      if (!studentId) throw new Error('Student profile unavailable')
+      const nameParts = (updates.full_name ?? '').trim().split(/\s+/u)
+      const { full_name: _name, ...details } = updates
+      const { data, error } = await db.from('students').update({
+        ...details, first_name: nameParts[0], last_name: nameParts.slice(1).join(' '),
+      }).eq('id', studentId).eq('profile_id', profileId)
+        .select(['id', 'first_name', 'last_name', ...Object.keys(details)].join(',')).single()
+      if (error) throw new Error(error.message || 'Unable to save name')
+      applySavedProfileChanges(profileId, {
+        ...details, full_name: [data.first_name, data.last_name].filter(Boolean).join(' '),
+      }, data)
+      void queryClient.invalidateQueries({ queryKey: ['students'] })
+      return
+    }
     const { data, error } = await db.from('profiles').update(updates).eq('id', profileId)
       .select(['id', ...Object.keys(updates)].join(',')).single()
     if (error) throw new Error(error.message || 'Unable to save profile')
     const syncedFields = ['father_name', 'mother_name', 'blood_group', 'secondary_phone']
     const studentChanges = Object.fromEntries(Object.entries(data).filter(([key]) => syncedFields.includes(key))) as Partial<Student>
     applySavedProfileChanges(profileId, data, studentChanges)
-  }, [profileId, applySavedProfileChanges])
+  }, [profileId, studentId, role, applySavedProfileChanges, queryClient])
   const personalAutosave = useAutosave(savePersonalChanges, 350)
 
   const queuePersonalField = (field: keyof ProfileForm, value: string) => {
-    if (role === 'student' && (field === 'full_name' || field === 'phone')) return
+    if (role === 'student' && field === 'phone') return
     const parsed = (role === 'student' ? studentProfileSchema : profileSchema).shape[field].safeParse(value)
     if (!parsed.success) return
     const normalized = field === 'phone' || field === 'secondary_phone'
@@ -340,6 +359,14 @@ export function ProfilePage() {
   }
   return (
     <div className="w-full max-w-6xl">
+      <StudentProfileReviewNotice onEdit={field => {
+        setActiveTab(field === 'subjects' ? 'academics' : 'personal')
+        window.setTimeout(() => {
+          if (field === 'subjects') document.getElementById('profile-subjects')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          else if (field === 'photo_url') document.getElementById('profile-photo-upload')?.focus()
+          else document.querySelector<HTMLElement>(`[name="${field}"]`)?.focus()
+        }, 100)
+      }} />
       {role === 'student' && (
         <section className="px-5 py-4 sm:px-7" aria-label="Profile completion" aria-live="polite">
           {profileComplete ? (
@@ -432,9 +459,8 @@ export function ProfilePage() {
                   <div className="space-y-2 sm:col-span-2">
                     <div className="flex items-center justify-between gap-2">
                       <Label>Full name</Label>
-                      {role === 'student' && <span className="text-xs text-muted-foreground">Managed by admin</span>}
                     </div>
-                    <Input {...regProfile('full_name')} readOnly={role === 'student'} className={role === 'student' ? 'bg-muted/40 opacity-50 cursor-not-allowed' : undefined} aria-invalid={!!profileErrors.full_name} />
+                    <Input {...regProfile('full_name')} autoComplete="name" aria-invalid={!!profileErrors.full_name} />
                     {profileErrors.full_name && <p className="text-xs text-destructive">{profileErrors.full_name.message}</p>}
                   </div>
                   <div className="space-y-2">

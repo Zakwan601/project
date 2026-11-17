@@ -1,3 +1,4 @@
+import { StudentProfileReviewNotice } from '@/components/dashboard/StudentProfileReviewNotice'
 import { motion } from 'framer-motion'
 import { CheckCircle, UserX, Clock, TrendingUp, AlarmClock, Banknote, MessageSquareWarning } from 'lucide-react'
 import { format } from 'date-fns'
@@ -94,6 +95,8 @@ export function StudentDashboard() {
           Good {getGreeting()}, {student?.first_name ?? profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
       </motion.div>
+
+      <StudentProfileReviewNotice />
 
       {/* Personal attendance stats */}
       <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">

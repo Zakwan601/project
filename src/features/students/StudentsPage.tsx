@@ -1,3 +1,5 @@
+import { StudentProfileReview } from './StudentProfileReview'
+import { SUBJECT_REVIEW_FIELDS } from '@/lib/studentProfileReview'
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
@@ -1312,6 +1314,7 @@ export function StudentsPage() {
                 {editing && (
                   <>
                     <ProfileUploads
+                      showPhotoPreview
                       student={editing}
                       userId={editing.profile_id ?? editing.id}
                       refreshProfile={() => refreshEditingStudent(editing.id)}
@@ -1352,6 +1355,16 @@ export function StudentsPage() {
                         )}
                       </div>
                     </div>
+                    <StudentProfileReview key={editing.id} student={editing} onRemoved={async fields => {
+                      for (const field of fields) {
+                        if (field === 'subjects') {
+                          for (const subjectField of SUBJECT_REVIEW_FIELDS) setValue(subjectField, '', { shouldDirty: true, shouldValidate: true })
+                        } else if (field !== 'photo_url' && field !== 'birth_certificate_path') {
+                          setValue(field, '', { shouldDirty: true, shouldValidate: true })
+                        }
+                      }
+                      await refreshEditingStudent(editing.id)
+                    }} />
                   </>
                 )}
               </div>

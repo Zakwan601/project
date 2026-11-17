@@ -1,3 +1,4 @@
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useRef, useState } from 'react'
 import { ExternalLink, FileText, Loader2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
@@ -35,10 +36,11 @@ interface ProfileUploadsProps {
   student?: Student
   userId: string
   refreshProfile: () => Promise<void>
+  showPhotoPreview?: boolean
   stacked?: boolean
 }
 
-export function ProfileUploads({ profile, student, userId, refreshProfile, stacked = false }: ProfileUploadsProps) {
+export function ProfileUploads({ profile, student, userId, refreshProfile, stacked = false, showPhotoPreview = false }: ProfileUploadsProps) {
   if (!profile && !student) throw new Error('A profile or student record is required')
 
   const avatarUrl = student?.photo_url ?? profile?.avatar_url ?? null
@@ -195,6 +197,10 @@ export function ProfileUploads({ profile, student, userId, refreshProfile, stack
     <div className={stacked ? "grid gap-7" : "grid gap-6 sm:grid-cols-2"}>
       <div className="space-y-2">
         <Label className={photoRequired && !avatarUrl?.trim() ? 'text-destructive' : undefined}>Profile photo <span className={`font-normal ${photoRequired && !avatarUrl?.trim() ? 'text-destructive' : 'text-muted-foreground'}`}>{photoRequired ? '(required)' : '(optional)'}</span></Label>
+        {showPhotoPreview && <Avatar className="h-24 w-24 rounded-md">
+          {avatarUrl && <AvatarImage src={avatarUrl} alt="Student profile photo" className="object-cover" />}
+          <AvatarFallback className="rounded-md text-xs">No photo</AvatarFallback>
+        </Avatar>}
         <div className="flex flex-wrap items-center gap-2">
           <Button id="profile-photo-upload" type="button" variant="outline" onClick={() => photoInputRef.current?.click()} disabled={uploadingAvatar || removingAvatar}>
             {uploadingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
