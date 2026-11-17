@@ -1,3 +1,4 @@
+import { AUTH_CAPTCHA_ENABLED } from '@/lib/authCaptcha'
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
@@ -167,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
-      options: { captchaToken: turnstileToken },
+      options: AUTH_CAPTCHA_ENABLED ? { captchaToken: turnstileToken } : undefined,
     })
     if (error) return { error: error as Error }
     if (!data.user || !data.session) return { error: new Error('Sign-in session was not created') }

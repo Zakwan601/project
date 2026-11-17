@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { AUTH_CAPTCHA_ENABLED } from '@/lib/authCaptcha'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -192,7 +193,7 @@ export function LoginPage() {
 
     setError('')
 
-    if (!turnstileSiteKey) {
+    if (AUTH_CAPTCHA_ENABLED && !turnstileSiteKey) {
       setError(
         'Security verification is not configured. Contact the administrator.'
       )
@@ -205,12 +206,12 @@ export function LoginPage() {
         verificationAttempt < 2;
         verificationAttempt += 1
       ) {
-        updateLoginPhase('verifying')
+        updateLoginPhase(AUTH_CAPTCHA_ENABLED ? 'verifying' : 'signing-in')
 
         let token: string
 
         try {
-          token = await waitForTurnstileToken()
+          token = AUTH_CAPTCHA_ENABLED ? await waitForTurnstileToken() : ''
         } catch (verificationError) {
           if (attemptId !== loginAttemptRef.current) return
 
@@ -240,7 +241,7 @@ export function LoginPage() {
           return
         }
 
-        if (isTurnstileAuthError(signInError) && verificationAttempt === 0) {
+        if (AUTH_CAPTCHA_ENABLED && isTurnstileAuthError(signInError) && verificationAttempt === 0) {
           continue
         }
 
@@ -363,7 +364,7 @@ export function LoginPage() {
                 )}
               </div>
 
-              {turnstileSiteKey ? (
+              {AUTH_CAPTCHA_ENABLED && (turnstileSiteKey ? (
                 <div className="">
                   <Turnstile
                     ref={turnstileRef}
@@ -403,7 +404,7 @@ export function LoginPage() {
                   Security verification is not configured. Add the Turnstile
                   site key before deploying.
                 </div>
-              )}
+              ))}
             </CardContent>
 
             <CardFooter className="flex flex-col gap-3 px-6 pb-6 pt-5">

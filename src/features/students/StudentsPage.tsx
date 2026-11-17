@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -774,7 +775,16 @@ export function StudentsPage() {
         {/* Name */}
         <TableCell className="px-2 py-1.5 sm:px-3 sm:py-2">
           <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-            <UserCircle className="h-6 w-6 shrink-0 text-muted-foreground sm:h-8 sm:w-8" />
+            <Avatar className="h-6 w-6 sm:h-8 sm:w-8">
+              {student.photo_url?.trim() && <AvatarImage
+                src={student.photo_url}
+                alt={`${student.first_name} ${student.last_name}'s profile`}
+                className="object-cover"
+              />}
+              <AvatarFallback className="bg-transparent">
+                <UserCircle className="h-6 w-6 text-muted-foreground sm:h-8 sm:w-8" aria-hidden="true" />
+              </AvatarFallback>
+            </Avatar>
 
             <div className="min-w-0">
               <p className="max-w-[110px] truncate text-xs font-medium sm:max-w-none sm:text-sm">

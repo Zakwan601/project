@@ -20,3 +20,25 @@ verify_jwt = false
 
 [functions.bulk-student-logins]
 verify_jwt = false
+
+# Temporarily disabled; keep the Turnstile integration in the application.
+[auth.captcha]
+enabled = false
+provider = "turnstile"
+
+# Preserve the linked project's existing authentication settings when pushing config.
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = []
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m"
+otp_length = 8
+
+[storage.vector]
+enabled = false

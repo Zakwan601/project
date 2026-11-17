@@ -1,3 +1,4 @@
+import { AUTH_CAPTCHA_ENABLED } from '@/lib/authCaptcha'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -251,11 +252,11 @@ export function ProfilePage() {
     passwordTurnstileResetAttemptedRef.current = false
     try {
       // Verify old password by re-authenticating
-      const captchaToken = await getPasswordTurnstileToken()
+      const captchaToken = AUTH_CAPTCHA_ENABLED ? await getPasswordTurnstileToken() : undefined
       const { error: verifyErr } = await supabase.auth.signInWithPassword({
         email: user?.email ?? '',
         password: data.oldPassword,
-        options: { captchaToken },
+        options: AUTH_CAPTCHA_ENABLED ? { captchaToken } : undefined,
       })
       if (verifyErr) {
         const status = 'status' in verifyErr ? Number(verifyErr.status) : 0
@@ -620,7 +621,7 @@ export function ProfilePage() {
                 )}
                 {pwdErrors.confirmPassword && <p className="text-xs text-destructive">{pwdErrors.confirmPassword.message}</p>}
               </div>
-              {turnstileSiteKey ? (
+              {AUTH_CAPTCHA_ENABLED && (turnstileSiteKey ? (
                 <div className="flex justify-start py-1">
                   <Turnstile
                     ref={passwordTurnstileRef}
@@ -639,7 +640,7 @@ export function ProfilePage() {
                 </div>
               ) : (
                 <p className="text-xs text-destructive">Security verification is not configured.</p>
-              )}
+              ))}
               <Button type="submit" disabled={changingPwd}>
                 {changingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update password
