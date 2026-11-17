@@ -1140,29 +1140,30 @@ export function StudentsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-2xl">
+          <DialogHeader className="shrink-0 border-b px-4 py-4 pr-12 text-left sm:px-6">
             <DialogTitle>Edit Student</DialogTitle>
             <DialogDescription>Update student information</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="grid grid-cols-2 gap-4 py-4">
-              <div className="space-y-2">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6">
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
+              <div className="min-w-0 space-y-2">
                 <Label>First Name *</Label>
                 <Input {...register('first_name')} aria-invalid={!!errors.first_name} />
                 {errors.first_name && <p className="text-xs text-destructive">{errors.first_name.message}</p>}
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Last Name *</Label>
                 <Input {...register('last_name')} aria-invalid={!!errors.last_name} />
                 {errors.last_name && <p className="text-xs text-destructive">{errors.last_name.message}</p>}
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Admission Number *</Label>
                 <Input {...register('admission_number')} aria-invalid={!!errors.admission_number} />
                 {errors.admission_number && <p className="text-xs text-destructive">{errors.admission_number.message}</p>}
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Class</Label>
                 <Select value={classId} onValueChange={v => {
                   setValue('class_id', v)
@@ -1179,15 +1180,15 @@ export function StudentsPage() {
                     setValue('humanities_fourth_option_id', '')
                   }
                 }}>
-                  <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="h-10 w-full min-w-0 [&>span:first-child]:truncate"><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
                     {classes?.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name} ({c.grade}-{c.section})</SelectItem>
+                      <SelectItem className="whitespace-normal break-words" key={c.id} value={c.id}>{c.name} ({c.grade}-{c.section})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Group *</Label>
                 <Select
                   value={classGroup}
@@ -1204,18 +1205,18 @@ export function StudentsPage() {
                     setValue('humanities_fourth_option_id', '')
                   }}
                 >
-                  <SelectTrigger aria-invalid={!!errors.class_group}><SelectValue placeholder="Select group" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="science">Science</SelectItem>
-                    <SelectItem value="humanities">Humanities</SelectItem>
-                    <SelectItem value="business">Business Studies</SelectItem>
+                  <SelectTrigger className="h-10 w-full min-w-0 [&>span:first-child]:truncate" aria-invalid={!!errors.class_group}><SelectValue placeholder="Select group" /></SelectTrigger>
+                  <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
+                    <SelectItem className="whitespace-normal break-words" value="science">Science</SelectItem>
+                    <SelectItem className="whitespace-normal break-words" value="humanities">Humanities</SelectItem>
+                    <SelectItem className="whitespace-normal break-words" value="business">Business Studies</SelectItem>
                   </SelectContent>
                 </Select>
                 {classId && <p className="text-xs text-muted-foreground">Group follows the assigned class.</p>}
                 {errors.class_group && <p className="text-xs text-destructive">{errors.class_group.message}</p>}
               </div>
               {classGroup === 'humanities' ? (
-                <div className="col-span-2 space-y-4">
+                <div className="col-span-full min-w-0 space-y-4">
                   <div>
                     <p className="text-sm font-medium">Humanities subject choices</p>
                     <p className="text-xs text-muted-foreground">Optional for admins. Students must choose three different electives and a fourth subject in their profile. Bangla, English and ICT are compulsory; both papers follow each chosen course.</p>
@@ -1227,11 +1228,11 @@ export function StudentsPage() {
                       const available = (index === 3 ? groupFourthOptions : groupElectiveOptions)
                         .filter(option => option.id === current || !selectedIds.includes(option.id))
                       return (
-                        <div key={field} className="space-y-2">
+                        <div key={field} className="min-w-0 space-y-2">
                           <Label>{index === 3 ? 'Fourth subject' : `Elective subject ${index + 1}`} (optional)</Label>
                           <Select value={current || ''} onValueChange={value => setValue(field, value, { shouldValidate: true })}>
-                            <SelectTrigger aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
-                            <SelectContent>{available.map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
+                            <SelectTrigger className="h-10 w-full min-w-0 [&>span:first-child]:truncate" aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
+                            <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">{available.map(option => <SelectItem className="whitespace-normal break-words" key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
                           </Select>
                           {errors[field] && <p className="text-xs text-destructive">{errors[field]?.message}</p>}
                         </div>
@@ -1240,7 +1241,7 @@ export function StudentsPage() {
                   </div>
                 </div>
               ) : classGroup !== 'science' ? (
-                <div className="col-span-2 space-y-4">
+                <div className="col-span-full min-w-0 space-y-4">
                   <div>
                     <p className="text-sm font-medium">Group subject choices</p>
                     <p className="text-xs text-muted-foreground">Optional for admins. Students must choose one elective and a different fourth subject in their profile.</p>
@@ -1254,11 +1255,11 @@ export function StudentsPage() {
                         ? groupElectiveOptions.filter(option => option.id !== groupFourthOptionId)
                         : groupFourthOptions.filter(option => option.id !== groupElectiveOptionId)
                       return (
-                        <div key={field} className="space-y-2">
+                        <div key={field} className="min-w-0 space-y-2">
                           <Label>{label} (optional)</Label>
                           <Select value={current || ''} onValueChange={value => setValue(field, value, { shouldValidate: true })}>
-                            <SelectTrigger aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
-                            <SelectContent>{available.map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
+                            <SelectTrigger className="h-10 w-full min-w-0 [&>span:first-child]:truncate" aria-invalid={!!errors[field]}><SelectValue placeholder="Select subject" /></SelectTrigger>
+                            <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">{available.map(option => <SelectItem className="whitespace-normal break-words" key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
                           </Select>
                           {errors[field] && <p className="text-xs text-destructive">{errors[field]?.message}</p>}
                         </div>
@@ -1267,12 +1268,12 @@ export function StudentsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="col-span-2 space-y-2">
+                <div className="col-span-full min-w-0 space-y-2">
                   <Label>Fourth subject (optional for admins)</Label>
                   <Select value={groupFourthOptionId || ''} onValueChange={value => setValue('group_fourth_option_id', value, { shouldValidate: true })}>
-                    <SelectTrigger aria-invalid={!!errors.group_fourth_option_id}><SelectValue placeholder="Select subject" /></SelectTrigger>
-                    <SelectContent>
-                      {groupFourthOptions.filter(option => option.id !== groupElectiveOptionId).map(option => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}
+                    <SelectTrigger className="h-10 w-full min-w-0 [&>span:first-child]:truncate" aria-invalid={!!errors.group_fourth_option_id}><SelectValue placeholder="Select subject" /></SelectTrigger>
+                    <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
+                      {groupFourthOptions.filter(option => option.id !== groupElectiveOptionId).map(option => <SelectItem className="whitespace-normal break-words" key={option.id} value={option.id}>{option.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">Students must choose their fourth subject in their profile. Both papers follow the choice; the other Science course remains a main subject.</p>
@@ -1280,15 +1281,15 @@ export function StudentsPage() {
                   {errors.group_fourth_option_id && <p className="text-xs text-destructive">{errors.group_fourth_option_id.message}</p>}
                 </div>
               )}
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Roll Number</Label>
                 <Input type="number" {...register('roll_number', { valueAsNumber: true })} />
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Biometric ID</Label>
                 <Input {...register('biometric_id')} placeholder="ZKTeco device ID" />
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Guardian Phone</Label>
                 <Input
                   type="tel"
@@ -1320,31 +1321,31 @@ export function StudentsPage() {
                       refreshProfile={() => refreshEditingStudent(editing.id)}
                     />
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>Father's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
                         <Input {...register('father_name')} aria-invalid={!!errors.father_name} />
                         {errors.father_name && <p className="text-xs text-destructive">{errors.father_name.message}</p>}
                       </div>
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>Mother's Name <span className="font-normal text-muted-foreground">(optional)</span></Label>
                         <Input {...register('mother_name')} aria-invalid={!!errors.mother_name} />
                         {errors.mother_name && <p className="text-xs text-destructive">{errors.mother_name.message}</p>}
                       </div>
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>Blood Group <span className="font-normal text-muted-foreground">(optional)</span></Label>
                         <Select
                           value={bloodGroup || 'not-specified'}
                           onValueChange={value => setValue('blood_group', value === 'not-specified' ? '' : value as BloodGroup, { shouldValidate: true })}
                         >
-                          <SelectTrigger aria-invalid={!!errors.blood_group}><SelectValue placeholder="Select blood group" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="not-specified">Not specified</SelectItem>
-                            {BLOOD_GROUPS.map(group => <SelectItem key={group} value={group}>{group}</SelectItem>)}
+                          <SelectTrigger className="h-10 w-full min-w-0 [&>span:first-child]:truncate" aria-invalid={!!errors.blood_group}><SelectValue placeholder="Select blood group" /></SelectTrigger>
+                          <SelectContent position="popper" className="max-w-[calc(100vw-2rem)]">
+                            <SelectItem className="whitespace-normal break-words" value="not-specified">Not specified</SelectItem>
+                            {BLOOD_GROUPS.map(group => <SelectItem className="whitespace-normal break-words" key={group} value={group}>{group}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         {errors.blood_group && <p className="text-xs text-destructive">{errors.blood_group.message}</p>}
                       </div>
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>Secondary Mobile Number <span className="font-normal text-muted-foreground">(optional)</span></Label>
                         <Input type="tel" inputMode="tel" placeholder="01XXXXXXXXX" {...register('secondary_phone')} aria-invalid={!!errors.secondary_phone} />
                         {secondaryPhone && (
@@ -1369,9 +1370,10 @@ export function StudentsPage() {
                 )}
               </div>
             )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isSubmitting}>
+            </div>
+            <DialogFooter className="shrink-0 flex-row border-t px-4 py-3 sm:px-6">
+              <Button className="h-10 flex-1 sm:flex-none" type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button className="h-10 flex-1 sm:flex-none" type="submit" disabled={isSubmitting}>
                 {isSubmitting ? 'Saving...' : 'Update'}
               </Button>
             </DialogFooter>
