@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { CalendarDays, Printer } from 'lucide-react'
+import { Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { EmptyState, ErrorState, PageHeader } from '@/components/shared/PageHeader'
@@ -142,7 +142,7 @@ export function StudentResultsPage() {
 
       <Card className="mb-5">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" /> Examination routine</CardTitle>
+          <CardTitle className="flex items-center gap-2"> Examination routine</CardTitle>
           <CardDescription className="flex flex-wrap items-center gap-2">
             {selectedExam && <Badge variant={selectedExam.has_regular_classes ? 'secondary' : 'default'}>{selectedExam.has_regular_classes ? 'Exam + classes' : 'Exam only'}</Badge>}
             {selectedExam && <Badge variant="outline">{selectedExam.combine_subject_papers ? 'Combined papers' : 'Separate papers'}</Badge>}

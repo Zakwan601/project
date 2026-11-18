@@ -26,8 +26,6 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
-import { useStudentDashboardStats } from '@/hooks/useStudentDashboard'
-import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { ProfileUploads } from './ProfileUploads'
 import { StudentSubjects } from './StudentSubjects'
@@ -38,7 +36,7 @@ import type { Profile, Student } from '@/types/database'
 const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || undefined
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
-const profileTabClassName = 'h-10 rounded-none px-3 text-sm text-muted-foreground shadow-none hover:bg-background/60 hover:text-foreground data-[state=active]:border-transparent! data-[state=active]:bg-primary! data-[state=active]:text-primary-foreground! data-[state=active]:font-semibold'
+const profileTabClassName = 'h-8 min-w-0 rounded-none px-1 text-[11px] sm:h-10 sm:px-3 sm:text-sm text-muted-foreground shadow-none hover:bg-background/60 hover:text-foreground data-[state=active]:border-transparent! data-[state=active]:bg-primary! data-[state=active]:text-primary-foreground! data-[state=active]:font-semibold'
 
 const profileSchema = z.object({
   full_name: z.string().trim().min(2, 'Required'),
@@ -156,11 +154,6 @@ export function ProfilePage() {
   const { data: enrollmentHistory = [], isLoading: historyLoading } = useStudentEnrollmentHistory(
     role === 'student' ? student?.id : undefined,
   )
-  const {
-    data: attendanceStats,
-    isLoading: attendanceStatsLoading,
-    error: attendanceStatsError,
-  } = useStudentDashboardStats(role === 'student' ? student?.id : undefined)
 
   const {
     register: regProfile,
@@ -430,13 +423,12 @@ export function ProfilePage() {
           </div>
         </header>
 
-        <div className=" px-5 pb-4 sm:px-7">
-          <TabsList className={`grid h-auto! w-full grid-cols-2 gap-1 rounded-none bg-muted p-1 ${role === 'student' ? 'sm:grid-cols-4' : ''}`}>
+        <div className="px-3 pb-3 sm:px-7 sm:pb-4">
+          <TabsList className={`grid h-auto! w-full gap-0.5 rounded-none bg-muted p-0.5 sm:gap-1 sm:p-1 ${role === 'student' ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <TabsTrigger value="personal" className={profileTabClassName}>Personal</TabsTrigger>
             {role === 'student' && (
               <>
                 <TabsTrigger value="academics" className={profileTabClassName}>Academics</TabsTrigger>
-                <TabsTrigger value="fine-details" className={profileTabClassName}>Fine Details</TabsTrigger>
               </>
             )}
             <TabsTrigger value="security" className={profileTabClassName}>Security</TabsTrigger>
@@ -562,23 +554,6 @@ export function ProfilePage() {
                 )}
               </section>
             </div>
-          </TabsContent>
-        )}
-
-        {role === 'student' && student && (
-          <TabsContent value="fine-details" className="m-0">
-            <section className="p-5 sm:p-7">
-              <AttendanceFineCard
-                absentCount={attendanceStats?.fineRecordedAbsences ?? 0}
-                lateCount={attendanceStats?.fineLateDays ?? 0}
-                finePerAbsentDay={Number(attendanceStats?.finePerAbsentDay ?? 0)}
-                examMissedCount={attendanceStats?.examMissedCount ?? 0}
-                examMissedFineAmount={Number(attendanceStats?.examMissedFineAmount ?? 0)}
-                periodLabel="Lifetime attendance fine breakdown"
-                loading={attendanceStatsLoading}
-                error={Boolean(attendanceStatsError)}
-              />
-            </section>
           </TabsContent>
         )}
 

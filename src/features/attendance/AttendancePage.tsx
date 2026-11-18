@@ -14,7 +14,6 @@ import {
 import { useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAbsenceNotificationStatus, useSendAbsenceNotifications } from '@/hooks/useAbsenceNotifications'
 import { useClasses } from '@/hooks/useClasses'
-import { useStudentFineDetails } from '@/hooks/useStudentDashboard'
 import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
@@ -50,7 +49,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import type { AttendanceSessionWithDetails, AttendanceStatus } from '@/types/database'
 import { attendanceStatusLabel } from '@/lib/attendance'
-import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // Handwritten database types do not include all nested relationship selections.
@@ -822,19 +820,6 @@ function StudentAttendanceSkeleton() {
       <PageHeader title="My Attendance" description="Weekends and holidays are excluded." />
       <Skeleton className="mb-5 h-10 w-full max-w-xs" />
 
-      <div className="mb-5 rounded-lg border p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="mt-2 h-3 w-48" />
-          </div>
-          <Skeleton className="h-7 w-20" />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}
-        </div>
-      </div>
-
       <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
         <div className="rounded-lg border p-4">
           <Skeleton className="h-4 w-36" />
@@ -853,7 +838,7 @@ function StudentAttendanceSkeleton() {
           </div>
         </div>
       </div>
-      <span className="sr-only">Loading attendance calendar and fine details</span>
+      <span className="sr-only">Loading attendance calendar and daily details</span>
     </div>
   )
 }
@@ -864,11 +849,6 @@ function StudentDailyAttendance() {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
   const monthStart = `${month}-01`
   const monthEnd = format(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0), 'yyyy-MM-dd')
-  const {
-    data: fineStats,
-    isLoading: fineStatsLoading,
-    error: fineStatsError,
-  } = useStudentFineDetails(student?.id, monthStart, monthEnd)
   const { data: calendarHolidays = [] } = useHolidays(
     monthStart,
     monthEnd,
@@ -926,19 +906,6 @@ function StudentDailyAttendance() {
         onChange={setMonth}
         className="mb-3 max-w-xs sm:mb-5"
       />
-
-      <div className="mb-3 sm:mb-5">
-        <AttendanceFineCard
-          absentCount={fineStats?.recordedAbsences ?? 0}
-          lateCount={fineStats?.lateDays ?? 0}
-          finePerAbsentDay={Number(fineStats?.finePerAbsentDay ?? 0)}
-          examMissedCount={fineStats?.examMissedCount ?? 0}
-          examMissedFineAmount={Number(fineStats?.examMissedFineAmount ?? 0)}
-          periodLabel={`${format(calendarMonth, 'MMMM yyyy')} fine breakdown`}
-          loading={fineStatsLoading}
-          error={Boolean(fineStatsError)}
-        />
-      </div>
 
       <div className="mb-3 grid min-w-0 gap-3 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] sm:mb-5">
         <Card className="min-w-0">

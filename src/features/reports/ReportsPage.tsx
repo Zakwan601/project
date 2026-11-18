@@ -14,11 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
 import type { ChartConfig } from '@/components/ui/chart'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadCsv } from '@/lib/csv'
 import { calculateAttendanceFine, formatFine } from '@/lib/attendanceFine'
@@ -193,7 +194,7 @@ function useDailyStudentAttendance(classId: string, startDate: string, endDate: 
   })
 }
 
-interface DailyPoint { date: string; shortDate: string; present: number; absent: number; late: number }
+interface DailyPoint { date: string; shortDate: string; present: number; absent: number; late: number; hasAttendanceSession: boolean }
 
 interface DailyAttendanceSummary {
   attendance_date: string
@@ -227,12 +228,14 @@ function useDailyReport(startDate: string, endDate: string) {
         present: 0,
         absent: 0,
         late: 0,
+        hasAttendanceSession: false,
       }]))
 
       for (const summary of (data ?? []) as DailyAttendanceSummary[]) {
         const result = resultsByDate.get(summary.attendance_date)
         if (!result) continue
 
+        result.hasAttendanceSession = true
         result.present = Number(summary.present_count)
         result.absent = Number(summary.absent_count)
         result.late = Number(summary.late_count)
@@ -251,6 +254,7 @@ export function ReportsPage() {
     error: attendanceFineError,
   } = useAttendanceFineSetting()
   const [selectedClass, setSelectedClass] = useState('')
+  const [chartType, setChartType] = useState<'column' | 'line'>('column')
   const [studentScope, setStudentScope] = useState<'all' | 'below'>('all')
   const [percentageThreshold, setPercentageThreshold] = useState('75')
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
@@ -304,6 +308,11 @@ export function ReportsPage() {
     format(subDays(new Date(), 13), 'yyyy-MM-dd'),
     format(new Date(), 'yyyy-MM-dd')
   )
+  // Vacation/weekend dates have no sessions. Keep real zero-count attendance days.
+  const trendData = chartType === 'line'
+    ? dailyData?.filter(day => day.hasAttendanceSession)
+    : dailyData
+  const TrendChart = chartType === 'line' ? LineChart : BarChart
 
   const exportStudentReport = () => {
     if (!reportRows.length || !dailyStudentAttendance) return
@@ -371,24 +380,59 @@ export function ReportsPage() {
 
       <Card>
         <CardHeader className="px-4 pb-3 sm:px-6">
-          <CardTitle>14-Day Attendance Trend</CardTitle>
-          <CardDescription>Daily attendance breakdown over the last 2 weeks</CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1.5">
+              <CardTitle>14-Day Attendance Trend</CardTitle>
+              <CardDescription>
+                {chartType === 'line'
+                  ? 'Attendance days over the last 2 weeks; vacations and weekends excluded'
+                  : 'Daily attendance breakdown over the last 2 weeks'}
+              </CardDescription>
+            </div>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              value={chartType}
+              onValueChange={value => {
+                if (value === 'column' || value === 'line') setChartType(value)
+              }}
+              aria-label="Attendance graph type"
+            >
+              <ToggleGroupItem value="column">Column</ToggleGroupItem>
+              <ToggleGroupItem value="line">Line</ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </CardHeader>
         <CardContent className="px-2 pb-4 sm:px-6 sm:pb-6">
           {dailyLoading ? (
             <LoadingState />
+          ) : chartType === 'line' && trendData?.length === 0 ? (
+            <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground sm:h-[280px]">
+              No attendance days in the last 2 weeks.
+            </div>
           ) : (
             <ChartContainer config={chartConfig} className="h-[240px] w-full aspect-auto sm:h-[280px]">
-              <BarChart accessibilityLayer data={dailyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <TrendChart accessibilityLayer data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="shortDate" tickLine={false} axisLine={false} tickMargin={8} minTickGap={18} tick={{ fontSize: 10 }} />
                 <YAxis tickLine={false} axisLine={false} width={38} tick={{ fontSize: 10 }} />
                 <ChartTooltip content={<ChartTooltipContent labelFormatter={(_value, payload) => payload[0]?.payload.date ?? ''} />} />
                 <ChartLegend content={<ChartLegendContent className="flex-wrap gap-x-4 gap-y-1 pt-2" />} />
-                <Bar dataKey="present" stackId="attendance" fill="var(--color-present)" maxBarSize={22} />
-                <Bar dataKey="absent" stackId="attendance" fill="var(--color-absent)" maxBarSize={22} />
-                <Bar dataKey="late" stackId="attendance" fill="var(--color-late)" radius={[3, 3, 0, 0]} maxBarSize={22} />
-              </BarChart>
+                {chartType === 'line' ? (
+                  <>
+                    <Line dataKey="present" stroke="var(--color-present)" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line dataKey="absent" stroke="var(--color-absent)" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line dataKey="late" stroke="var(--color-late)" strokeWidth={2} dot={{ r: 3 }} />
+                  </>
+                ) : (
+                  <>
+                    <Bar dataKey="present" stackId="attendance" fill="var(--color-present)" maxBarSize={22} />
+                    <Bar dataKey="absent" stackId="attendance" fill="var(--color-absent)" maxBarSize={22} />
+                    <Bar dataKey="late" stackId="attendance" fill="var(--color-late)" radius={[3, 3, 0, 0]} maxBarSize={22} />
+                  </>
+                )}
+              </TrendChart>
             </ChartContainer>
           )}
         </CardContent>

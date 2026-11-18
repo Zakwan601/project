@@ -8,6 +8,7 @@ interface AttendanceFineCardProps {
   examMissedCount?: number
   examMissedFineAmount?: number
   periodLabel: string
+  showTitle?: boolean
   loading?: boolean
   error?: boolean
 }
@@ -19,6 +20,7 @@ export function AttendanceFineCard({
   examMissedCount = 0,
   examMissedFineAmount = 0,
   periodLabel,
+  showTitle = true,
   loading = false,
   error = false,
 }: AttendanceFineCardProps) {
@@ -28,8 +30,8 @@ export function AttendanceFineCard({
     <section className="w-full max-w-3xl" aria-label="Fine details" aria-busy={loading}>
       <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
         <div>
-          <h2 className="text-base font-semibold">Fine Details</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{periodLabel}</p>
+          {showTitle && <h2 className="text-base font-semibold">Fine Details</h2>}
+          <p className={`text-sm text-muted-foreground ${showTitle ? 'mt-1' : ''}`}>{periodLabel}</p>
         </div>
         {loading ? <Skeleton className="h-8 w-24" /> : !error && (
           <div className="text-right">

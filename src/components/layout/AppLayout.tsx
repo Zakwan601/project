@@ -34,6 +34,7 @@ const pageLabels: Record<string, string> = {
   '/students': 'Students',
   '/classes': 'Classes',
   '/attendance': 'Attendance',
+  '/fine-details': 'Fine Details',
   '/punches': 'Punches',
   '/archived-punches': 'Archived Punches',
   '/reports': 'Reports',

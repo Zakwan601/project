@@ -49,6 +49,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
@@ -492,52 +493,50 @@ export function StudentsPage() {
 
   return (
     <div className="student-report-screen min-w-0 max-w-full overflow-x-hidden">
-      <PageHeader
-        title="Students"
-        description={`${students?.length ?? 0} students enrolled`}
-        action={canWriteStudents ? (
-          <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-            {isFullAdmin && <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void createStudentLogins()}
-              disabled={creatingStudentLogins || (!pendingLoginExport && filtered.length === 0)}
-            >
-              <KeyRound className="mr-1.5 h-4 w-4" />
-              {creatingStudentLogins
-                ? 'Processing student logins...'
-                : pendingLoginExport
-                  ? 'Retry credentials download'
-                  : selectedStudentIds.length > 0
-                    ? `Create logins (${selectedStudentIds.length})`
-                    : 'Create student logins'}
-            </Button>}
-            {isFullAdmin && <Button size="sm" variant="outline"
-              onClick={() => setReissueLoginsOpen(true)}
-              disabled={creatingStudentLogins || Boolean(pendingLoginExport) || selectedStudentIds.length === 0}
-            >
-              <Download className="mr-1.5 h-4 w-4" /> Download login CSV{selectedStudentIds.length > 0 ? ` (${selectedStudentIds.length})` : ''}
-            </Button>}
-            {isFullAdmin && <Button size="sm" variant="outline" onClick={() => setBulkUpdateOpen(true)}>
-              <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Bulk edit
-            </Button>}
-            {isFullAdmin && <Button size="sm" variant="outline" onClick={syncUsers} disabled={isSyncingUsers}>
-              <RefreshCw className={`mr-1.5 h-4 w-4 ${isSyncingUsers ? 'animate-spin' : ''}`} />
-              {isSyncingUsers ? 'Syncing users...' : 'Sync ZKTeco users'}
-            </Button>}
-            {selectedStudentIds.length > 0 && <>
-              <Button size="sm" variant="outline" onClick={() => setAssignmentOpen(true)}>
-                <School className="mr-1.5 h-4 w-4" />
-                Assign class ({selectedStudentIds.length})
-              </Button>
-              <Button size="sm" onClick={() => setPromotionOpen(true)}>
-                <GraduationCap className="mr-1.5 h-4 w-4" />
-                Promote ({selectedStudentIds.length})
-              </Button>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <PageHeader title="Students" description={`${students?.length ?? 0} students enrolled`} />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" size="icon" variant="ghost" className="shrink-0" aria-label="Student list actions">
+              <MoreHorizontal className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64 max-w-[calc(100vw-2rem)]">
+            {isFullAdmin && <>
+              <DropdownMenuItem onSelect={() => void createStudentLogins()} disabled={creatingStudentLogins || (!pendingLoginExport && filtered.length === 0)}>
+                <KeyRound className="h-4 w-4" />
+                {creatingStudentLogins ? 'Processing student logins...' : pendingLoginExport ? 'Retry credentials download' : selectedStudentIds.length > 0 ? `Create logins (${selectedStudentIds.length})` : 'Create student logins'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setReissueLoginsOpen(true)} disabled={creatingStudentLogins || Boolean(pendingLoginExport) || selectedStudentIds.length === 0}>
+                <Download className="h-4 w-4" /> Download login CSV{selectedStudentIds.length > 0 ? ` (${selectedStudentIds.length})` : ''}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setBulkUpdateOpen(true)}>
+                <FileSpreadsheet className="h-4 w-4" /> Bulk edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void syncUsers()} disabled={isSyncingUsers}>
+                <RefreshCw className={`h-4 w-4 ${isSyncingUsers ? 'animate-spin' : ''}`} />
+                {isSyncingUsers ? 'Syncing users...' : 'Sync ZKTeco users'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
             </>}
-          </div>
-        ) : undefined}
-      />
+            {canWriteStudents && selectedStudentIds.length > 0 && <>
+              <DropdownMenuItem onSelect={() => setAssignmentOpen(true)}>
+                <School className="h-4 w-4" /> Assign class ({selectedStudentIds.length})
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setPromotionOpen(true)}>
+                <GraduationCap className="h-4 w-4" /> Promote ({selectedStudentIds.length})
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>}
+            <DropdownMenuItem onSelect={exportStudentList} disabled={!selectedClassDetails || filtered.length === 0}>
+              <Download className="h-4 w-4" /> Export CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={printStudentList} disabled={!selectedClassDetails || filtered.length === 0}>
+              <Printer className="h-4 w-4" /> Print
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <AlertDialog open={reissueLoginsOpen} onOpenChange={setReissueLoginsOpen}>
         <AlertDialogContent>
@@ -686,14 +685,6 @@ export function StudentsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex gap-2 sm:ml-auto">
-              <Button type="button" variant="outline" className="flex-1 whitespace-nowrap sm:flex-none" onClick={exportStudentList} disabled={!selectedClassDetails || filtered.length === 0}>
-                <Download className="h-4 w-4" /> Export CSV
-              </Button>
-              <Button type="button" variant="outline" className="flex-1 whitespace-nowrap sm:flex-none" onClick={printStudentList} disabled={!selectedClassDetails || filtered.length === 0}>
-                <Printer className="h-4 w-4" /> Print
-              </Button>
-            </div>
           </div>
       </section>
 
