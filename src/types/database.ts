@@ -122,6 +122,7 @@ export interface Profile {
   id: string
   role: UserRole
   sub_admin_label: SubAdminLabel
+  is_open_account: boolean
   full_name: string
   avatar_url: string | null
   birth_certificate_path: string | null

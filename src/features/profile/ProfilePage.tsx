@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { StudentProfileReviewNotice } from '@/components/dashboard/StudentProfileReviewNotice'
 import { AUTH_CAPTCHA_ENABLED } from '@/lib/authCaptcha'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -90,6 +90,18 @@ const passwordRequirements = [
 
 export function ProfilePage() {
   const { profile, student, user, refreshProfile, applySavedProfileChanges, role, loading, profileError } = useAuth()
+  const openAccountQuery = useQuery({
+    queryKey: ['staff-open-account', user?.id],
+    enabled: !!user && role === 'sub_admin',
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('is_open_account').eq('id', user!.id).single()
+      if (error) throw error
+      return (data as Pick<Profile, 'is_open_account'>).is_open_account
+    },
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+  const passwordLocked = role === 'sub_admin' && (openAccountQuery.data ?? profile?.is_open_account ?? false)
   const [activeTab, setActiveTab] = useState(() => new URLSearchParams(window.location.search).get('review') === 'subjects' ? 'academics' : 'personal')
   const [changingPwd, setChangingPwd] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({ old: false, new: false, confirm: false })
@@ -278,6 +290,10 @@ export function ProfilePage() {
   }
 
   const changePassword = async (data: PasswordForm) => {
+    if (passwordLocked) {
+      toast.error('Password changes are disabled for this open account. Contact an administrator.')
+      return
+    }
     setChangingPwd(true)
     passwordTurnstileResetAttemptedRef.current = false
     try {
@@ -602,9 +618,9 @@ export function ProfilePage() {
           <section className="max-w-2xl p-5 sm:p-7">
             <div className="mb-6">
               <h2 className="text-base font-semibold">Password & security</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Use a strong password you do not use elsewhere.</p>
+              <p className="mt-1 text-sm text-muted-foreground">{passwordLocked ? 'Password changes are disabled for this shared login.' : 'Use a strong password you do not use elsewhere.'}</p>
             </div>
-            <form onSubmit={handlePwd(changePassword)} className="space-y-5">
+            {passwordLocked ? <p className="text-sm text-muted-foreground">This is an open account. Password changes are managed by an administrator.</p> : <form onSubmit={handlePwd(changePassword)} className="space-y-5">
               <div className="space-y-2">
                 <Label>Current password</Label>
                 <div className="relative">
@@ -687,7 +703,7 @@ export function ProfilePage() {
                 {changingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update password
               </Button>
-            </form>
+            </form>}
           </section>
         </TabsContent>
       </Tabs>

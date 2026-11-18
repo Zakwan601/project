@@ -15,6 +15,7 @@ interface LoginAccount {
   full_name: string
   login_email: string | null
   sub_admin_label: SubAdminLabel
+  is_open_account: boolean
 }
 
 export function SubAdminLoginDialog({ account, onClose }: { account: LoginAccount; onClose: () => void }) {
@@ -22,6 +23,7 @@ export function SubAdminLoginDialog({ account, onClose }: { account: LoginAccoun
   const resetPassword = useMutation({
     gcTime: 0,
     mutationFn: async () => {
+      if (account.is_open_account) throw new Error('Turn off Open account before resetting this password')
       const password = generateTemporaryPassword()
       const { data, error } = await supabase.functions.invoke('create-user', {
         body: { action: 'reset-sub-admin-password', profile_id: account.id, password },
@@ -80,14 +82,14 @@ export function SubAdminLoginDialog({ account, onClose }: { account: LoginAccoun
               </div>
             </div>
             <Button type="button" variant="secondary" className="w-full" onClick={() => void copyText(`${getSubAdminLabel(account.sub_admin_label)} login\nName: ${account.full_name}\nEmail: ${email}\nPassword: ${password}\n\nPlease change the password after signing in.`, 'Login message')}><Copy className="h-4 w-4" /> Copy login message</Button>
-          </> : <>
+          </> : account.is_open_account ? <p className="text-sm text-muted-foreground">Password changes are disabled for this open account. Turn off Open account in Access Control before issuing a new password.</p> : <>
             <p className="text-sm text-muted-foreground">Generate a new temporary password when this account needs help signing in. This replaces its current password immediately.</p>
             <Button type="button" variant="outline" className="w-full" disabled={resetPassword.isPending || !email} onClick={() => resetPassword.mutate()}>
               {resetPassword.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {resetPassword.isPending ? 'Generating...' : 'Generate new temporary password'}
             </Button>
           </>}
-          <p className="flex items-start gap-2 text-xs text-muted-foreground"><KeyRound className="h-4 w-4 shrink-0" />Passwords are not stored or displayed again. The login email stays available, and an administrator can issue a fresh temporary password at any time.</p>
+          <p className="flex items-start gap-2 text-xs text-muted-foreground"><KeyRound className="h-4 w-4 shrink-0" />Passwords are only shown when created or reset. Keep shared login details secure.</p>
         </div>
         <DialogFooter><Button type="button" variant="outline" disabled={resetPassword.isPending} onClick={onClose}>Done</Button></DialogFooter>
       </DialogContent>

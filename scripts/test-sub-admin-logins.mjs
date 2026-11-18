@@ -14,6 +14,7 @@ async function exercise(options = {}) {
   const updates = []
   const creations = []
   const profileWrites = []
+  const deletions = []
   let clients = 0
   const userClient = {
     auth: { getUser: async () => ({ data: { user: options.invalidToken ? null : { id: 'caller' } }, error: null }) },
@@ -25,16 +26,18 @@ async function exercise(options = {}) {
         select: () => query,
         upsert: async values => { profileWrites.push(values); return { error: null } },
         eq: (_, value) => { id = value; return query },
+        limit: async () => ({ data: options.linkedStudent ? [{ id: 'student-record' }] : [], error: options.linkError ? { message: 'Link read failed' } : null }),
         maybeSingle: async () => ({
           data: table === 'students' ? { id, profile_id: 'linked-student-id' } : id === 'caller'
             ? { role: options.callerRole ?? 'admin', is_active: options.active ?? true }
-            : options.missingProfile ? null : { id, role: options.targetRole ?? 'sub_admin' },
+            : options.missingProfile ? null : { id, role: options.targetRole ?? 'sub_admin', is_open_account: options.openAccount ?? false },
           error: null,
         }),
       }
       return query
     },
     auth: { admin: {
+      deleteUser: async (id, soft) => { deletions.push({ id, soft }); return { error: options.deleteError ? { message: 'Delete failed' } : null } },
       createUser: async values => { creations.push(values); return { data: { user: { id: 'new-staff-id' } }, error: null } },
       getUserById: async id => ({ data: { user: options.missingAuth ? null : { id, email: 'staff@example.test' } }, error: null }),
       updateUserById: async (id, values) => {
@@ -53,7 +56,7 @@ async function exercise(options = {}) {
     headers: { 'Content-Type': 'application/json', ...(options.noAuth ? {} : { Authorization: 'Bearer test-token' }) },
     body: JSON.stringify({ action: 'reset-sub-admin-password', profile_id: 'staff-id', password: 'Strong!Pass123', ...options.body }),
   }))
-  return { status: response.status, body: await response.json(), updates, creations, profileWrites }
+  return { status: response.status, body: await response.json(), updates, creations, profileWrites, deletions }
 }
 
 for (const [name, options, status] of [
@@ -69,6 +72,7 @@ for (const [name, options, status] of [
   ['missing profile ID', { body: { profile_id: '' } }, 400],
   ['short password', { body: { password: 'short' } }, 400],
   ['invalid password type', { body: { password: 12345678 } }, 400],
+  ['open account', { openAccount: true }, 403],
 ]) {
   const actual = await exercise(options)
   assert.equal(actual.status, status, name)
@@ -83,6 +87,32 @@ assert.equal(valid.updates.length, 1)
 assert.equal(valid.updates[0].id, 'staff-id')
 assert.equal(valid.updates[0].values.password, 'Strong!Pass123')
 assert.equal((await exercise({ resetError: true })).status, 400)
+
+for (const [name, options, status] of [
+  ['no authorization', { noAuth: true }, 401],
+  ['invalid token', { invalidToken: true }, 401],
+  ['staff caller', { callerRole: 'sub_admin' }, 403],
+  ['student caller', { callerRole: 'student' }, 403],
+  ['inactive admin', { active: false }, 403],
+  ['admin target', { targetRole: 'admin' }, 404],
+  ['student target', { targetRole: 'student' }, 404],
+  ['missing target', { missingProfile: true }, 404],
+  ['self deletion', { body: { profile_id: 'caller' } }, 400],
+  ['missing ID', { body: { profile_id: '' } }, 400],
+  ['student-linked staff', { linkedStudent: true }, 400],
+  ['student link query fails', { linkError: true }, 500],
+]) {
+  const result = await exercise({ ...options, body: { action: 'delete-sub-admin', ...options.body } })
+  assert.equal(result.status, status, name)
+  assert.equal(result.deletions.length, 0, `${name} must not delete a user`)
+}
+for (const openAccount of [false, true]) {
+  const result = await exercise({ openAccount, body: { action: 'delete-sub-admin' } })
+  assert.equal(result.status, 200, 'Administrator can delete standard and open staff accounts')
+  assert.deepEqual(result.deletions, [{ id: 'staff-id', soft: true }])
+  assert.equal(result.updates.length, 0)
+}
+assert.equal((await exercise({ deleteError: true, body: { action: 'delete-sub-admin' } })).status, 400)
 
 const studentLogin = await exercise({ body: { action: 'get-student-login', student_id: 'student-record' } })
 assert.equal(studentLogin.status, 200, 'Existing student login retrieval still works')
@@ -116,4 +146,4 @@ for (let index = 0; index < 100; index++) {
   assert.equal(password.length, 12)
   for (const group of [/[A-Z]/, /[a-z]/, /[0-9]/, /[!@#$%]/]) assert.match(password, group)
 }
-console.log('Passed administrator authorization, target-role protection, password reset, API error, and temporary-password generation checks.')
+console.log('Passed administrator authorization, target-role protection, open-account reset blocking, safe staff deletion, API errors, and temporary-password generation checks.')

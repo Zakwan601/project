@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, CheckCircle2, ChevronRight, Copy, Eye, EyeOff, KeyRound, Loader2, Mail, Phone, Plus, RotateCcw, Save, Search, ShieldCheck, Users } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronRight, Copy, Eye, EyeOff, KeyRound, Loader2, Mail, Phone, Plus, RotateCcw, Save, Search, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { permissionDefinitions } from '@/lib/permissions'
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 
 // Database RPC types are maintained manually in this project.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,7 +26,7 @@ const db = supabase as any
 
 type PermissionState = Record<PermissionKey, { read: boolean; write: boolean }>
 
-type SubAdminAccount = Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'phone' | 'secondary_phone' | 'is_active' | 'created_at' | 'sub_admin_label'> & {
+type SubAdminAccount = Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'phone' | 'secondary_phone' | 'is_active' | 'created_at' | 'sub_admin_label' | 'is_open_account'> & {
   login_email: string | null
 }
 
@@ -65,6 +66,7 @@ export function AccessControlPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null)
   const [loginAccount, setLoginAccount] = useState<SubAdminAccount | null>(null)
+  const [deleteAccount, setDeleteAccount] = useState<SubAdminAccount | null>(null)
 
   const profilesQuery = useQuery({
     queryKey: ['sub-admin-profiles'],
@@ -175,7 +177,47 @@ export function AccessControlPage() {
     onError: (error: Error) => toast.error(error.message),
   })
 
-  const editingDisabled = permissionsUnavailable || savePermissions.isPending
+  const updateOpenAccount = useMutation({
+    mutationFn: async ({ profileId, isOpen }: { profileId: string; isOpen: boolean }) => {
+      const { error } = await db.rpc('set_staff_open_account', { p_profile_id: profileId, p_is_open: isOpen })
+      if (error) throw error
+    },
+    onSuccess: async (_, { isOpen }) => {
+      await queryClient.invalidateQueries({ queryKey: ['sub-admin-profiles'] })
+      setLoginAccount(null)
+      toast.success(isOpen ? 'Open account enabled. Password changes are disabled.' : 'Open account disabled. Password changes are allowed.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+  const deleteStaff = useMutation({
+    mutationFn: async (profileId: string) => {
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: { action: 'delete-sub-admin', profile_id: profileId },
+      })
+      if (error) {
+        if (error.context instanceof Response) {
+          const details = await error.context.json().catch(() => null)
+          throw new Error(details?.error || error.message)
+        }
+        throw error
+      }
+      if (data?.error) throw new Error(String(data.error))
+    },
+    onSuccess: async (_, profileId) => {
+      setDeleteAccount(null)
+      setLoginAccount(null)
+      setDraft(current => current?.profileId === profileId ? null : current)
+      setSelectedProfileId(current => current === profileId ? '' : current)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['sub-admin-profiles'] }),
+        queryClient.invalidateQueries({ queryKey: ['sub-admin-permissions'] }),
+      ])
+      toast.success('Staff account deleted')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
+  const editingDisabled = permissionsUnavailable || savePermissions.isPending || deleteStaff.isPending
 
   const chooseProfile = (profileId: string) => {
     if (profileId === selectedProfileId || savePermissions.isPending) return
@@ -296,7 +338,14 @@ export function AccessControlPage() {
                   </Select>
                   <p className="text-xs text-muted-foreground">Display label only. Permissions stay the same.</p>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="mt-4" disabled={!selectedProfile.login_email} onClick={() => setLoginAccount(selectedProfile)}><KeyRound className="h-3.5 w-3.5" /> Login details</Button>
+                <div className="mt-5 flex items-start gap-3">
+                  <Switch id="staff-open-account" checked={updateOpenAccount.isPending && updateOpenAccount.variables?.profileId === selectedProfileId ? updateOpenAccount.variables.isOpen : selectedProfile.is_open_account} disabled={updateOpenAccount.isPending || deleteStaff.isPending} onCheckedChange={isOpen => updateOpenAccount.mutate({ profileId: selectedProfileId, isOpen })} />
+                  <div className="space-y-1"><Label htmlFor="staff-open-account">Open account</Label><p className="text-xs text-muted-foreground">Shared login. Password changes are disabled while this is on.</p></div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={!selectedProfile.login_email || updateOpenAccount.isPending || deleteStaff.isPending} onClick={() => setLoginAccount(selectedProfile)}><KeyRound className="h-3.5 w-3.5" /> Login details</Button>
+                  <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={savePermissions.isPending || updateOpenAccount.isPending || deleteStaff.isPending} onClick={() => setDeleteAccount(selectedProfile)}><Trash2 className="h-3.5 w-3.5" /> Delete user</Button>
+                </div>
                 {!selectedProfile.is_active && <p className="mt-4 text-xs text-muted-foreground">This account is inactive. Assigned permissions do not grant access while it remains inactive.</p>}
               </div>
 
@@ -346,6 +395,14 @@ export function AccessControlPage() {
       )}
 
       {loginAccount && <SubAdminLoginDialog key={loginAccount.id} account={loginAccount} onClose={() => setLoginAccount(null)} />}
+
+      <Dialog open={!!deleteAccount} onOpenChange={open => { if (!open && !deleteStaff.isPending) setDeleteAccount(null) }}>
+        <DialogContent className="sm:max-w-md" showCloseButton={!deleteStaff.isPending}>
+          <DialogHeader><DialogTitle>Delete this user?</DialogTitle><DialogDescription>This removes their login and assigned access. School records they created will be kept.</DialogDescription></DialogHeader>
+          <div className="min-w-0 text-sm"><p className="break-words font-medium">{deleteAccount?.full_name}</p><p className="mt-1 break-all text-muted-foreground">{deleteAccount?.login_email}</p></div>
+          <DialogFooter><Button variant="outline" disabled={deleteStaff.isPending} onClick={() => setDeleteAccount(null)}>Cancel</Button><Button variant="destructive" disabled={deleteStaff.isPending || !deleteAccount} onClick={() => { if (deleteAccount) deleteStaff.mutate(deleteAccount.id) }}>{deleteStaff.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}{deleteStaff.isPending ? 'Deleting...' : 'Delete user'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createDialogOpen} onOpenChange={open => {
         if (createSubAdmin.isPending) return

@@ -52,6 +52,26 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { action = "create", email, password, full_name, role, extra, student_id, profile_id } = body;
 
+    if (action === "delete-sub-admin") {
+      if (typeof profile_id !== "string" || !profile_id || profile_id === userData.user.id) {
+        return jsonResponse(400, { error: "Choose another staff account to delete" });
+      }
+      const { data: target, error: targetError } = await adminClient
+        .from("profiles").select("id, role").eq("id", profile_id).maybeSingle();
+      if (targetError) return jsonResponse(500, { error: "Could not verify the staff account" });
+      if (!target || target.role !== "sub_admin") {
+        return jsonResponse(404, { error: "Staff account not found" });
+      }
+      const { data: studentLink, error: studentLinkError } = await adminClient
+        .from("students").select("id").eq("profile_id", profile_id).limit(1);
+      if (studentLinkError) return jsonResponse(500, { error: "Could not verify account links" });
+      if (studentLink?.length) return jsonResponse(400, { error: "This account is linked to a student and cannot be deleted here" });
+      // Keep historical authorship and school uploads; Auth removes credentials and sessions.
+      const { error: deleteError } = await adminClient.auth.admin.deleteUser(profile_id, true);
+      if (deleteError) return jsonResponse(400, { error: deleteError.message });
+      return jsonResponse(200, { success: true, user_id: profile_id });
+    }
+
     if (action === "reset-sub-admin-password") {
       if (typeof profile_id !== "string" || !profile_id) {
         return jsonResponse(400, { error: "Missing required field: profile_id" });
@@ -62,12 +82,15 @@ Deno.serve(async (req: Request) => {
 
       const { data: targetProfile, error: targetError } = await adminClient
         .from("profiles")
-        .select("id, role")
+        .select("id, role, is_open_account")
         .eq("id", profile_id)
         .maybeSingle();
 
       if (targetError || !targetProfile || targetProfile.role !== "sub_admin") {
         return jsonResponse(404, { error: "Sub-admin account not found" });
+      }
+      if (targetProfile.is_open_account) {
+        return jsonResponse(403, { error: "Turn off Open account before resetting this password" });
       }
 
       const { data: linkedUser, error: linkedUserError } = await adminClient.auth.admin.getUserById(profile_id);
