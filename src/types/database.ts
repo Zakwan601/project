@@ -182,6 +182,9 @@ export interface Student {
   first_name: string
   last_name: string
   guardian_phone: string | null
+  student_phone: string | null
+  present_address: string | null
+  permanent_address: string | null
   date_of_admission: string
   biometric_id: string | null
   photo_url: string | null
@@ -353,6 +356,7 @@ export interface DashboardStats {
   presentToday: number
   absentToday: number
   lateToday: number
+  tooLateToday: number
   excusedToday: number
 }
 

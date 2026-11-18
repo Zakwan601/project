@@ -6,6 +6,9 @@ export const STUDENT_REVIEW_FIELDS = [
   { key: 'father_name', label: "Father's name" },
   { key: 'mother_name', label: "Mother's name" },
   { key: 'blood_group', label: 'Blood group' },
+  { key: 'student_phone', label: 'Student phone' },
+  { key: 'present_address', label: 'Present address' },
+  { key: 'permanent_address', label: 'Permanent address' },
   { key: 'secondary_phone', label: 'Secondary mobile number' },
   { key: 'subjects', label: 'Subject choices' },
 ] as const

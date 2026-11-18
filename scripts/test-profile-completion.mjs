@@ -16,7 +16,7 @@ const { isProfileComplete, getStudentProfileMissingRequirements } = await import
 )
 
 const profile = { role: 'student', avatar_url: null }
-const student = { class_group: 'science', group_fourth_option_id: 'biology', guardian_phone: '01712345678', photo_url: null }
+const student = { class_group: 'science', group_fourth_option_id: 'biology', guardian_phone: '01712345678', student_phone: '01812345678', present_address: 'Dhaka', permanent_address: 'Chattogram', photo_url: null }
 
 assert.equal(isProfileComplete(profile, student), false, 'A guardian phone alone must not unlock the dashboard')
 assert.equal(isProfileComplete(profile, { ...student, photo_url: '   ' }), false, 'Blank photo URLs must not unlock access')
@@ -37,4 +37,14 @@ assert.deepEqual(getStudentProfileMissingRequirements(completeStudent), [], 'Com
 assert.equal(isProfileComplete(profile, completeStudent), getStudentProfileMissingRequirements(completeStudent).length === 0, 'Admin list and dashboard use the same completion rule')
 assert.deepEqual(getStudentProfileMissingRequirements({ ...student, guardian_phone: '', group_fourth_option_id: null }), ['Profile photo', 'Guardian phone', 'Subject choices'], 'Incomplete rows explain every missing requirement')
 
-console.log('Passed photo and subject requirements, removal, guardian phone, missing records, and staff access checks.')
+for (const [field, label] of [['student_phone', 'Student phone'], ['present_address', 'Present address'], ['permanent_address', 'Permanent address']]) {
+  for (const missing of [null, undefined, '', '   ', '\t\n']) {
+    const incomplete = { ...completeStudent, [field]: missing }
+    assert.equal(isProfileComplete(profile, incomplete), false, `${label} is compulsory`)
+    assert.ok(getStudentProfileMissingRequirements(incomplete).includes(label))
+  }
+}
+assert.equal(isProfileComplete(profile, { ...completeStudent, student_phone: '123' }), false, 'Student phone must be valid')
+assert.equal(isProfileComplete(profile, { ...completeStudent, student_phone: '+8801812345678' }), true, 'International phone format is supported')
+assert.deepEqual(getStudentProfileMissingRequirements({ ...completeStudent, student_phone: null, present_address: null, permanent_address: null }), ['Student phone', 'Present address', 'Permanent address'])
+console.log('Passed required student phone and addresses, photo and subject requirements, guardian phone, and staff access checks.')

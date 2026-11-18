@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -74,6 +75,9 @@ const studentSchema = z.object({
     value => !value?.trim() || isValidBangladeshMobile(value),
     'Enter a valid Bangladesh mobile number',
   ),
+  student_phone: z.string().trim().optional().refine(value => !value || isValidBangladeshMobile(value), 'Enter a valid Bangladesh mobile number'),
+  present_address: z.string().trim().max(1000, 'Use 1,000 characters or fewer').optional(),
+  permanent_address: z.string().trim().max(1000, 'Use 1,000 characters or fewer').optional(),
   biometric_id: z.string().optional(),
   father_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
   mother_name: z.string().trim().max(120, 'Use 120 characters or fewer').optional(),
@@ -104,7 +108,7 @@ function StudentProfileStatus({ student }: { student: Student }) {
   return (
     <span
       className={`inline-flex items-center gap-1 whitespace-nowrap text-xs ${complete ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
-      title={complete ? 'Profile photo, guardian phone and subject choices are complete' : `Missing: ${missing.join(', ')}`}
+      title={complete ? 'Profile photo, phone numbers, addresses and subject choices are complete' : `Missing: ${missing.join(', ')}`}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       {complete ? 'Complete' : 'Incomplete'}
@@ -433,6 +437,9 @@ export function StudentsPage() {
       humanities_fourth_option_id: s.humanities_fourth_option_id ?? undefined,
       roll_number: s.roll_number ?? undefined,
       guardian_phone: s.guardian_phone ?? undefined,
+      student_phone: s.student_phone ?? '',
+      present_address: s.present_address ?? '',
+      permanent_address: s.permanent_address ?? '',
       biometric_id: s.biometric_id ?? undefined,
       father_name: s.father_name ?? '',
       mother_name: s.mother_name ?? '',
@@ -459,6 +466,9 @@ export function StudentsPage() {
       humanities_fourth_option_id: data.class_group === 'humanities' ? data.group_fourth_option_id || null : null,
       roll_number: data.roll_number ?? null,
       guardian_phone: data.guardian_phone?.trim() || null,
+      student_phone: data.student_phone ? normalizeBangladeshMobile(data.student_phone) : null,
+      present_address: data.present_address?.trim() || null,
+      permanent_address: data.permanent_address?.trim() || null,
       biometric_id: data.biometric_id || null,
       father_name: data.father_name?.trim() || null,
       mother_name: data.mother_name?.trim() || null,
@@ -1203,7 +1213,7 @@ export function StudentsPage() {
                     <SelectItem className="whitespace-normal break-words" value="business">Business Studies</SelectItem>
                   </SelectContent>
                 </Select>
-                {classId && <p className="text-xs text-muted-foreground">Group follows the assigned class.</p>}
+                {classId && <p className="text-xs text-muted-foreground"></p>}
                 {errors.class_group && <p className="text-xs text-destructive">{errors.class_group.message}</p>}
               </div>
               {classGroup === 'humanities' ? (
@@ -1235,7 +1245,6 @@ export function StudentsPage() {
                 <div className="col-span-full min-w-0 space-y-4">
                   <div>
                     <p className="text-sm font-medium">Group subject choices</p>
-                    <p className="text-xs text-muted-foreground">Optional for admins. Students must choose one elective and a different fourth subject in their profile.</p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     {([
@@ -1346,6 +1355,19 @@ export function StudentsPage() {
                           </p>
                         )}
                       </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="min-w-0 space-y-2 sm:col-span-2">
+                        <Label htmlFor="edit-student-phone">Student phone</Label>
+                        <Input id="edit-student-phone" type="tel" inputMode="tel" placeholder="01XXXXXXXXX" {...register('student_phone')} aria-invalid={!!errors.student_phone} />
+                        {errors.student_phone && <p className="text-xs text-destructive">{errors.student_phone.message}</p>}
+                      </div>
+                      {(['present_address', 'permanent_address'] as const).map(field => <div key={field} className="min-w-0 space-y-2 sm:col-span-2">
+                        <Label htmlFor={`edit-${field}`}>{field === 'present_address' ? 'Present address' : 'Permanent address'}</Label>
+                        <Textarea id={`edit-${field}`} rows={2} maxLength={1000} {...register(field)} aria-invalid={!!errors[field]} />
+                        {errors[field] && <p className="text-xs text-destructive">{errors[field]?.message}</p>}
+                      </div>)}
+                      <p className="text-xs text-muted-foreground sm:col-span-2">Students must add a valid phone number and both addresses to complete their profile.</p>
                     </div>
                     <StudentProfileReview key={editing.id} student={editing} onRemoved={async fields => {
                       for (const field of fields) {

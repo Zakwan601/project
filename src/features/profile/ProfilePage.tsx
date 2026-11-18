@@ -20,6 +20,7 @@ import { LoadingState, PageHeader } from '@/components/shared/PageHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -44,6 +45,9 @@ const profileSchema = z.object({
     .trim()
     .min(1, 'Phone is required')
     .refine(isValidBangladeshMobile, 'Enter a valid Bangladesh mobile number'),
+  student_phone: z.string().trim(),
+  present_address: z.string().trim().max(1000, 'Use 1,000 characters or fewer'),
+  permanent_address: z.string().trim().max(1000, 'Use 1,000 characters or fewer'),
   father_name: z.string().trim().max(120, 'Use 120 characters or fewer'),
   mother_name: z.string().trim().max(120, 'Use 120 characters or fewer'),
   blood_group: z.enum(BLOOD_GROUPS).or(z.literal('')),
@@ -54,9 +58,12 @@ const profileSchema = z.object({
 })
 const studentProfileSchema = profileSchema.extend({
   phone: z.string(),
+  student_phone: z.string().trim().min(1, 'Student phone is required').refine(isValidBangladeshMobile, 'Enter a valid Bangladesh mobile number'),
+  present_address: z.string().trim().min(1, 'Present address is required').max(1000, 'Use 1,000 characters or fewer'),
+  permanent_address: z.string().trim().min(1, 'Permanent address is required').max(1000, 'Use 1,000 characters or fewer'),
 })
 type ProfileForm = z.infer<typeof profileSchema>
-type PersonalUpdates = Partial<Pick<Profile, 'full_name' | 'phone' | 'father_name' | 'mother_name' | 'blood_group' | 'secondary_phone'>>
+type PersonalUpdates = Partial<Pick<Profile, 'full_name' | 'phone' | 'father_name' | 'mother_name' | 'blood_group' | 'secondary_phone'> & Pick<Student, 'student_phone' | 'present_address' | 'permanent_address'>>
 
 const passwordSchema = z.object({
   oldPassword: z.string().min(1, 'Current password required'),
@@ -94,6 +101,7 @@ export function ProfilePage() {
   const needsPhoto = role === 'student' && !hasProfilePhoto(profile, student)
   const needsSubjects = role === 'student' && !hasRequiredStudentSubjects(student)
   const profileComplete = isProfileComplete(profile, student)
+  const missingContactField = !isValidBangladeshMobile(student?.student_phone) ? 'student_phone' : !student?.present_address?.trim() ? 'present_address' : !student?.permanent_address?.trim() ? 'permanent_address' : null
   const avatarUrl = student?.photo_url ?? profile?.avatar_url
   const personalIdentityRef = useRef<string | null>(null)
   const profileId = profile?.id
@@ -101,18 +109,22 @@ export function ProfilePage() {
   const queryClient = useQueryClient()
   const savePersonalChanges = useCallback(async (updates: PersonalUpdates) => {
     if (!profileId) throw new Error('Profile unavailable')
-    if (role === 'student' && Object.hasOwn(updates, 'full_name')) {
+    if (role === 'student') {
       if (!studentId) throw new Error('Student profile unavailable')
-      const nameParts = (updates.full_name ?? '').trim().split(/\s+/u)
-      const { full_name: _name, ...details } = updates
-      const { data, error } = await db.from('students').update({
-        ...details, first_name: nameParts[0], last_name: nameParts.slice(1).join(' '),
-      }).eq('id', studentId).eq('profile_id', profileId)
-        .select(['id', 'first_name', 'last_name', ...Object.keys(details)].join(',')).single()
-      if (error) throw new Error(error.message || 'Unable to save name')
-      applySavedProfileChanges(profileId, {
-        ...details, full_name: [data.first_name, data.last_name].filter(Boolean).join(' '),
-      }, data)
+      const { full_name, phone: _guardianPhone, ...details } = updates
+      const nameParts = full_name?.trim().split(/\s+/u)
+      const studentUpdates = {
+        ...details,
+        ...(nameParts ? { first_name: nameParts[0], last_name: nameParts.slice(1).join(' ') } : {}),
+      }
+      const { data, error } = await db.from('students').update(studentUpdates)
+        .eq('id', studentId).eq('profile_id', profileId)
+        .select(['id', ...Object.keys(studentUpdates)].join(',')).single()
+      if (error) throw new Error(error.message || 'Unable to save profile')
+      const syncedFields = ['father_name', 'mother_name', 'blood_group', 'secondary_phone']
+      const profileChanges = Object.fromEntries(Object.entries(data).filter(([key]) => syncedFields.includes(key))) as Partial<Profile>
+      if (nameParts) profileChanges.full_name = [data.first_name, data.last_name].filter(Boolean).join(' ')
+      applySavedProfileChanges(profileId, profileChanges, data)
       void queryClient.invalidateQueries({ queryKey: ['students'] })
       return
     }
@@ -129,7 +141,7 @@ export function ProfilePage() {
     if (role === 'student' && field === 'phone') return
     const parsed = (role === 'student' ? studentProfileSchema : profileSchema).shape[field].safeParse(value)
     if (!parsed.success) return
-    const normalized = field === 'phone' || field === 'secondary_phone'
+    const normalized = field === 'phone' || field === 'secondary_phone' || field === 'student_phone'
       ? parsed.data ? normalizeBangladeshMobile(parsed.data) : null
       : parsed.data || null
     personalAutosave.enqueue({ [field]: normalized } as PersonalUpdates)
@@ -173,6 +185,9 @@ export function ProfilePage() {
       mother_name: profile?.mother_name ?? '',
       blood_group: profile?.blood_group ?? '',
       secondary_phone: profile?.secondary_phone ?? '',
+      student_phone: student?.student_phone ?? '',
+      present_address: student?.present_address ?? '',
+      permanent_address: student?.permanent_address ?? '',
     },
   })
 
@@ -186,6 +201,9 @@ export function ProfilePage() {
       mother_name: profile?.mother_name ?? '',
       blood_group: profile?.blood_group ?? '',
       secondary_phone: profile?.secondary_phone ?? '',
+      student_phone: student?.student_phone ?? '',
+      present_address: student?.present_address ?? '',
+      permanent_address: student?.permanent_address ?? '',
     }, {
       keepDirtyValues: personalIdentityRef.current === profile?.id,
       keepErrors: personalIdentityRef.current === profile?.id,
@@ -385,6 +403,17 @@ export function ProfilePage() {
                     <Button type="button" variant="ghost" size="sm" onClick={goToSubjects}>Choose subjects <ArrowRight /></Button>
                   </li>
                 )}
+                {missingContactField && <li className="flex items-center justify-between gap-3 py-2">
+                  <span className="text-sm text-destructive">Student phone and both addresses are required</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => {
+                    setActiveTab('personal')
+                    window.setTimeout(() => {
+                      const field = document.querySelector<HTMLElement>(`[name="${missingContactField}"]`)
+                      field?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+                      field?.focus({ preventScroll: true })
+                    }, 100)
+                  }}>Add details <ArrowRight /></Button>
+                </li>}
                 {!isValidBangladeshMobile(student?.guardian_phone) && (
                   <li className="py-3 text-sm text-destructive">Ask an administrator to add a valid guardian phone number.</li>
                 )}
@@ -437,7 +466,7 @@ export function ProfilePage() {
 
         <TabsContent value="personal" forceMount className="m-0 data-[state=inactive]:hidden">
           <form onSubmit={event => { event.preventDefault(); void personalAutosave.flush() }} onBlur={() => void personalAutosave.flush()} onChange={event => {
-            if (!(event.target instanceof HTMLInputElement)) return
+            if (!(event.target instanceof HTMLInputElement) && !(event.target instanceof HTMLTextAreaElement)) return
             const input = event.target
             if (Object.hasOwn(profileSchema.shape, input.name)) queuePersonalField(input.name as keyof ProfileForm, input.value)
           }}>
@@ -503,6 +532,18 @@ export function ProfilePage() {
                       <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> Valid Bangladesh mobile number</p>
                     )}
                   </div>
+                  {role === 'student' && <>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="student-phone" className={!isValidBangladeshMobile(student?.student_phone) ? 'text-destructive' : undefined}>Student phone <span className="font-normal">(required)</span></Label>
+                      <Input id="student-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" {...regProfile('student_phone')} required aria-invalid={!!profileErrors.student_phone} />
+                      {profileErrors.student_phone && <p className="text-xs text-destructive">{profileErrors.student_phone.message}</p>}
+                    </div>
+                    {(['present_address', 'permanent_address'] as const).map(field => <div key={field} className="space-y-2 sm:col-span-2">
+                      <Label htmlFor={field} className={!student?.[field]?.trim() ? 'text-destructive' : undefined}>{field === 'present_address' ? 'Present address' : 'Permanent address'} <span className="font-normal">(required)</span></Label>
+                      <Textarea id={field} rows={2} maxLength={1000} autoComplete={field === 'present_address' ? 'section-present street-address' : 'section-permanent street-address'} placeholder="House, road or village, area, district and postcode" {...regProfile(field)} required aria-invalid={!!profileErrors[field]} />
+                      {profileErrors[field] && <p className="text-xs text-destructive">{profileErrors[field]?.message}</p>}
+                    </div>)}
+                  </>}
                   <div className="space-y-2 sm:col-span-2">
                     <Label>Email</Label>
                     <Input value={user?.email ?? ''} disabled className="bg-muted/40" />

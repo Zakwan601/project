@@ -27,6 +27,9 @@ export function getStudentProfileMissingRequirements(student: Student | null | u
   const missing: string[] = []
   if (!hasProfilePhoto(profile, student)) missing.push('Profile photo')
   if (!isValidBangladeshMobile(student.guardian_phone)) missing.push('Guardian phone')
+  if (!isValidBangladeshMobile(student.student_phone)) missing.push('Student phone')
+  if (!student.present_address?.trim()) missing.push('Present address')
+  if (!student.permanent_address?.trim()) missing.push('Permanent address')
   if (!hasRequiredStudentSubjects(student)) missing.push('Subject choices')
   return missing
 }

@@ -17,7 +17,38 @@ export interface AdminDashboardData {
   weekly: WeeklyAttendanceDay[]
 }
 
+export interface DailyPresenceCounts {
+  students: number
+  present: number
+  late: number
+  absent: number
+  excused: number
+  unmarked: number
+  rate: number | null
+}
+export interface ClassDailyPresence extends DailyPresenceCounts {
+  class_id: string | null
+  class_name: string
+  section: string
+  session_id: string | null
+  session_name: string
+}
+export interface SessionDailyPresence extends DailyPresenceCounts {
+  session_id: string | null
+  session_name: string
+}
+export interface AdminDailyPresenceData {
+  date: string
+  classes: ClassDailyPresence[]
+  sessions: SessionDailyPresence[]
+}
+
 export const dashboardService = {
+  async getDailyPresence(date: string): Promise<AdminDailyPresenceData> {
+    const { data, error } = await db.rpc('get_admin_daily_presence', { p_date: date })
+    if (error) throw error
+    return data as AdminDailyPresenceData
+  },
   async getDashboard(
     today: string,
     weeklyStart: string,

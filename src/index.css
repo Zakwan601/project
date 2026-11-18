@@ -50,8 +50,8 @@
   Theme: neutral (default)
   Mode:  light (:root) / dark (.dark)
 
-  To switch to dark mode by default, change the ThemeProvider
-  defaultTheme prop in src/main.tsx:
+  Dark mode is the default. Set the ThemeProvider
+  defaultTheme prop in src/App.tsx to change it:
     <ThemeProvider defaultTheme="dark">
 
   To change theme colors, replace the OKLCH values below.

@@ -39,7 +39,7 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="Axentra@Zuanshi-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="Axentra@Zuanshi-theme">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>

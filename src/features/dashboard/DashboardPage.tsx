@@ -1,5 +1,6 @@
+import { AdminDailyPresence } from './AdminDailyPresence'
 import { motion } from 'framer-motion'
-import { CalendarCheck, CheckCircle, Clock, GraduationCap, Users, UserX } from 'lucide-react'
+import { AlarmClock, CalendarCheck, CheckCircle, Clock, GraduationCap, Users, UserX } from 'lucide-react'
 import { format } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Label, Pie, PieChart, XAxis } from 'recharts'
@@ -16,13 +17,14 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart'
 import type { ChartConfig } from '@/components/ui/chart'
-import { formatDisplayDate } from '@/lib/dateTime'
+import { formatDisplayDate, splitBangladeshDateTime } from '@/lib/dateTime'
 
 const chartConfig = {
-  present: { label: 'Present', color: 'var(--chart-2)' },
-  absent: { label: 'Absent', color: 'var(--chart-1)' },
-  late: { label: 'Late', color: 'var(--chart-4)' },
-  excused: { label: 'Approved leave', color: 'var(--chart-3)' },
+  present: { label: 'Present', color: '#0d9488' },
+  absent: { label: 'Absent', color: '#e11d48' },
+  late: { label: 'Late', color: '#d99a00' },
+  too_late: { label: 'Too late', color: '#9333ea' },
+  excused: { label: 'Approved leave', color: '#2563eb' },
 } satisfies ChartConfig
 
 export function DashboardPage() {
@@ -41,15 +43,18 @@ export function DashboardPage() {
     late: day.late,
   })) ?? []
   const presentToday = stats?.presentToday ?? 0
-  const absentToday = stats?.absentToday ?? 0
+  const tooLateToday = stats?.tooLateToday ?? 0
+  // The aggregate absence total includes too-late arrivals; split the snapshot into distinct statuses.
+  const absentToday = Math.max(0, (stats?.absentToday ?? 0) - tooLateToday)
   const lateToday = stats?.lateToday ?? 0
   const excusedToday = stats?.excusedToday ?? 0
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const todayTotal = presentToday + absentToday + lateToday + excusedToday
+  const today = splitBangladeshDateTime(new Date()).date
+  const todayTotal = presentToday + absentToday + lateToday + tooLateToday + excusedToday
   const todayPieData = [
     { status: 'present', count: presentToday, fill: 'var(--color-present)' },
     { status: 'absent', count: absentToday, fill: 'var(--color-absent)' },
     { status: 'late', count: lateToday, fill: 'var(--color-late)' },
+    { status: 'too_late', count: tooLateToday, fill: 'var(--color-too_late)' },
     { status: 'excused', count: excusedToday, fill: 'var(--color-excused)' },
   ]
 
@@ -89,6 +94,8 @@ export function DashboardPage() {
           to={`/attendance?date=${today}&status=excused`}
         />
       </div>
+
+      <AdminDailyPresence />
 
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
@@ -148,10 +155,11 @@ export function DashboardPage() {
                   </PieChart>
                 </ChartContainer>
                 <div className="w-full space-y-3">
-                  <Snapshot icon={CheckCircle} label="Present" value={presentToday} className="text-emerald-600" to={`/attendance?date=${today}&status=present`} />
-                  <Snapshot icon={UserX} label="Absent" value={absentToday} className="text-red-600" to={`/attendance?date=${today}&status=absent`} />
-                  <Snapshot icon={Clock} label="Late" value={lateToday} className="text-amber-600" to={`/attendance?date=${today}&status=late`} />
-                  <Snapshot icon={CalendarCheck} label="Approved leave" value={excusedToday} className="text-blue-600" to={`/attendance?date=${today}&status=excused`} />
+                  <Snapshot icon={CheckCircle} label="Present" value={presentToday} color={chartConfig.present.color} to={`/attendance?date=${today}&status=present`} />
+                  <Snapshot icon={UserX} label="Absent" value={absentToday} color={chartConfig.absent.color} to={`/attendance?date=${today}&status=absent`} />
+                  <Snapshot icon={Clock} label="Late" value={lateToday} color={chartConfig.late.color} to={`/attendance?date=${today}&status=late`} />
+                  <Snapshot icon={AlarmClock} label="Too late" value={tooLateToday} color={chartConfig.too_late.color} to={`/attendance?date=${today}&status=too_late`} />
+                  <Snapshot icon={CalendarCheck} label="Approved leave" value={excusedToday} color={chartConfig.excused.color} to={`/attendance?date=${today}&status=excused`} />
                 </div>
               </div>
             ) : (
@@ -223,13 +231,13 @@ function Snapshot({
   icon: Icon,
   label,
   value,
-  className,
+  color,
   to,
 }: {
   icon: React.ElementType
   label: string
   value: number
-  className: string
+  color: string
   to: string
 }) {
   return (
@@ -237,7 +245,7 @@ function Snapshot({
       to={to}
       className="flex items-center gap-3 rounded-md px-1 py-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <Icon className={`h-4 w-4 ${className}`} />
+      <Icon className="h-4 w-4" style={{ color }} />
       <span className="flex-1 text-sm text-muted-foreground">{label}</span>
       <strong>{value}</strong>
     </Link>
