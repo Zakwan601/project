@@ -12,7 +12,7 @@ export function AdminDailyPresence() {
   const classes = data?.classes.filter(row => row.class_id !== null) ?? []
   return <section className="min-w-0 space-y-5 " aria-labelledby="daily-presence-title">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h2 id="daily-presence-title" className="text-base font-semibold">Daily presence report</h2><p className="mt-1 text-xs text-muted-foreground">Today's attendance by class.</p></div>
+      <div><h2 id="daily-presence-title" className="text-base font-semibold">Today's presence report</h2></div>
     </div>
     {isLoading ? <div className="space-y-3" role="status" aria-label="Loading daily presence report">{[0, 1, 2].map(row => <Skeleton key={row} className="h-8 w-full" />)}</div>
       : error ? <div className="flex flex-wrap items-center gap-3"><p className="text-sm text-destructive">Could not load the daily presence report.</p><Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</Button></div>

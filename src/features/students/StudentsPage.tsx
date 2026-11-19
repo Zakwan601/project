@@ -1,9 +1,11 @@
 import { StudentProfileReview } from './StudentProfileReview'
+import { StudentAttendanceDetails, StudentFineBreakdown, StudentInformation, StudentResultDetails } from './StudentDetails'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SUBJECT_REVIEW_FIELDS } from '@/lib/studentProfileReview'
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { AlertCircle, Check, Copy, Download, Eye, EyeOff, FileSpreadsheet, GraduationCap, KeyRound, Loader2, Pencil, Printer, RefreshCw, School, ShieldCheck, Trash2, UserCircle, X } from 'lucide-react'
+import { AlertCircle, Check, Copy, Download, Eye, EyeOff, FileSpreadsheet, GraduationCap, KeyRound, Loader2, Printer, RefreshCw, School, ShieldCheck, Trash2, UserCircle, UserRound, X } from 'lucide-react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -145,6 +147,9 @@ export function StudentsPage() {
   const { session, role, can } = useAuth()
   const canWriteStudents = can('students', 'write')
   const isFullAdmin = role === 'admin'
+  const canReadStudents = can('students', 'read')
+  const canReadReports = can('reports', 'read')
+  const canReadResults = can('results', 'read')
 
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('all')
@@ -152,6 +157,7 @@ export function StudentsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [detailsTab, setDetailsTab] = useState('info')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editing, setEditing] = useState<StudentWithClass | null>(null)
   const [accountStudent, setAccountStudent] = useState<StudentWithClass | null>(null)
@@ -420,6 +426,7 @@ export function StudentsPage() {
   }
 
   const openEdit = (s: StudentWithClass) => {
+    setDetailsTab('info')
     setEditing(s)
     reset({
       first_name: s.first_name,
@@ -476,7 +483,7 @@ export function StudentsPage() {
       secondary_phone: data.secondary_phone ? normalizeBangladeshMobile(data.secondary_phone) : null,
     }
 
-    if (!editing) return
+    if (!editing || !canWriteStudents) return
     if (isFullAdmin && editing.profile_id) {
       const { error } = await db
         .from('profiles')
@@ -494,6 +501,8 @@ export function StudentsPage() {
       }
     }
     await updateStudent.mutateAsync({ id: editing.id, updates: payload })
+    void queryClient.invalidateQueries({ queryKey: ['staff-student-result', editing.id] })
+    void queryClient.invalidateQueries({ queryKey: ['staff-student-exams', editing.id] })
     setDialogOpen(false)
     reset({})
   }
@@ -841,96 +850,10 @@ export function StudentsPage() {
 
         {/* Actions */}
         <TableCell className="px-1 py-1.5 text-right sm:px-3 sm:py-2">
-          {/* Mobile: 3-dot menu */}
-          <div className={canWriteStudents || isFullAdmin ? 'flex justify-end sm:hidden' : 'hidden'}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Actions for ${student.first_name} ${student.last_name}`}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent align="end" className="w-48">
-
-                {isFullAdmin && (
-                  <DropdownMenuItem
-                    onClick={() => setAccountStudent(student)}
-                  >
-                    <KeyRound className="mr-2 h-4 w-4" />
-                    {student.profile_id
-                      ? 'View / reset login'
-                      : 'Set up login account'}
-                  </DropdownMenuItem>
-                )}
-
-                {canWriteStudents && (
-                  <DropdownMenuItem
-                    onClick={() => openEdit(student)}
-                  >
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit student
-                  </DropdownMenuItem>
-                )}
-
-                {canWriteStudents && (
-                  <DropdownMenuItem
-                    onClick={() => setDeleteId(student.id)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete student
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* Desktop: individual action buttons */}
-          <div className="hidden items-center justify-end gap-1 sm:flex">
-
-            {isFullAdmin && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setAccountStudent(student)}
-                title={
-                  student.profile_id
-                    ? 'View or reset login credentials'
-                    : 'Set up login account'
-                }
-                className="text-blue-600 hover:text-blue-700"
-              >
-                <KeyRound className="h-3.5 w-3.5" />
-              </Button>
-            )}
-
-            {canWriteStudents && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => openEdit(student)}
-                title="Edit student"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-            )}
-
-            {canWriteStudents && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setDeleteId(student.id)}
-                title="Delete student"
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-          </div>
+          {canReadStudents && <Button variant="ghost" size="icon-sm" onClick={() => openEdit(student)}
+            aria-label={`Student details for ${student.first_name} ${student.last_name}`} title="Student details">
+            <UserRound className="h-4 w-4" />
+          </Button>}
         </TableCell>
       </motion.tr>
     ))}
@@ -1139,13 +1062,55 @@ export function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
+      {/* Student details: data for additional tabs is loaded only while open. */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-2xl">
+        <DialogContent className="flex h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:h-[85dvh] sm:max-w-4xl">
           <DialogHeader className="shrink-0 border-b px-4 py-4 pr-12 text-left sm:px-6">
-            <DialogTitle>Edit Student</DialogTitle>
-            <DialogDescription>Update student information</DialogDescription>
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar className="h-11 w-11 shrink-0"><AvatarImage src={editing?.photo_url ?? undefined} alt="" />
+                <AvatarFallback><UserRound className="h-5 w-5" /></AvatarFallback></Avatar>
+              <div className="min-w-0"><DialogTitle className="truncate">{editing ? `${editing.first_name} ${editing.last_name}` : 'Student details'}</DialogTitle>
+                <DialogDescription className="mt-1 truncate">{editing?.admission_number} · {editing?.classes?.name ?? 'No class assigned'}</DialogDescription></div>
+            </div>
           </DialogHeader>
+          {editing && canReadStudents && <Tabs value={detailsTab} onValueChange={setDetailsTab} className="min-h-0 flex-1 gap-0">
+            <TabsList variant="line" aria-label="Student details" className="grid h-auto! w-full shrink-0 grid-cols-3 gap-0 border-b px-2 sm:flex sm:h-10! sm:justify-start sm:px-5 [&_button]:h-8 [&_button]:min-w-0 [&_button]:rounded-none [&_button]:px-1.5 [&_button]:text-xs [&_button]:after:bottom-0 sm:[&_button]:h-full sm:[&_button]:flex-none sm:[&_button]:px-4 sm:[&_button]:text-sm">
+              <TabsTrigger value="info">Overview</TabsTrigger>
+              {canWriteStudents && <TabsTrigger value="edit">Edit info</TabsTrigger>}
+              {canReadReports && <><TabsTrigger value="attendance">Attendance</TabsTrigger><TabsTrigger value="fines">Fines</TabsTrigger></>}
+              {canReadResults && <TabsTrigger value="results">Results</TabsTrigger>}
+              {isFullAdmin && <TabsTrigger value="account">Account</TabsTrigger>}
+            </TabsList>
+            <TabsContent value="info" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              {detailsTab === 'info' && <StudentInformation student={editing} courseOptions={courseOptions} />}
+            </TabsContent>
+            {canReadReports && <><TabsContent value="attendance" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              {detailsTab === 'attendance' && <StudentAttendanceDetails key={editing.id} studentId={editing.id} />}
+            </TabsContent><TabsContent value="fines" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              {detailsTab === 'fines' && <StudentFineBreakdown key={editing.id} studentId={editing.id} />}
+            </TabsContent></>}
+            {canReadResults && <TabsContent value="results" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              {detailsTab === 'results' && <StudentResultDetails key={editing.id} student={editing} />}
+            </TabsContent>}
+            {isFullAdmin && <TabsContent value="account" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              <div className="divide-y">
+                {isFullAdmin && <section className="flex flex-col items-start gap-3 pb-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div><h3 className="text-sm font-semibold">Student login</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">{editing.profile_id ? 'View login details or reset the password.' : 'Create login access for this student.'}</p></div>
+                  <Button variant="outline" className="shrink-0" onClick={() => setAccountStudent(editing)}>
+                    <KeyRound className="mr-2 h-4 w-4" />{editing.profile_id ? 'Manage student login' : 'Set Up Student Login'}
+                  </Button>
+                </section>}
+                {isFullAdmin && <section className="flex flex-col items-start gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div><h3 className="text-sm font-semibold">Delete student</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">Permanently remove this student record. This cannot be undone.</p></div>
+                  <Button variant="outline" className="shrink-0 text-destructive hover:text-destructive" onClick={() => setDeleteId(editing.id)}>
+                    <Trash2 className="mr-2 h-4 w-4" />Delete student
+                  </Button>
+                </section>}
+              </div>
+            </TabsContent>}
+            {canWriteStudents && <TabsContent value="edit" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
           <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6">
             <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
@@ -1391,11 +1356,13 @@ export function StudentsPage() {
               </Button>
             </DialogFooter>
           </form>
+            </TabsContent>}
+          </Tabs>}
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirm */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+      <AlertDialog open={isFullAdmin && !!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Student</AlertDialogTitle>
@@ -1407,7 +1374,13 @@ export function StudentsPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => { deleteId && deleteStudent.mutate(deleteId); setDeleteId(null) }}
+              onClick={() => {
+                if (deleteId && isFullAdmin) deleteStudent.mutate(deleteId, { onSuccess: () => {
+                  setDialogOpen(false)
+                  setEditing(null)
+                } })
+                setDeleteId(null)
+              }}
             >
               Delete
             </AlertDialogAction>
@@ -1416,7 +1389,7 @@ export function StudentsPage() {
       </AlertDialog>
 
       {/* Create Student Account Dialog */}
-      <Dialog open={!!accountStudent} onOpenChange={() => setAccountStudent(null)}>
+      <Dialog open={isFullAdmin && !!accountStudent} onOpenChange={() => setAccountStudent(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Set Up Student Login</DialogTitle>

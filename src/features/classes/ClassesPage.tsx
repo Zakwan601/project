@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Search, Pencil, Trash2, BookOpen, Users } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Users, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,7 +9,7 @@ import { useClasses, useCreateClass, useUpdateClass, useDeleteClass } from '@/ho
 import { supabase } from '@/lib/supabase'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
-import { PageHeader, LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
+import { LoadingState, ErrorState, EmptyState } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -66,9 +66,13 @@ export function ClassesPage() {
     defaultValues: { section: 'A', capacity: 40 },
   })
 
-  const filtered = classes?.filter(c =>
-    `${c.name} ${c.grade} ${c.section}`.toLowerCase().includes(search.toLowerCase())
-  ) ?? []
+  const normalizeSearch = (value: string) => value.normalize('NFKC').toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  const searchTerms = normalizeSearch(search).split(/\s+/).filter(Boolean)
+  const filtered = classes?.filter(c => {
+    const text = normalizeSearch(`${c.name} ${c.grade} ${c.section} ${c.class_group === 'business' ? 'Business Studies' : c.class_group} ${c.academic_years?.name ?? ''} ${c.room ?? ''}`)
+    return searchTerms.every(term => text.includes(term))
+  }) ?? []
 
   const openCreate = () => {
     setEditing(null)
@@ -115,61 +119,71 @@ export function ClassesPage() {
   if (error) return <ErrorState message={(error as Error).message} />
 
   return (
-    <div>
-      <PageHeader
-        title="Classes"
-        description={`${classes?.length ?? 0} classes`}
-        action={canWriteClasses ? (
-          <Button onClick={openCreate} size="sm">
+    <div className="min-w-0 max-w-full">
+      <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+        <div className="min-w-0"><h2 className="text-xl font-bold tracking-tight sm:text-2xl">Classes</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm" aria-live="polite">
+            {searchTerms.length ? `${filtered.length} of ${classes?.length ?? 0} classes` : `${classes?.length ?? 0} classes`}
+          </p>
+        </div>
+        {canWriteClasses && <Button onClick={openCreate} size="sm" className="shrink-0">
             <Plus className="h-4 w-4 mr-1" /> Add Class
-          </Button>
-        ) : undefined}
-      />
+        </Button>}
+      </div>
 
-      <div className="relative mb-3 max-w-sm sm:mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search classes..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+      <div className="relative mb-3 w-full sm:mb-4 sm:max-w-sm">
+        <Label htmlFor="class-search" className="sr-only">Search classes</Label>
+        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input id="class-search" type="search" placeholder="Search name, group or session" value={search} onChange={e => setSearch(e.target.value)} className="h-9 w-full pl-9 pr-9 [&::-webkit-search-cancel-button]:appearance-none" />
+        {search && <Button variant="ghost" size="icon-sm" aria-label="Clear class search" onClick={() => setSearch('')}
+          className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"><X className="h-3.5 w-3.5" /></Button>}
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState title="No classes found" description="Add your first class" />
+        <EmptyState title="No classes found" description={searchTerms.length ? 'Try another name, group or academic session.' : 'Add your first class'} />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {filtered.map((cls, i) => {
             const count = cls.active_student_count ?? 0
             const occupancy = cls.capacity > 0 ? Math.round((count / cls.capacity) * 100) : 0
             return (
               <motion.div key={cls.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                <Card className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-3 sm:p-5">
-                    <div className="mb-2 flex items-start justify-between sm:mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <BookOpen className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-semibold">{cls.name}</p>
-                          <p className="text-xs text-muted-foreground">Grade {cls.grade} · Section {cls.section}</p>
+                <Card className="gap-0 rounded-lg py-0 shadow-none transition-shadow sm:rounded-xl sm:hover:shadow-md">
+                  <CardContent className="p-2.5 sm:p-5">
+                    <div className="mb-1 flex items-center justify-between gap-2 sm:mb-3 sm:items-start">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold sm:text-base" title={cls.name}>{cls.name}</p>
+                          <p className="hidden text-xs text-muted-foreground sm:block">Grade {cls.grade} · Section {cls.section}</p>
                         </div>
                       </div>
-                      {canWriteClasses && <div className="flex gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(cls)}>
+                      {canWriteClasses && <div className="flex shrink-0 gap-0.5">
+                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 sm:h-8 sm:w-8" aria-label={`Edit ${cls.name}`} onClick={() => openEdit(cls)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => setDeleteId(cls.id)} className="text-destructive hover:text-destructive">
+                        <Button variant="ghost" size="icon-sm" aria-label={`Delete ${cls.name}`} onClick={() => setDeleteId(cls.id)} className="h-7 w-7 text-destructive hover:text-destructive sm:h-8 sm:w-8">
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>}
                     </div>
 
+                    <div className="mb-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground sm:hidden">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{cls.academic_years?.name ?? 'No session'}{cls.room ? ` · Room ${cls.room}` : ''}</span>
+                        <span className={`shrink-0 ${cls.is_active ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{cls.is_active ? 'Active' : 'Inactive'}</span>
+                      </div>
+                      <span className="flex shrink-0 items-center gap-1 tabular-nums"><Users className="h-3 w-3" aria-hidden="true" />
+                        <span className="sr-only">Students: </span><span className="font-medium text-foreground">{count} / {cls.capacity}</span>
+                      </span>
+                    </div>
                     <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between text-muted-foreground">
+                      <div className="hidden items-center justify-between text-muted-foreground sm:flex">
                         <span className="flex items-center gap-1.5">
                           <Users className="h-3.5 w-3.5" /> Students
                         </span>
                         <span className="font-medium text-foreground">{count} / {cls.capacity}</span>
                       </div>
-                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-0.5 overflow-hidden rounded-full bg-muted sm:h-1.5">
                         <div
                           className="h-full bg-primary rounded-full transition-all"
                           style={{ width: `${Math.min(occupancy, 100)}%` }}
@@ -177,9 +191,9 @@ export function ClassesPage() {
                       </div>
                     </div>
 
-                    {cls.room && <p className="text-xs text-muted-foreground">Room: {cls.room}</p>}
+                    {cls.room && <p className="hidden text-xs text-muted-foreground sm:block">Room: {cls.room}</p>}
 
-                    <div className="flex items-center gap-2 mt-3">
+                    <div className="mt-3 hidden flex-wrap items-center gap-2 sm:flex">
                       <Badge variant="outline" className="text-xs capitalize">
                         {cls.class_group}
                       </Badge>

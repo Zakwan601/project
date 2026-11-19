@@ -70,7 +70,7 @@ export const studentsService = {
   },
 
   async delete(id: string) {
-    const { error } = await db.from('students').delete().eq('id', id)
+    const { error } = await db.from('students').delete().eq('id', id).select('id').single()
     if (error) throw error
   },
 
