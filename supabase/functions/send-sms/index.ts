@@ -223,6 +223,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const { data: classRestricted, error: scopeError } = await authClient.rpc("is_class_restricted_teacher");
+    if (scopeError) return jsonResponse({ error: "Could not verify account scope" }, 403);
+    if (classRestricted === true) {
+      if (source !== "result_published" || !body.studentId || !body.resultExamId) {
+        return jsonResponse({ error: "Teachers can only notify guardians about results for their assigned classes" }, 403);
+      }
+      const [{ data: studentAllowed, error: studentScopeError }, { data: examAllowed, error: examScopeError }] = await Promise.all([
+        authClient.rpc("teacher_can_access_student", { p_student_id: body.studentId }),
+        authClient.rpc("teacher_can_access_exam", { p_exam_id: body.resultExamId }),
+      ]);
+      if (studentScopeError || examScopeError || studentAllowed !== true || examAllowed !== true) {
+        return jsonResponse({ error: "Access is limited to your assigned classes" }, 403);
+      }
+    }
 
     let claimedResultMessageId: string | null = null;
     if (source === "result_published") {

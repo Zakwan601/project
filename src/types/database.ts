@@ -43,6 +43,11 @@ export interface Database {
         Insert: Omit<SubAdminPermission, 'created_at' | 'updated_at'>
         Update: Partial<Pick<SubAdminPermission, 'can_read' | 'can_write'>>
       }
+      teacher_class_assignments: {
+        Row: { profile_id: string; class_id: string; created_at: string }
+        Insert: { profile_id: string; class_id: string; created_at?: string }
+        Update: { profile_id?: string; class_id?: string }
+      }
       academic_years: {
         Row: AcademicYear
         Insert: Omit<AcademicYear, 'id' | 'created_at'>

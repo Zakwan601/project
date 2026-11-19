@@ -71,8 +71,9 @@ export function AttendancePage() {
 }
 
 function StaffDailyAttendance() {
-  const { can } = useAuth()
+  const { can, profile } = useAuth()
   const isAdmin = can('attendance', 'write')
+  const canRunSchoolActions = isAdmin && profile?.sub_admin_label !== 'teacher'
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedStatus = searchParams.get('status')
   const initialStatus = isAttendanceStatus(requestedStatus) ? requestedStatus : 'all'
@@ -98,7 +99,7 @@ function StaffDailyAttendance() {
   const afterNotificationTime = canManuallySendAbsenceNotifications(selectedDate, now)
   const absenceNotificationStatus = useAbsenceNotificationStatus(
     selectedDate,
-    isAdmin && afterNotificationTime && !isNonSchoolDay && sessions.length > 0,
+    canRunSchoolActions && afterNotificationTime && !isNonSchoolDay && sessions.length > 0,
   )
   const sendAbsenceNotifications = useSendAbsenceNotifications()
   const absenceNotificationAvailable = afterNotificationTime
@@ -154,7 +155,7 @@ function StaffDailyAttendance() {
       <PageHeader
         title="Daily Attendance"
         description="One biometric result per student, per day"
-        action={isAdmin ? (
+        action={canRunSchoolActions ? (
           <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
             {absenceNotificationAvailable && !isNonSchoolDay && (
               <Button

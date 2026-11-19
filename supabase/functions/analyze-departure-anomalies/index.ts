@@ -134,6 +134,10 @@ Deno.serve(async (request: Request) => {
       if (!UUID_PATTERN.test(classId)) {
         return jsonResponse(400, { error: "class_id must be a valid UUID", request_id: requestId });
       }
+      const { data: classAllowed, error: scopeError } = await userClient.rpc("teacher_can_access_class", { p_class_id: classId });
+      if (scopeError || classAllowed !== true) {
+        return jsonResponse(403, { error: "Access is limited to your assigned classes", request_id: requestId });
+      }
       if (!isValidDate(date)) {
         return jsonResponse(400, {
           error: "date must be a real calendar date in YYYY-MM-DD format",
@@ -185,6 +189,10 @@ Deno.serve(async (request: Request) => {
 
     if (!UUID_PATTERN.test(classId)) {
       return jsonResponse(400, { error: "class_id must be a valid UUID", request_id: requestId });
+    }
+    const { data: classAllowed, error: scopeError } = await userClient.rpc("teacher_can_access_class", { p_class_id: classId });
+    if (scopeError || classAllowed !== true) {
+      return jsonResponse(403, { error: "Access is limited to your assigned classes", request_id: requestId });
     }
     if (!isValidDate(date)) {
       return jsonResponse(400, {

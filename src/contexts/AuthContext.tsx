@@ -1,5 +1,6 @@
 import { AUTH_CAPTCHA_ENABLED } from '@/lib/authCaptcha'
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { PermissionKey, Profile, Student, SubAdminPermission, UserRole } from '@/types/database'
@@ -29,6 +30,7 @@ interface ProfileLoad {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const profileLoadRef = useRef<ProfileLoad | null>(null)
   const loadedUserIdRef = useRef<string | null>(null)
   const activeUserIdRef = useRef<string | null>(null)
+  const accessScopeRef = useRef<string | null>(null)
 
   const fetchProfile = useCallback((userId: string) => {
     const currentLoad = profileLoadRef.current
@@ -54,14 +57,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               { data: profileData, error: profileQueryError },
               { data: studentData, error: studentError },
               { data: permissionData, error: permissionError },
+              { data: assignmentData, error: assignmentError },
             ] = await Promise.all([
               supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
               supabase.from('students').select('*').eq('profile_id', userId).maybeSingle(),
               supabase.from('sub_admin_permissions').select('*').eq('profile_id', userId),
+              supabase.from('teacher_class_assignments').select('class_id').eq('profile_id', userId),
             ])
             if (profileQueryError) throw profileQueryError
             if (studentError) throw studentError
             if (permissionError) throw permissionError
+            if (assignmentError) throw assignmentError
 
             const loadedProfile = profileData as Profile | null
             const linkedStudent = studentData as Student | null
@@ -70,6 +76,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               throw new Error('Linked student record not found')
             }
             if (profileLoadRef.current !== load) return
+
+            const fingerprint = JSON.stringify({
+              role: loadedProfile.role, label: loadedProfile.sub_admin_label, active: loadedProfile.is_active,
+              permissions: [...(permissionData ?? []) as SubAdminPermission[]].sort((a, b) => a.permission_key.localeCompare(b.permission_key)),
+              classes: (assignmentData as { class_id: string }[] ?? []).map(row => row.class_id).sort(),
+            })
+            if (loadedUserIdRef.current === userId && accessScopeRef.current !== fingerprint) {
+              void queryClient.resetQueries().catch(() => undefined)
+            }
+            accessScopeRef.current = fingerprint
 
             setProfile(loadedProfile)
             setStudent(linkedStudent)
@@ -91,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })()
     profileLoadRef.current = load
     return load.promise
-  }, [])
+  }, [queryClient])
 
   const hydrateProfile = useCallback(async (userId: string) => {
     setLoading(true)
@@ -127,6 +143,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       const nextUser = nextSession?.user ?? null
       const nextUserId = nextUser?.id ?? null
+      if (activeUserIdRef.current !== nextUserId) {
+        queryClient.clear()
+        accessScopeRef.current = null
+      }
       activeUserIdRef.current = nextUserId
       setSession(nextSession)
       setUser(nextUser)
@@ -162,7 +182,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       for (const timeoutId of deferredProfileLoads) window.clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
-  }, [hydrateProfile])
+  }, [hydrateProfile, queryClient])
+
+  useEffect(() => {
+    if (!user || profile?.role !== 'sub_admin') return
+    const refreshAccess = () => { void fetchProfile(user.id).catch(() => undefined) }
+    const interval = window.setInterval(refreshAccess, 30_000)
+    window.addEventListener('focus', refreshAccess)
+    return () => { window.clearInterval(interval); window.removeEventListener('focus', refreshAccess) }
+  }, [fetchProfile, user, profile?.role])
 
   const signIn = async (email: string, password: string, turnstileToken: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -200,9 +228,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const can = useCallback((permission: PermissionKey, access: 'read' | 'write' = 'read') => {
     if (profile?.role === 'admin') return true
     if (profile?.role !== 'sub_admin') return false
+    if (profile.sub_admin_label === 'teacher' && (permission === 'devices'
+      || (access === 'write' && (permission === 'announcements' || permission === 'vacations')))) return false
     const grant = permissions.find(item => item.permission_key === permission)
     return access === 'write' ? Boolean(grant?.can_write) : Boolean(grant?.can_read)
-  }, [permissions, profile?.role])
+  }, [permissions, profile?.role, profile?.sub_admin_label])
 
   return (
     <AuthContext.Provider value={{

@@ -549,6 +549,10 @@ Deno.serve(
           global: { headers: { Authorization: authorization } },
           auth: { persistSession: false, autoRefreshToken: false },
         });
+        const { data: classRestricted, error: scopeError } = await userClient.rpc("is_class_restricted_teacher");
+        if (scopeError || classRestricted === true) {
+          return jsonResponse({ success: false, error: "School-wide absence notifications require an administrator" }, 403);
+        }
         const { data: allowed, error: permissionError } = await userClient.rpc(
           "has_permission",
           { p_permission_key: "attendance", p_access: "write" },

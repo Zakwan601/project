@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { TeacherClassAssignments } from './TeacherClassAssignments'
 
 // Database RPC types are maintained manually in this project.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -329,14 +330,14 @@ export function AccessControlPage() {
                   <div><dt className="flex items-center gap-1.5 text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Latest grant update</dt><dd className="mt-1 font-medium">{permissionsUnavailable ? 'Unavailable' : latestGrantUpdate ? formatDisplayDate(latestGrantUpdate) : 'No module grants'}</dd></div>
                 </dl>
                 <div className="mt-4 max-w-xs space-y-1.5">
-                  <Label htmlFor="staff-display-label">Display as</Label>
+                  <Label htmlFor="staff-display-label">Account type</Label>
                   <Select value={updateLabel.isPending && updateLabel.variables?.profileId === selectedProfileId ? updateLabel.variables.label : selectedProfile.sub_admin_label ?? 'sub_admin'} disabled={updateLabel.isPending} onValueChange={value => {
                     if (value !== selectedProfile.sub_admin_label) updateLabel.mutate({ profileId: selectedProfileId, label: value as SubAdminLabel })
                   }}>
                     <SelectTrigger id="staff-display-label" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="sub_admin">Sub-administrator</SelectItem><SelectItem value="teacher">Teacher</SelectItem></SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">Display label only. Permissions stay the same.</p>
+                  <p className="text-xs text-muted-foreground">Teachers are limited to their assigned classes. Sub-administrators use module permissions across classes.</p>
                 </div>
                 <div className="mt-5 flex items-start gap-3">
                   <Switch id="staff-open-account" checked={updateOpenAccount.isPending && updateOpenAccount.variables?.profileId === selectedProfileId ? updateOpenAccount.variables.isOpen : selectedProfile.is_open_account} disabled={updateOpenAccount.isPending || deleteStaff.isPending} onCheckedChange={isOpen => updateOpenAccount.mutate({ profileId: selectedProfileId, isOpen })} />
@@ -347,6 +348,7 @@ export function AccessControlPage() {
                   <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={savePermissions.isPending || updateOpenAccount.isPending || deleteStaff.isPending} onClick={() => setDeleteAccount(selectedProfile)}><Trash2 className="h-3.5 w-3.5" /> Delete user</Button>
                 </div>
                 {!selectedProfile.is_active && <p className="mt-4 text-xs text-muted-foreground">This account is inactive. Assigned permissions do not grant access while it remains inactive.</p>}
+                {selectedProfile.sub_admin_label === 'teacher' && <TeacherClassAssignments key={selectedProfile.id} profileId={selectedProfile.id} active={selectedProfile.is_active} />}
               </div>
 
               <div className="p-4 sm:p-6">
@@ -366,12 +368,12 @@ export function AccessControlPage() {
                             return <div key={key} className="grid grid-cols-[minmax(0,1fr)_48px_48px] items-center gap-2 px-1 py-1 sm:grid-cols-[minmax(0,1fr)_64px_64px]">
                               <p className="min-w-0 text-sm font-medium">{item.label}</p>
                               <div className="flex min-h-10 items-center justify-center">
-                                <Checkbox checked={permissions[key].read} disabled={editingDisabled}
+                                <Checkbox checked={selectedProfile.sub_admin_label === 'teacher' && key === 'devices' ? false : permissions[key].read} disabled={editingDisabled || (selectedProfile.sub_admin_label === 'teacher' && key === 'devices')}
                                   onCheckedChange={checked => setPermission(key, 'read', checked === true)}
                                   aria-label={`Allow ${item.label} read access`} />
                               </div>
                               <div className="flex min-h-10 items-center justify-center">
-                                <Checkbox checked={permissions[key].write} disabled={editingDisabled || !item.supportsWrite}
+                                <Checkbox checked={selectedProfile.sub_admin_label === 'teacher' && (key === 'announcements' || key === 'vacations') ? false : permissions[key].write} disabled={editingDisabled || !item.supportsWrite || (selectedProfile.sub_admin_label === 'teacher' && (key === 'announcements' || key === 'vacations'))}
                                   onCheckedChange={checked => setPermission(key, 'write', checked === true)}
                                   aria-label={`Allow ${item.label} write access`} />
                               </div>
@@ -424,11 +426,12 @@ export function AccessControlPage() {
               <div className="space-y-1.5"><Label htmlFor="sub-admin-name">Full name</Label><Input id="sub-admin-name" value={fullName} onChange={event => setFullName(event.target.value)} autoComplete="name" placeholder="e.g. Rahim Ahmed" required /></div>
               <div className="space-y-1.5"><Label htmlFor="sub-admin-email">Login email</Label><Input id="sub-admin-email" type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="off" placeholder="name@example.com" required /></div>
               <div className="space-y-1.5">
-                <Label htmlFor="new-staff-display-label">Display as</Label>
+                <Label htmlFor="new-staff-display-label">Account type</Label>
                 <Select value={accountLabel} onValueChange={value => setAccountLabel(value as SubAdminLabel)} disabled={createSubAdmin.isPending}>
                   <SelectTrigger id="new-staff-display-label" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="sub_admin">Sub-administrator</SelectItem><SelectItem value="teacher">Teacher</SelectItem></SelectContent>
                 </Select>
+                {accountLabel === 'teacher' && <p className="text-xs text-muted-foreground">After creating this teacher, assign classes and module permissions to enable access.</p>}
               </div>
               <div className="space-y-1.5"><Label htmlFor="sub-admin-password">Temporary password</Label><div className="flex gap-2"><div className="relative min-w-0 flex-1"><Input id="sub-admin-password" type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} minLength={8} autoComplete="new-password" required className="pr-10" /><Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(current => !current)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button></div><Button type="button" variant="outline" size="icon" aria-label="Generate a temporary password" onClick={() => setPassword(generateTemporaryPassword())}><KeyRound className="h-4 w-4" /></Button></div><p className="text-xs text-muted-foreground">At least 8 characters. Share it securely with the account holder.</p></div>
             </fieldset>

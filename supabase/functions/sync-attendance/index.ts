@@ -44,12 +44,15 @@ Deno.serve(async (req: Request) => {
 
       const { data: profile, error: profileError } = await userClient
         .from("profiles")
-        .select("is_active")
+        .select("is_active, role, sub_admin_label")
         .eq("id", authData.user.id)
         .maybeSingle();
 
       if (profileError || !profile?.is_active) {
         return jsonResponse(403, { error: "An active user profile is required" });
+      }
+      if (profile.role === "sub_admin" && profile.sub_admin_label === "teacher") {
+        return jsonResponse(403, { error: "School-wide attendance sync requires an administrator" });
       }
 
       const { data: allowed, error: permissionError } = await userClient.rpc("has_permission", {

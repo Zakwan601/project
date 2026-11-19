@@ -8,7 +8,7 @@ export interface PermissionDefinition {
 }
 
 export const permissionDefinitions: PermissionDefinition[] = [
-  { key: 'dashboard', label: 'Dashboard', description: 'School-wide dashboard totals and trends', supportsWrite: false },
+  { key: 'dashboard', label: 'Dashboard', description: 'Dashboard totals and attendance trends', supportsWrite: false },
   { key: 'students', label: 'Students', description: 'Student profiles, enrollment history, and promotions', supportsWrite: true },
   { key: 'classes', label: 'Classes', description: 'Classes, subjects, and class configuration', supportsWrite: true },
   { key: 'attendance', label: 'Attendance', description: 'Daily attendance and manual corrections', supportsWrite: true },

@@ -72,7 +72,7 @@ export function DashboardPage() {
           Good {getGreeting()}, {profile?.full_name?.split(' ')[0] ?? 'there'}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Today&apos;s school attendance at a glance.
+          {profile?.sub_admin_label === 'teacher' ? "Today's attendance for your assigned classes." : "Today's school attendance at a glance."}
         </p>
       </motion.div>
 
