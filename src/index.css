@@ -169,6 +169,38 @@
 }
 
 @media print {
+  #report-card-print-root .student-guardian-report {
+    width: 100%;
+    color: #111;
+    background: white;
+  }
+  #report-card-print-root .student-guardian-report [data-slot=table-container] {
+    overflow: visible !important;
+  }
+  #report-card-print-root .student-guardian-report table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  #report-card-print-root .student-guardian-report thead {
+    display: table-header-group;
+  }
+  #report-card-print-root .student-guardian-report th,
+  #report-card-print-root .student-guardian-report td {
+    padding: 2mm 1mm;
+    border: 1px solid #ccc;
+    font-size: 8pt;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  #report-card-print-root .student-guardian-report tr,
+  #report-card-print-root .student-guardian-report header,
+  #report-card-print-root .student-guardian-report footer {
+    break-inside: avoid;
+  }
+}
+
+@media print {
   body.report-card-printing {
     margin: 0 !important;
     background: white !important;

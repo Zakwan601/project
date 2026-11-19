@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { Printer } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { studentDashboardService, type StudentAttendanceStatistics } from '@/services/studentDashboard'
+import { studentDashboardService, type StudentAttendanceBreakdown } from '@/services/studentDashboard'
 import type { StudentResultPayload, StudentWithClass, SubjectCourseOption } from '@/types/database'
 import { AttendanceFineCard } from '@/components/attendance/AttendanceFineCard'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatFine } from '@/lib/attendanceFine'
+import { printReportCards } from '@/lib/printReportCard'
 
 // Database types are maintained manually in this project.
 const db = supabase as any
@@ -53,21 +55,11 @@ function DetailError({ retry }: { retry: () => void }) {
     <Button variant="link" className="mt-1 h-auto p-0" onClick={retry}>Try again</Button></div>
 }
 
-export function StudentAttendanceDetails({ studentId }: { studentId: string }) {
-  const query = useQuery<StudentAttendanceStatistics>({
-    queryKey: ['staff-student-attendance', studentId], staleTime: 60_000,
-    queryFn: async ({ signal }) => {
-      const { data, error } = await db.rpc('get_student_attendance_statistics', { p_student_id: studentId }).abortSignal(signal)
-      if (error) throw error
-      return data as StudentAttendanceStatistics
-    },
-  })
-  if (query.isPending) return <DetailLoading />
-  if (query.isError) return <DetailError retry={() => void query.refetch()} />
-  const { stats, subjects } = query.data
+function AttendanceSummary({ data }: { data: StudentAttendanceBreakdown }) {
+  const { stats } = data
   return <section>
     <h3 className="text-sm font-semibold">Attendance overview</h3>
-    <p className="mt-1 text-xs text-muted-foreground">All recorded attendance sessions within your access. Absent includes too-late arrivals.</p>
+    <p className="mt-1 text-xs text-muted-foreground">Absent includes too-late arrivals.</p>
     <dl className="my-5 grid grid-cols-3 gap-x-4 gap-y-5 sm:grid-cols-5">
       {[
         ['Attendance', `${stats.attendanceRate}%`, ''],
@@ -78,44 +70,87 @@ export function StudentAttendanceDetails({ studentId }: { studentId: string }) {
       ].map(([label, value, color]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt>
         <dd className={`mt-1 text-xl font-semibold tabular-nums ${color}`}>{value}</dd></div>)}
     </dl>
-    {!subjects.length ? <p className="border-t py-5 text-sm text-muted-foreground">No attendance recorded yet.</p>
-      : <Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead className="text-right">Present</TableHead>
-        <TableHead className="text-right">Absent</TableHead><TableHead className="text-right">Late</TableHead>
-        <TableHead className="text-right">Leave</TableHead><TableHead className="text-right">Rate</TableHead></TableRow></TableHeader>
-        <TableBody>{subjects.map(row => <TableRow key={row.subject}><TableCell className="whitespace-normal font-medium">{row.subject}</TableCell>
-          <TableCell className="text-right">{row.present}</TableCell><TableCell className="text-right">{row.absent}</TableCell>
-          <TableCell className="text-right">{row.late}</TableCell><TableCell className="text-right">{row.excused}</TableCell>
-          <TableCell className="text-right">{row.percentage}%</TableCell></TableRow>)}</TableBody></Table>}
   </section>
 }
 
-export function StudentFineBreakdown({ studentId }: { studentId: string }) {
-  const query = useQuery({ queryKey: ['staff-student-fines', studentId], staleTime: 60_000,
-    queryFn: ({ signal }) => studentDashboardService.getFineBreakdown(studentId, signal) })
+export function StudentAttendanceReport({ student }: { student: StudentWithClass }) {
+  const studentId = student.id
+  const reportRef = useRef<HTMLDivElement>(null)
+  const query = useQuery({ queryKey: ['staff-student-attendance-report', studentId], staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      const [response, fines, exceptions] = await Promise.all([
+        db.rpc('get_student_attendance_breakdown', { p_student_id: studentId }).abortSignal(signal),
+        studentDashboardService.getFineBreakdown(studentId, signal),
+        studentDashboardService.getAttendanceExceptions(studentId, signal),
+      ])
+      if (response.error) throw response.error
+      return { attendance: response.data as StudentAttendanceBreakdown, fines, exceptions }
+    } })
   if (query.isPending) return <DetailLoading />
   if (query.isError) return <DetailError retry={() => void query.refetch()} />
-  const { total: fine, months } = query.data
-  return <div className="space-y-7"><AttendanceFineCard absentCount={fine.recordedAbsences} lateCount={fine.lateDays}
+  const { attendance, fines, exceptions } = query.data
+  const fine = fines.total
+  const attendanceByMonth = new Map(attendance.months.map(row => [row.month, row]))
+  const finesByMonth = new Map(fines.months.map(row => [row.month, row]))
+  const months = [...new Set([...attendanceByMonth.keys(), ...finesByMonth.keys()])].sort().reverse()
+  return <div>
+    <div className="mb-4 flex justify-end"><Button variant="outline" size="sm" onClick={() => {
+      if (reportRef.current) printReportCards([reportRef.current])
+    }}><Printer className="mr-2 h-4 w-4" />Print guardian report</Button></div>
+    <div ref={reportRef} className="student-guardian-report space-y-7">
+      <header className="hidden border-b pb-4 print:block">
+        <p className="text-center text-lg font-semibold">New Model Degree College</p>
+        <h2 className="mt-1 text-center text-base font-semibold">Attendance &amp; Fine Report</h2>
+        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+          <div><dt className="text-muted-foreground">Student</dt><dd className="font-semibold">{student.first_name} {student.last_name}</dd></div>
+          <div><dt className="text-muted-foreground">Student ID / Roll</dt><dd>{student.admission_number} / {student.roll_number ?? '-'}</dd></div>
+          <div><dt className="text-muted-foreground">Class</dt><dd>{student.classes?.name ?? 'Not assigned'}</dd></div>
+          <div><dt className="text-muted-foreground">Guardian phone</dt><dd>{student.guardian_phone || 'Not provided'}</dd></div>
+        </dl>
+        <p className="mt-3 text-xs text-muted-foreground">Prepared on {new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date())}</p>
+      </header>
+    <AttendanceSummary data={attendance} />
+    <AttendanceFineCard absentCount={fine.recordedAbsences} lateCount={fine.lateDays}
     finePerAbsentDay={Number(fine.finePerAbsentDay)} examMissedCount={fine.examMissedCount}
     examMissedFineAmount={Number(fine.examMissedFineAmount)} periodLabel="All-time fine breakdown" />
-    <section><h3 className="mb-3 text-sm font-semibold">Monthly breakdown</h3>
+    <section><h3 className="mb-3 text-sm font-semibold">Monthly attendance &amp; fines</h3>
       {!months.length ? <p className="text-sm text-muted-foreground">No monthly records available.</p>
         : <><Table><TableHeader><TableRow><TableHead>Month</TableHead>
-          <TableHead className="text-right">Absent / too late</TableHead><TableHead className="text-right">Late</TableHead>
+          <TableHead className="text-right">Present</TableHead>
+          <TableHead className="text-right">Absent</TableHead><TableHead className="text-right">Late</TableHead>
+          <TableHead className="text-right">Leave</TableHead><TableHead className="text-right">Rate</TableHead>
           <TableHead className="text-right">Attendance fine</TableHead><TableHead className="text-right">Missed exams</TableHead>
-          <TableHead className="text-right">Exam fine</TableHead><TableHead className="text-right">Total</TableHead>
-        </TableRow></TableHeader><TableBody>{months.map(row => <TableRow key={row.month}>
-          <TableCell className="whitespace-nowrap font-medium">{format(parseISO(row.month), 'MMM yyyy')}</TableCell>
-          <TableCell className="text-right tabular-nums">{row.recordedAbsences}</TableCell>
-          <TableCell className="text-right tabular-nums">{row.lateDays}</TableCell>
-          <TableCell className="text-right tabular-nums">{formatFine(Number(row.attendanceFine))}</TableCell>
-          <TableCell className="text-right tabular-nums">{row.examMissedCount}</TableCell>
-          <TableCell className="text-right tabular-nums">{formatFine(Number(row.examMissedFine))}</TableCell>
-          <TableCell className="text-right font-semibold tabular-nums">{formatFine(Number(row.totalFine))}</TableCell>
-        </TableRow>)}</TableBody></Table>
-          <p className="mt-3 text-xs text-muted-foreground">Late-day penalties are calculated per month, so monthly totals may differ from the all-time fine.</p>
-        </>}
+          <TableHead className="text-right">Exam fine</TableHead><TableHead className="text-right">Total fine</TableHead>
+        </TableRow></TableHeader><TableBody>{months.map(month => {
+          const row = attendanceByMonth.get(month)
+          const monthFine = finesByMonth.get(month)
+          return <TableRow key={month}>
+          <TableCell className="whitespace-nowrap font-medium">{format(parseISO(month), 'MMM yyyy')}</TableCell>
+          <TableCell className="text-right tabular-nums">{row?.present ?? 0}</TableCell>
+          <TableCell className="text-right tabular-nums">{row?.absent ?? 0}</TableCell>
+          <TableCell className="text-right tabular-nums">{row?.late ?? 0}</TableCell>
+          <TableCell className="text-right tabular-nums">{row?.excused ?? 0}</TableCell>
+          <TableCell className="text-right tabular-nums">{row ? `${row.percentage}%` : '-'}</TableCell>
+          <TableCell className="text-right tabular-nums" title={monthFine ? `${monthFine.recordedAbsences} fineable absent days + ${monthFine.latePenaltyAbsences} late penalty days` : undefined}>{formatFine(Number(monthFine?.attendanceFine ?? 0))}</TableCell>
+          <TableCell className="text-right tabular-nums">{monthFine?.examMissedCount ?? 0}</TableCell>
+          <TableCell className="text-right tabular-nums">{formatFine(Number(monthFine?.examMissedFine ?? 0))}</TableCell>
+          <TableCell className="text-right font-semibold tabular-nums">{formatFine(Number(monthFine?.totalFine ?? 0))}</TableCell>
+        </TableRow>})}</TableBody></Table>
+          <p className="mt-3 text-xs text-muted-foreground">Late-day penalties are calculated per month, so monthly totals may differ from the all-time fine.</p>        </>}
     </section>
+      <section>
+        <h3 className="mb-3 text-sm font-semibold">Missed exam details</h3>
+        {!exceptions.missedExams.length ? <p className="text-sm text-muted-foreground">No missed exams recorded.</p>
+          : <><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Examination</TableHead><TableHead>Subject</TableHead></TableRow></TableHeader>
+            <TableBody>{exceptions.missedExams.map(exam => <TableRow key={exam.id}>
+              <TableCell className="whitespace-nowrap">{format(parseISO(exam.date), 'dd MMM yyyy')}</TableCell>
+              <TableCell className="whitespace-normal font-medium">{exam.exam}</TableCell>
+              <TableCell className="whitespace-normal">{exam.subject}</TableCell>
+            </TableRow>)}</TableBody></Table>
+                      </>}
+      </section>
+      <footer className="hidden justify-between gap-8 border-t pt-8 text-xs print:flex"><span>Office signature: __________________</span><span>Guardian signature: __________________</span></footer>
+    </div>
   </div>
 }
 

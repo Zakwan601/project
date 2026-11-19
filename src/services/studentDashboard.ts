@@ -42,7 +42,7 @@ export interface StudentFineDetails {
 
 export interface StudentFineBreakdown {
   total: StudentFineDetails
-  months: (StudentFineDetails & { month: string })[]
+  months: (StudentFineDetails & { month: string; presentDays: number })[]
 }
 
 export interface SubjectAttendance {
@@ -60,6 +60,10 @@ export interface StudentAttendanceStatistics {
   subjects: SubjectAttendance[]
 }
 
+export interface StudentAttendanceBreakdown extends StudentAttendanceStatistics {
+  months: (Omit<SubjectAttendance, 'subject'> & { month: string })[]
+}
+
 export interface WeeklyAttendanceDay {
   date: string
   present: number
@@ -73,8 +77,8 @@ export interface StudentAttendanceExceptions {
 }
 
 export const studentDashboardService = {
-  async getAttendanceExceptions(studentId: string): Promise<StudentAttendanceExceptions> {
-    const { data, error } = await db.rpc('get_student_attendance_exceptions', { p_student_id: studentId })
+  async getAttendanceExceptions(studentId: string, signal?: AbortSignal): Promise<StudentAttendanceExceptions> {
+    const { data, error } = await db.rpc('get_student_attendance_exceptions', { p_student_id: studentId }).abortSignal(signal)
     if (error) throw error
     return data as StudentAttendanceExceptions
   },

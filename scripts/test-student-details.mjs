@@ -15,8 +15,9 @@ let grants = new Set(['students:read', 'students:write', 'reports:read', 'result
 let role = 'sub_admin'
 let frames = new Map(), currentFrame, cursor, nodes, queries, tabContext
 let formValues = {}
+let printedSources = []
 const queryData = new Map()
-const fakeReact = { ...React, useEffect() {}, useState(initial) {
+const fakeReact = { ...React, useEffect() {}, useRef: initial => ({ current: initial }), useState(initial) {
   const frame = currentFrame
   const index = cursor++
   if (!(index in frame)) frame[index] = typeof initial === 'function' ? initial() : initial
@@ -49,6 +50,7 @@ function load(path) {
     if (name === 'framer-motion') return { motion: new Proxy({}, { get: () => element }) }
     if (name === './StudentDetails') return details
     if (name === '@/lib/attendanceFine') return load('../src/lib/attendanceFine.ts')
+    if (name === '@/lib/printReportCard') return { printReportCards: sources => { printedSources = sources } }
     if (name === '@/contexts/AuthContext') return { useAuth: () => ({ role, can: (key, access = 'read') => role === 'admin' || grants.has(`${key}:${access}`) }) }
     if (name === '@/hooks/useStudents') return new Proxy({ STUDENTS_KEY: 'students', useStudents: () => ({ data: [student, secondStudent] }) },
       { get: (target, key) => target[key] ?? (() => ({})) })
@@ -76,7 +78,10 @@ function visit(node) {
     const rendered = node.type(node.props)
     ;[currentFrame, cursor] = saved
     visit(rendered)
-  } else { nodes.push(node); visit(node.props?.children) }
+  } else {
+    if (node.props?.ref && typeof node.props.ref === 'object') node.props.ref.current = node
+    nodes.push(node); visit(node.props?.children)
+  }
 }
 function render() {
   nodes = []; queries = []; tabContext = undefined
@@ -91,19 +96,36 @@ function click(label) {
 assert.equal(render().length, 0, 'Student list must not request attendance, fine or result data')
 click('Student details for Example Student')
 assert.equal(render().length, 0, 'Opening Overview must not request unopened detail tabs')
-click('Attendance')
-assert.deepEqual(render().map(query => Array.from(query.queryKey)), [['staff-student-attendance', 'student-a']])
-click('Fines')
-assert.deepEqual(render().map(query => Array.from(query.queryKey)), [['staff-student-fines', 'student-a']])
+click('Attendance & fines')
+assert.deepEqual(render().map(query => Array.from(query.queryKey)), [['staff-student-attendance-report', 'student-a']])
+assert.ok(!nodes.some(node => node.props.children === 'Fines'), 'Separate fine tab must be removed')
 const fine = { recordedAbsences: 1, lateDays: 0, finePerAbsentDay: 50, attendanceFine: 50,
   examMissedCount: 0, examMissedFineAmount: 100, examMissedFine: 0, totalFine: 50 }
-queryData.set('staff-student-fines', { total: fine, months: [{ ...fine, month: '2026-11-01' }] })
+const attendance = { stats: { attendanceRate: 95, presentCount: 17, absentCount: 1, lateCount: 2, excusedCount: 0 },
+  subjects: [], months: [{ month: '2026-11-01', present: 17, absent: 1, late: 2, excused: 0, total: 20, percentage: 95 }] }
+queryData.set('staff-student-attendance-report', { attendance, exceptions: { missedExams: [{ id: 'missed-1', date: '2026-10-05', exam: 'Tutorial Exam - 1', subject: 'Bangla' }] }, fines: { total: fine,
+  months: [{ ...fine, month: '2026-11-01', presentDays: 17 }, { ...fine, month: '2026-10-01', presentDays: 0, examMissedCount: 1 }] } })
 render()
-assert.ok(nodes.some(node => node.props.children === 'Monthly breakdown'))
+assert.ok(nodes.some(node => node.props.children === 'Monthly attendance & fines'))
 assert.ok(nodes.some(node => node.props.children === 'Nov 2026'), 'Available months must render in the fine table')
-queryData.set('staff-student-fines', { total: fine, months: [] })
+assert.equal(nodes.filter(node => node.props.children === 'Nov 2026').length, 1, 'Attendance and fine months must share one row')
+assert.ok(nodes.some(node => node.props.children === 'Oct 2026'), 'Exam-only fine months must not be lost when joining attendance')
+assert.ok(nodes.some(node => node.props.children === 17), 'Monthly present days must appear in the report')
+assert.ok(nodes.some(node => node.props.children === 'Missed exam details'))
+assert.ok(nodes.some(node => node.props.children === '05 Oct 2026'))
+assert.ok(nodes.some(node => node.props.children === 'Tutorial Exam - 1'))
+assert.ok(nodes.some(node => node.props.children === 'Bangla'))
+const printButton = nodes.find(node => node.props.onClick && Array.isArray(node.props.children) && node.props.children.includes('Print guardian report'))
+assert.ok(printButton, 'Guardian report print action must be available after data loads')
+printButton.props.onClick()
+assert.equal(printedSources.length, 1)
+assert.ok(printedSources[0].props.className.includes('student-guardian-report'), 'Print only the student report, not the list or modal controls')
+assert.ok(nodes.some(node => node.props.children === 'Attendance & Fine Report'))
+assert.ok(nodes.some(node => node.props.children === 'Attendance overview'), 'Print source includes the attendance summary')
+queryData.set('staff-student-attendance-report', { attendance: { stats: attendance.stats, subjects: [], months: [] }, exceptions: { missedExams: [] }, fines: { total: fine, months: [] } })
 render()
 assert.ok(nodes.some(node => node.props.children === 'No monthly records available.'))
+assert.ok(nodes.some(node => node.props.children === 'No missed exams recorded.'))
 click('Results')
 assert.deepEqual(render().map(query => Array.from(query.queryKey)), [['staff-student-exams', 'student-a', 'science']])
 click('Overview')
@@ -119,7 +141,7 @@ assert.ok(nodes.some(node => Array.isArray(node.props.children) && node.props.ch
 role = 'sub_admin'
 grants = new Set(['students:read'])
 assert.equal(render().length, 0)
-for (const label of ['Edit info', 'Attendance', 'Fines', 'Results', 'Account'])
+for (const label of ['Edit info', 'Attendance & fines', 'Results', 'Account'])
   assert.ok(!nodes.some(node => node.props.children === label), `Read-only student permission must not expose ${label}`)
 grants = new Set(['students:read', 'reports:read', 'results:read'])
 render(); click('Results')
@@ -141,6 +163,6 @@ nodes.find(node => node.props.open === true && node.props.onOpenChange)?.props.o
 assert.equal(render().length, 0, 'Closing student details must leave no active detail requests')
 click('Student details for Another Student')
 assert.equal(render().length, 0, 'Opening a different student resets to Overview')
-click('Attendance')
-assert.deepEqual(render().map(query => Array.from(query.queryKey)), [['staff-student-attendance', 'student-b']])
+click('Attendance & fines')
+assert.deepEqual(render().map(query => Array.from(query.queryKey)), [['staff-student-attendance-report', 'student-b']])
 console.log('Passed actual student-list/detail rendering: lazy tab loading, permission gates, closed-dialog behavior, student isolation, pending marks and zero-mark tutorial results.')

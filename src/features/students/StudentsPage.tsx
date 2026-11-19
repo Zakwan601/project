@@ -1,5 +1,5 @@
 import { StudentProfileReview } from './StudentProfileReview'
-import { StudentAttendanceDetails, StudentFineBreakdown, StudentInformation, StudentResultDetails } from './StudentDetails'
+import { StudentAttendanceReport, StudentInformation, StudentResultDetails } from './StudentDetails'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SUBJECT_REVIEW_FIELDS } from '@/lib/studentProfileReview'
 import { useEffect, useState } from 'react'
@@ -1077,18 +1077,16 @@ export function StudentsPage() {
             <TabsList variant="line" aria-label="Student details" className="grid h-auto! w-full shrink-0 grid-cols-3 gap-0 border-b px-2 sm:flex sm:h-10! sm:justify-start sm:px-5 [&_button]:h-8 [&_button]:min-w-0 [&_button]:rounded-none [&_button]:px-1.5 [&_button]:text-xs [&_button]:after:bottom-0 sm:[&_button]:h-full sm:[&_button]:flex-none sm:[&_button]:px-4 sm:[&_button]:text-sm">
               <TabsTrigger value="info">Overview</TabsTrigger>
               {canWriteStudents && <TabsTrigger value="edit">Edit info</TabsTrigger>}
-              {canReadReports && <><TabsTrigger value="attendance">Attendance</TabsTrigger><TabsTrigger value="fines">Fines</TabsTrigger></>}
+              {canReadReports && <TabsTrigger value="attendance" className="whitespace-normal leading-tight">Attendance &amp; fines</TabsTrigger>}
               {canReadResults && <TabsTrigger value="results">Results</TabsTrigger>}
               {isFullAdmin && <TabsTrigger value="account">Account</TabsTrigger>}
             </TabsList>
             <TabsContent value="info" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
               {detailsTab === 'info' && <StudentInformation student={editing} courseOptions={courseOptions} />}
             </TabsContent>
-            {canReadReports && <><TabsContent value="attendance" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
-              {detailsTab === 'attendance' && <StudentAttendanceDetails key={editing.id} studentId={editing.id} />}
-            </TabsContent><TabsContent value="fines" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
-              {detailsTab === 'fines' && <StudentFineBreakdown key={editing.id} studentId={editing.id} />}
-            </TabsContent></>}
+            {canReadReports && <TabsContent value="attendance" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              {detailsTab === 'attendance' && <StudentAttendanceReport key={editing.id} student={editing} />}
+            </TabsContent>}
             {canReadResults && <TabsContent value="results" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
               {detailsTab === 'results' && <StudentResultDetails key={editing.id} student={editing} />}
             </TabsContent>}

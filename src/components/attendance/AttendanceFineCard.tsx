@@ -64,9 +64,7 @@ export function AttendanceFineCard({
                 calculation={`${fine.examMissedCount} × ${formatFine(fine.examMissedFineAmount)}`}
               />
             </dl>
-            <p className="border-t pt-4 text-xs leading-relaxed text-muted-foreground">
-              Both fines apply on exam days with classes. Exam-only days carry only the missed exam fine. Approved leave is exempt.
-            </p>
+           
           </>
         )}
       </div>
