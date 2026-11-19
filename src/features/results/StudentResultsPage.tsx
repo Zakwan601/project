@@ -89,7 +89,7 @@ export function StudentResultsPage() {
     enabled: Boolean(student?.id),
     queryFn: async () => {
       const { data, error } = await db.from('result_exams')
-        .select('*, result_exam_types(name), academic_years(name), classes(name, grade, section, class_group)')
+        .select('*, result_exam_types(name,marks_mode), academic_years(name), classes(name, grade, section, class_group)')
         .order('exam_date', { ascending: false })
       if (error) throw error
       return data as ExamWithDetails[]

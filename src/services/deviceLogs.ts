@@ -114,6 +114,7 @@ export const deviceLogsService = {
     date,
     page,
     pageSize,
+    signal,
   }: {
     search?: string
     admissionNumber?: string
@@ -122,6 +123,7 @@ export const deviceLogsService = {
     date?: string
     page: number
     pageSize: number
+    signal?: AbortSignal
   }): Promise<DailyPunchPage> {
     if (source === 'archive') {
       if (!date) throw new Error('Select a date to view archived punches')
@@ -143,6 +145,7 @@ export const deviceLogsService = {
         }>
         total: number
       }>('archive-device-logs', {
+        signal,
         body: {
           action: 'query',
           search: search.trim(),
@@ -181,7 +184,7 @@ export const deviceLogsService = {
       }
     }
 
-    const { data, error } = await db.rpc('search_daily_punches_page', {
+    const request = db.rpc('search_daily_punches_page', {
       p_class_id: classId || null,
       p_search: search.trim(),
       p_date: date || null,
@@ -189,6 +192,7 @@ export const deviceLogsService = {
       p_page_size: pageSize,
       p_student_biometric_id: admissionNumber || null,
     })
+    const { data, error } = await (signal ? request.abortSignal(signal) : request)
 
     if (error) throw error
 

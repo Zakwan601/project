@@ -59,7 +59,7 @@ export function ExamScheduleManager({
     queryKey: ['result-exam-group', examGroupId],
     queryFn: async () => {
       const { data, error } = await db.from('result_exams')
-        .select('*, result_exam_types(name), academic_years(name,start_date,end_date), classes(name,grade,section,class_group)')
+        .select('*, result_exam_types(name,marks_mode), academic_years(name,start_date,end_date), classes(name,grade,section,class_group)')
         .eq('exam_group_id', examGroupId)
         .order('class_id')
       if (error) throw error
@@ -93,7 +93,7 @@ export function ExamScheduleManager({
     queryKey: ['result-exam-routine', examGroupId, classId],
     queryFn: async () => {
       const { data, error } = await db.from('result_exam_schedules')
-        .select('*, subjects(name,code), result_exam_schedule_classes(exam_id, result_exams(*, result_exam_types(name), academic_years(name), classes(name,grade,section,class_group)))')
+        .select('*, subjects(name,code), result_exam_schedule_classes(exam_id, result_exams(*, result_exam_types(name,marks_mode), academic_years(name), classes(name,grade,section,class_group)))')
         .eq('exam_group_id', examGroupId)
         .order('exam_date')
         .order('exam_time')

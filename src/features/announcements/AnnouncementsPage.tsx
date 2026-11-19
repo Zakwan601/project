@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { Megaphone, Send, Trash2 } from 'lucide-react'
+import { Send, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { useAdminAnnouncements, useCreateAnnouncement, useDeleteAnnouncement } from '@/hooks/useAnnouncements'
 import { Badge } from '@/components/ui/badge'
@@ -43,8 +43,8 @@ export function AnnouncementsPage() {
 
       {canWriteAnnouncements && <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base"><Megaphone /> New Announcement</CardTitle>
-          <CardDescription>It will appear on every student dashboard.</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-base"> New Announcement</CardTitle>
+          <CardDescription></CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-3">

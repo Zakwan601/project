@@ -11,6 +11,7 @@ const showMark = (value: number | null, maximum: number, absent: boolean) => {
 
 export function ResultSheet({ result, publicView = false }: { result: StudentResultPayload; publicView?: boolean }) {
   const { exam, student, subjects, summary } = result
+  const totalOnly = exam.marks_mode === 'total_only'
   return (
     <Card className="result-sheet mx-auto max-w-5xl overflow-hidden print:border-0 print:shadow-none">
       <CardContent className="p-4 sm:p-8">
@@ -36,40 +37,40 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
           <div className="min-w-0"><span className="text-muted-foreground">Exam date</span><p className="break-words font-semibold">{exam.exam_date}</p></div>
         </div>
 
-        <div className="my-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
+        <div className={totalOnly ? 'my-5 grid grid-cols-2 gap-2' : 'my-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5'}>
           <Summary label="Total" value={`${summary.total_obtained} / ${summary.total_max}`} />
-          <Summary label="GPA" value={Number(summary.gpa).toFixed(2)} />
-          <Summary label="Grade" value={summary.letter_grade} />
+          {!totalOnly && <Summary label="GPA" value={Number(summary.gpa).toFixed(2)} />}
+          {!totalOnly && <Summary label="Grade" value={summary.letter_grade ?? '-'} />}
           <Summary label="Position" value={summary.position ? `${summary.position} of ${summary.total_students}` : '—'} />
-          <Summary label="Failed subjects" value={String(summary.failed_subjects)} danger={summary.failed_subjects > 0} />
+          {!totalOnly && <Summary label="Failed subjects" value={String(summary.failed_subjects)} danger={summary.failed_subjects > 0} />}
         </div>
 
         <div className="overflow-hidden rounded-lg border">
-          <Table className="min-w-[680px] text-xs sm:text-sm">
+          <Table className={totalOnly ? 'text-xs sm:text-sm' : 'min-w-[680px] text-xs sm:text-sm'}>
             <TableHeader>
               <TableRow>
                 <TableHead className="sticky left-0 z-20 w-32 min-w-32 border-r bg-background text-xs sm:w-44 sm:min-w-44 sm:text-sm print:static print:border-r-0">Subject</TableHead>
-                <TableHead className="text-center">Creative</TableHead>
+                {!totalOnly && <><TableHead className="text-center">Creative</TableHead>
                 <TableHead className="text-center">MCQ</TableHead>
-                <TableHead className="text-center">Practical</TableHead>
+                <TableHead className="text-center">Practical</TableHead></>}
                 <TableHead className="text-center">Obtained</TableHead>
-                <TableHead className="text-center">Letter</TableHead>
-                <TableHead className="text-center">Point</TableHead>
+                {!totalOnly && <><TableHead className="text-center">Letter</TableHead>
+                <TableHead className="text-center">Point</TableHead></>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {subjects.map(subject => (
-                <TableRow key={subject.id} className={subject.passed ? undefined : 'bg-destructive/5'}>
-                  <TableCell className={`sticky left-0 z-10 w-32 min-w-32 whitespace-normal border-r text-[11px] font-medium leading-tight sm:w-44 sm:min-w-44 sm:text-sm print:static print:border-r-0 ${subject.passed ? 'bg-card' : 'bg-destructive/5'}`}>
+                <TableRow key={subject.id} className={totalOnly || subject.passed ? undefined : 'bg-destructive/5'}>
+                  <TableCell className={`sticky left-0 z-10 w-32 min-w-32 whitespace-normal border-r text-[11px] font-medium leading-tight sm:w-44 sm:min-w-44 sm:text-sm print:static print:border-r-0 ${totalOnly || subject.passed ? 'bg-card' : 'bg-destructive/5'}`}>
                     <span className="block">{subject.name}</span>
                     <span className="mt-0.5 block text-[10px] text-muted-foreground sm:text-xs">{subject.code}</span>
                   </TableCell>
-                  <SectionMark value={subject.creative_marks} maximum={subject.creative_max} passMark={subject.creative_pass_mark} absent={subject.is_absent} />
+                  {!totalOnly && <><SectionMark value={subject.creative_marks} maximum={subject.creative_max} passMark={subject.creative_pass_mark} absent={subject.is_absent} />
                   <SectionMark value={subject.written_marks} maximum={subject.written_max} passMark={subject.written_pass_mark} absent={subject.is_absent} />
-                  <SectionMark value={subject.practical_marks} maximum={subject.practical_max} passMark={subject.practical_pass_mark} absent={subject.is_absent} />
+                  <SectionMark value={subject.practical_marks} maximum={subject.practical_max} passMark={subject.practical_pass_mark} absent={subject.is_absent} /></>}
                   <TableCell className="text-center font-semibold">{subject.is_absent ? 'Absent' : `${subject.obtained} / ${subject.total_max}`}</TableCell>
-                  <TableCell className="text-center"><Badge variant={subject.passed ? 'secondary' : 'destructive'}>{subject.letter_grade}</Badge></TableCell>
-                  <TableCell className="text-center font-semibold">{subject.grade_point}</TableCell>
+                  {!totalOnly && <><TableCell className="text-center"><Badge variant={subject.passed ? 'secondary' : 'destructive'}>{subject.letter_grade}</Badge></TableCell>
+                  <TableCell className="text-center font-semibold">{subject.grade_point}</TableCell></>}
                 </TableRow>
               ))}
             </TableBody>

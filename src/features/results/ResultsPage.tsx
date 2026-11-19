@@ -33,6 +33,9 @@ import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
+  examSubjectConfigValues,
+  validExamSubjectConfig,
+  isTotalOnlyExam,
   buildExamSubjectCatalogue,
   examSubjectAppliesToStudent,
   examSubjectRoleForStudent,
@@ -250,7 +253,7 @@ function StaffResults() {
     enabled: Boolean(routeExamId),
     queryFn: async () => {
       const { data, error } = await db.from('result_exams')
-        .select('*, result_exam_types(name), academic_years(name), classes(name, grade, section, class_group)')
+        .select('*, result_exam_types(name,marks_mode), academic_years(name), classes(name, grade, section, class_group)')
         .eq('id', routeExamId).single()
       if (error) throw error
       return data as ExamWithDetails
@@ -319,7 +322,7 @@ function StaffResults() {
     queryKey: ['result-exams', isExamPage ? classId : classId || 'all'], enabled: !isExamPage || Boolean(classId),
     queryFn: async () => {
       let request = db.from('result_exams')
-        .select('*, result_exam_types(name), academic_years(name), classes(name, grade, section, class_group)')
+        .select('*, result_exam_types(name,marks_mode), academic_years(name), classes(name, grade, section, class_group)')
         .order('exam_date', { ascending: false })
       if (classId) request = request.eq('class_id', classId)
       const { data, error } = await request
@@ -333,6 +336,7 @@ function StaffResults() {
   }, [examId, examsQuery.data])
 
   const selectedExam = routeExamQuery.data ?? examsQuery.data?.find(item => item.id === activeExamId)
+  const totalOnly = isTotalOnlyExam(selectedExam)
   const examSubjectsQuery = useQuery<ExamSubject[]>({
     queryKey: ['result-exam-subjects', activeExamId], enabled: Boolean(activeExamId),
     queryFn: async () => {
@@ -485,7 +489,7 @@ function StaffResults() {
           totalMax,
           absent: Boolean(mark?.is_absent),
           complete,
-          passed: complete && grade.passed,
+          passed: complete && (totalOnly ? !mark?.is_absent : grade.passed),
           gradePoint: complete ? grade.gradePoint : 0,
         }]
       })) as Record<string, ExamResultSubjectCell>
@@ -501,8 +505,8 @@ function StaffResults() {
           selectedExam?.count_fourth_subject ?? false,
         )
         : { gpa: 0, failedMainSubjects: 0 }
-      const failedSubjects = officialGpa.failedMainSubjects
-      const gpa = complete ? officialGpa.gpa : null
+      const failedSubjects = totalOnly ? 0 : officialGpa.failedMainSubjects
+      const gpa = complete && !totalOnly ? officialGpa.gpa : null
       return {
         id: student.id,
         name: `${student.first_name} ${student.last_name}`.trim(),
@@ -513,7 +517,7 @@ function StaffResults() {
         totalMax: cells.reduce((sum, cell) => sum + cell.totalMax, 0),
         failedSubjects,
         gpa,
-        grade: gpa == null ? 'Incomplete' : overallGrade(gpa, failedSubjects),
+        grade: totalOnly ? (complete ? 'Recorded' : 'Incomplete') : gpa == null ? 'Incomplete' : overallGrade(gpa, failedSubjects),
         complete,
         position: null,
       }
@@ -529,7 +533,7 @@ function StaffResults() {
         previousTotal = row.totalObtained
       })
     return rows.map(row => ({ ...row, position: positions.get(row.id) ?? null }))
-  }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data, curriculumByStudentId, courseOptionsQuery.data, paperGroupsQuery.data, selectedExam?.count_fourth_subject])
+  }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data, curriculumByStudentId, courseOptionsQuery.data, paperGroupsQuery.data, selectedExam?.count_fourth_subject, totalOnly])
 
   const examSubjectResultText = (row: ExamResultReportRow, subject: ExamSubject) => {
     const result = row.subjects[subject.id]
@@ -543,7 +547,7 @@ function StaffResults() {
     const headers = [
       'SN', 'Class', 'Exam', 'Exam Date', 'Roll', 'Student', 'Admission Number',
       ...examSubjectsQuery.data.map(subject => `${examSubjectName(subject)} (${examSubjectCode(subject)}) / ${examSubjectTotal(subject)}`),
-      'Total', 'GPA', 'Grade', 'Position', 'Failed Subjects',
+      'Total', ...(!totalOnly ? ['GPA', 'Grade'] : []), 'Position', ...(!totalOnly ? ['Failed Subjects'] : []),
     ]
     const rows = examResultRows.map((row, index) => [
       index + 1,
@@ -555,10 +559,9 @@ function StaffResults() {
       row.admission,
       ...examSubjectsQuery.data!.map(subject => examSubjectResultText(row, subject)),
       row.complete ? `${row.totalObtained} / ${row.totalMax}` : '',
-      row.gpa,
-      row.grade,
+      ...(!totalOnly ? [row.gpa, row.grade] : []),
       row.position,
-      row.complete ? row.failedSubjects : '',
+      ...(!totalOnly ? [row.complete ? row.failedSubjects : ''] : []),
     ])
     const classSlug = selectedExam.classes.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'class'
     const examSlug = (selectedExam.title || selectedExam.result_exam_types.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'exam'
@@ -707,16 +710,10 @@ function StaffResults() {
     if (!selected.length) return toast.error('Select at least one subject')
     const rows = selected.map((subject, index) => {
       const row = configRows[subject.id]
-      const values = [row.creative, row.written, row.practical, row.pass, row.total, row.creativePass, row.writtenPass, row.practicalPass].map(Number)
+      const values = examSubjectConfigValues(row, totalOnly)
       return { subject, row, values, index }
     })
-    const invalid = rows.find(({ values }) => values.some(value => !Number.isFinite(value) || value < 0)
-      || values[4] <= 0
-      || Math.abs(values[0] + values[1] + values[2] - values[4]) > 0.009
-      || values[3] <= 0 || values[3] > values[4]
-      || [0, 1, 2].some(index => values[index] > 0
-        ? values[index + 5] <= 0 || values[index + 5] > values[index]
-        : values[index + 5] !== 0))
+    const invalid = rows.find(({ values }) => !validExamSubjectConfig(values, totalOnly))
     if (invalid) return toast.error(`Check the marks configuration for ${invalid.subject.name}`)
     const { error } = await db.from('result_exam_subjects').upsert(rows.map(({ subject, values, index }) => ({
       exam_id: examId, subject_id: subject.id,
@@ -755,7 +752,7 @@ function StaffResults() {
       const rows = subjects.map(examSubject => ({
         exam_subject_id: examSubject.id, student_id: studentId,
         creative_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.creative ?? '', examSubject.creative_max, examSubjectName(examSubject), 'creative'),
-        written_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.written ?? '', examSubject.written_max, examSubjectName(examSubject), 'MCQ'),
+        written_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.written ?? '', examSubject.written_max, examSubjectName(examSubject), totalOnly ? 'total' : 'MCQ'),
         practical_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.practical ?? '', examSubject.practical_max, examSubjectName(examSubject), 'practical'),
         is_absent: nextDrafts[examSubject.id]?.absent ?? false, entered_by: user?.id,
       }))
@@ -1023,8 +1020,8 @@ function StaffResults() {
               {!selectedStudentId ? <Card className="min-h-56 min-w-0 gap-0 rounded-none border-0 bg-transparent py-0 shadow-none xl:min-h-[420px]"><CardContent className="flex min-h-56 items-center justify-center xl:min-h-[420px]"><div className="max-w-sm text-center"><ClipboardList className="mx-auto mb-4 h-7 w-7 text-muted-foreground" /><h3 className="text-lg font-semibold">Select a student</h3><p className="mt-2 text-sm text-muted-foreground">Choose a student from the roster to enter marks across all configured subjects.</p></div></CardContent></Card> : <div className="min-w-0 space-y-2 pl-0 xl:pl-5">
                 <Card className="gap-0 rounded-none border-0 border-b bg-transparent py-0 shadow-none"><CardContent className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-0 pb-3 pt-0"><div className="flex min-w-0 items-center gap-2 sm:gap-3"><Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"><AvatarFallback>{`${selectedStudent?.first_name[0] ?? ''}${selectedStudent?.last_name[0] ?? ''}`}</AvatarFallback></Avatar><div className="min-w-0"><h3 className="truncate text-sm font-semibold sm:text-base">{selectedStudent?.first_name} {selectedStudent?.last_name}</h3><p className="truncate text-[10px] text-muted-foreground sm:text-xs">Roll - {selectedStudent?.roll_number ?? '—'}</p></div></div><div className="flex shrink-0 items-center gap-2"><div className="flex items-center gap-1"><span className={`whitespace-nowrap text-[10px] sm:text-xs ${marksSaveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite"><span className="sm:hidden">{marksSaveStatus === 'saving' ? 'Saving…' : marksSaveStatus === 'saved' ? 'Saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Auto-save on'}</span><span className="hidden sm:inline">{marksSaveStatus === 'saving' ? 'Saving changes…' : marksSaveStatus === 'saved' ? 'All changes saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Changes save automatically'}</span></span>{marksSaveStatus === 'saved' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}</div></div></CardContent></Card>
                 <div className="min-w-0 max-w-full overflow-hidden border-b">
-                  <Table className="min-w-[520px] text-[10px] [&_td]:p-1 [&_th]:h-8 [&_th]:px-1 sm:min-w-[720px] sm:text-sm">
-                    <TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-28 min-w-28 border-r bg-background text-[10px] sm:w-48 sm:min-w-48 sm:text-sm">Subject</TableHead><TableHead className="w-20">Creative</TableHead><TableHead className="w-20">MCQ</TableHead><TableHead className="w-20">Practical</TableHead><TableHead className="w-14 text-center sm:w-24">Total</TableHead><TableHead className="w-12 text-center sm:w-24">Absent</TableHead></TableRow></TableHeader>
+                  <Table className={totalOnly ? "min-w-[320px] text-xs [&_td]:p-1 [&_th]:px-1 sm:text-sm" : "min-w-[520px] text-[10px] [&_td]:p-1 [&_th]:h-8 [&_th]:px-1 sm:min-w-[720px] sm:text-sm"}>
+                    <TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-28 min-w-28 border-r bg-background text-[10px] sm:w-48 sm:min-w-48 sm:text-sm">Subject</TableHead>{!totalOnly && <TableHead className="w-20">Creative</TableHead>}<TableHead className="w-20">{totalOnly ? "Marks" : "MCQ"}</TableHead>{!totalOnly && <TableHead className="w-20">Practical</TableHead>}<TableHead className="w-14 text-center sm:w-24">Total</TableHead><TableHead className="w-12 text-center sm:w-24">Absent</TableHead></TableRow></TableHeader>
                     <TableBody>{applicableExamSubjects.map(examSubject => {
                       const draft = drafts[examSubject.id] ?? { creative: '', written: '', practical: '', absent: false }
                       const subjectRole = selectedStudentCurriculum
@@ -1035,14 +1032,14 @@ function StaffResults() {
                       const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
                       const disabled = draft.absent || selectedExam?.status === 'published' || !canWrite
                       return <TableRow key={examSubject.id} className={draft.absent ? 'opacity-60' : undefined}>
-                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><div className="flex flex-wrap items-center gap-1"><p className="font-medium">{examSubjectName(examSubject)}</p>{subjectRole === 'fourth' && <Badge variant="outline" className="h-4 px-1 text-[8px] font-medium sm:h-5 sm:text-[10px]">Fourth subject</Badge>}</div><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubjectCode(examSubject)} · Total pass {examSubject.pass_mark}</p><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{[
+                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><div className="flex flex-wrap items-center gap-1"><p className="font-medium">{examSubjectName(examSubject)}</p>{subjectRole === 'fourth' && <Badge variant="outline" className="h-4 px-1 text-[8px] font-medium sm:h-5 sm:text-[10px]">Fourth subject</Badge>}</div><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubjectCode(examSubject)} · {!totalOnly && <>Total pass {examSubject.pass_mark}</>}</p><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{[
                           examSubject.creative_max > 0 && examSubject.creative_pass_mark > 0 ? `CQ pass ${examSubject.creative_pass_mark}` : null,
                           examSubject.written_max > 0 && examSubject.written_pass_mark > 0 ? `MCQ pass ${examSubject.written_pass_mark}` : null,
                           examSubject.practical_max > 0 && examSubject.practical_pass_mark > 0 ? `Practical pass ${examSubject.practical_pass_mark}` : null,
                         ].filter(Boolean).join(' / ')}</p></TableCell>
-                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} creative marks`} value={draft.creative} max={examSubject.creative_max} disabled={disabled} onChange={value => update('creative', value)} /></TableCell>
-                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} MCQ marks`} value={draft.written} max={examSubject.written_max} disabled={disabled} onChange={value => update('written', value)} /></TableCell>
-                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} practical marks`} value={draft.practical} max={examSubject.practical_max} disabled={disabled} onChange={value => update('practical', value)} /></TableCell>
+                        {!totalOnly && <TableCell><MarkInput label={`${examSubjectName(examSubject)} creative marks`} value={draft.creative} max={examSubject.creative_max} disabled={disabled} onChange={value => update('creative', value)} /></TableCell>}
+                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} ${totalOnly ? "total" : "MCQ"} marks`} value={draft.written} max={examSubject.written_max} disabled={disabled} onChange={value => update('written', value)} /></TableCell>
+                        {!totalOnly && <TableCell><MarkInput label={`${examSubjectName(examSubject)} practical marks`} value={draft.practical} max={examSubject.practical_max} disabled={disabled} onChange={value => update('practical', value)} /></TableCell>}
                         <TableCell className="text-center text-[10px]"><span className="font-semibold tabular-nums">{draft.absent ? '—' : total}</span><span className="block text-[9px] text-muted-foreground sm:text-xs">/ {maximum}</span></TableCell>
                         <TableCell className="text-center"><Checkbox aria-label={`Mark ${examSubjectName(examSubject)} as absent`} checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></TableCell>
                       </TableRow>
@@ -1060,14 +1057,14 @@ function StaffResults() {
                   <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Class performance</p><CardTitle className="mt-1 text-xl">All student results</CardTitle><CardDescription className="mt-1">{selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam && format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')}</CardDescription></div>
                   <div className="hidden flex-wrap gap-2 sm:flex"><Button type="button" variant="outline" onClick={exportExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Download className="mr-2 h-4 w-4" /> Export CSV</Button><Button type="button" variant="outline" onClick={printExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Printer className="mr-2 h-4 w-4" /> Print report</Button></div>
                 </div>
-                <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 sm:grid-cols-4"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div><div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div><div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
+                <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 sm:grid-cols-4"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div>{!totalOnly && <div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div>}<div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
               </CardHeader>
               <CardContent className="min-w-0 max-w-full p-0">
                 {examMarksQuery.isLoading || studentsQuery.isLoading ? <ResultsTableSkeleton />
                   : examMarksQuery.error ? <ErrorState message={(examMarksQuery.error as Error).message} />
                     : studentsQuery.error ? <ErrorState message={(studentsQuery.error as Error).message} />
                       : examResultRows.length === 0 ? <EmptyState title="No students found" description="No students belong to this exam roster." />
-                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{examSubjectsQuery.data?.map(subject => <TableHead key={subject.id} className="min-w-14 text-center"><span className="block">{examSubjectCode(subject)}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead><TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{examSubjectsQuery.data?.map(subject => <TableCell key={subject.id} className="text-center text-[11px]">{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell><TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
+                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{examSubjectsQuery.data?.map(subject => <TableHead key={subject.id} className="min-w-14 text-center"><span className="block">{examSubjectCode(subject)}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead>{!totalOnly && <><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead></>}<TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{examSubjectsQuery.data?.map(subject => <TableCell key={subject.id} className="text-center text-[11px]">{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell>{!totalOnly && <><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell></>}<TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1144,13 +1141,18 @@ function StaffResults() {
       <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) { setEditingSubjectId(null); setSubjectForm({ name: '', code: '', isFourthSubject: false }) } }} title={editingSubjectId ? 'Edit group subject' : 'Add group subject'} description={`This subject belongs to the ${settingsGroup} group and will be available to all its exams.`} onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /><label className="flex items-center gap-2 text-sm"><Checkbox checked={subjectForm.isFourthSubject} onCheckedChange={checked => setSubjectForm(current => ({ ...current, isFourthSubject: checked === true }))} /><span> Available as optional subject</span></label></SimpleDialog>
       <Dialog open={configDialog} onOpenChange={setConfigDialog}>
         <DialogContent className="flex h-[90dvh] max-h-[90dvh] flex-col overflow-hidden p-0 sm:h-auto sm:max-w-5xl">
-          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>{selectedExam?.combine_subject_papers ? 'Paired 1st and 2nd papers are combined into one subject. Define one marks configuration for each combined subject.' : 'Select subjects and define their creative, MCQ, practical, and pass marks.'} Each active section and the overall total must pass independently. Enter a pass mark for every active section.</DialogDescription></DialogHeader>
+          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>{totalOnly ? "Select subjects and enter the total marks for each. Tutorial exams have no section distribution or pass marks." : <>{selectedExam?.combine_subject_papers ? 'Paired 1st and 2nd papers are combined into one subject. Define one marks configuration for each combined subject.' : 'Select subjects and define their creative, MCQ, practical, and pass marks.'} Each active section and the overall total must pass independently. Enter a pass mark for every active section.</>}</DialogDescription></DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto">
-            <Table className="min-w-[1350px]">
-              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Creative pass</TableHead><TableHead className="w-32">MCQ pass</TableHead><TableHead className="w-32">Practical pass</TableHead><TableHead className="w-32">Total pass</TableHead><TableHead className="w-32">Total max</TableHead></TableRow></TableHeader>
+            <Table className={totalOnly ? "min-w-[320px]" : "min-w-[1350px]"}>
+              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead>{!totalOnly && <><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Creative pass</TableHead><TableHead className="w-32">MCQ pass</TableHead><TableHead className="w-32">Practical pass</TableHead><TableHead className="w-32">Total pass</TableHead></>}<TableHead className="w-32">{totalOnly ? "Total marks" : "Total max"}</TableHead></TableRow></TableHeader>
               <TableBody>{unusedSubjects.map(subject => {
                 const row = configRows[subject.id] ?? { selected: false, creative: '', written: '', practical: '', creativePass: '', writtenPass: '', practicalPass: '', pass: '', total: '' }
                 const update = (field: keyof ExamSubjectConfigDraft, value: string | boolean) => setConfigRows(current => ({ ...current, [subject.id]: { ...row, [field]: value } }))
+                if (totalOnly) return <TableRow key={subject.id}>
+                  <TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', checked === true)} aria-label={`Select ${subject.name}`} /></TableCell>
+                  <TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}</p></TableCell>
+                  <TableCell><Input aria-label={`${subject.name} total marks`} type="number" min={0.01} step="0.01" value={row.total} disabled={!row.selected} onChange={event => update('total', event.target.value)} /></TableCell>
+                </TableRow>
                 const updateComponent = (field: 'creative' | 'written' | 'practical', value: string) => {
                   const next = { ...row, [field]: value }
                   if (Number(value) <= 0) {
@@ -1212,11 +1214,11 @@ function StaffResults() {
           <section className="print-summary-section">
             <div className="print-section-heading">
               <h2>Student Results</h2>
-              <p>Subject totals, overall result, GPA, grade, and class position</p>
+              <p>{totalOnly ? "Subject totals and class position" : "Subject totals, overall result, GPA, grade, and class position"}</p>
             </div>
             <table className="print-summary-table exam-results-print-table">
-              <thead><tr><th>SN</th><th>Roll</th><th>Student</th><th>Admission</th>{examSubjectsQuery.data.map(subject => <th key={subject.id}>{examSubjectCode(subject)}<br />/{examSubjectTotal(subject)}</th>)}<th>Total</th><th>GPA</th><th>Grade</th><th>Pos.</th></tr></thead>
-              <tbody>{examResultRows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>{examSubjectsQuery.data!.map(subject => <td key={subject.id}>{examSubjectResultText(row, subject)}</td>)}<td>{row.complete ? `${row.totalObtained}/${row.totalMax}` : '-'}</td><td>{row.gpa == null ? '-' : row.gpa.toFixed(2)}</td><td>{row.grade}</td><td>{row.position ?? '-'}</td></tr>)}</tbody>
+              <thead><tr><th>SN</th><th>Roll</th><th>Student</th><th>Admission</th>{examSubjectsQuery.data.map(subject => <th key={subject.id}>{examSubjectCode(subject)}<br />/{examSubjectTotal(subject)}</th>)}<th>Total</th>{!totalOnly && <><th>GPA</th><th>Grade</th></>}<th>Pos.</th></tr></thead>
+              <tbody>{examResultRows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>{examSubjectsQuery.data!.map(subject => <td key={subject.id}>{examSubjectResultText(row, subject)}</td>)}<td>{row.complete ? `${row.totalObtained}/${row.totalMax}` : '-'}</td>{!totalOnly && <><td>{row.gpa == null ? '-' : row.gpa.toFixed(2)}</td><td>{row.grade}</td></>}<td>{row.position ?? '-'}</td></tr>)}</tbody>
             </table>
             <p className="print-footnote">A dash indicates an incomplete result. Subject columns show obtained marks over the configured maximum.</p>
           </section>

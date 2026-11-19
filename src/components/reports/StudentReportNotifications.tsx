@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, Check, CheckCircle2, MessageSquareWarning } from 'lucide-react'
+import { Check, CheckCircle2, MessageSquareWarning } from 'lucide-react'
 import { useAdminStudentReports, useAdminUnreadComplaintCount, useMarkStudentReportRead, useSolveStudentReport } from '@/hooks/useStudentReports'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { Badge } from '@/components/ui/badge'
@@ -27,7 +27,6 @@ export function StudentReportNotifications() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
               Complaint Inbox
               {unreadCount > 0 && <Badge variant="destructive">{unreadCount} new</Badge>}
             </CardTitle>

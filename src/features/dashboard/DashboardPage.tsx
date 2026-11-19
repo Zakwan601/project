@@ -76,7 +76,7 @@ export function DashboardPage() {
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <SummaryCard icon={Users} label="Students" value={error ? '—' : stats?.totalStudents ?? 0} loading={isLoading} to="/students" />
         <SummaryCard icon={GraduationCap} label="Classes" value={error ? '—' : stats?.totalClasses ?? 0} loading={isLoading} to="/classes" />
         <SummaryCard
@@ -189,16 +189,16 @@ function SummaryCard({
   to: string
 }) {
   const card = (
-    <Card>
-      <CardContent className="flex items-center justify-between p-3 sm:p-5">
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
+    <Card className="h-full py-0 sm:py-3">
+      <CardContent className="relative flex h-full items-start justify-between px-2 py-2 sm:items-center sm:p-5">
+        <div className="min-w-0">
+          <p className="min-h-6 text-[10px] leading-3 text-muted-foreground sm:min-h-0 sm:text-xs sm:leading-normal">{label}</p>
           {loading
-            ? <Skeleton className="mt-1 h-7 w-16" />
-            : <p className="mt-0.5 text-xl font-bold sm:mt-1 sm:text-2xl">{value}</p>}
+            ? <Skeleton className="mt-1 h-5 w-7 sm:h-7 sm:w-16" />
+            : <p className="mt-0.5 text-base font-bold sm:mt-1 sm:text-2xl">{value}</p>}
         </div>
-        <div className="rounded-lg bg-primary/10 p-2 text-primary sm:rounded-xl sm:p-3">
-          <Icon className="h-5 w-5" />
+        <div className="absolute right-1.5 bottom-3 text-primary sm:static sm:rounded-xl sm:bg-primary/10 sm:p-3">
+          <Icon className="h-3 w-3 sm:h-5 sm:w-5" />
         </div>
       </CardContent>
     </Card>
@@ -206,7 +206,7 @@ function SummaryCard({
   return (
     <Link
       to={to}
-      className="block rounded-xl transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="block min-w-0 rounded-xl transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {card}
     </Link>
