@@ -30,6 +30,7 @@ import { useStudentEnrollmentHistory } from '@/hooks/useStudents'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { ProfileUploads } from './ProfileUploads'
 import { StudentSubjects } from './StudentSubjects'
+import { FinePaymentHistory } from '@/features/fines/FinePaymentHistory'
 import { useAutosave } from '@/hooks/useAutosave'
 import { AutosaveStatus } from '@/components/shared/AutosaveStatus'
 import type { Profile, Student } from '@/types/database'
@@ -469,11 +470,12 @@ export function ProfilePage() {
         </header>
 
         <div className="px-3 pb-3 sm:px-7 sm:pb-4">
-          <TabsList className={`grid h-auto! w-full gap-0.5 rounded-none bg-muted p-0.5 sm:gap-1 sm:p-1 ${role === 'student' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <TabsList className={`grid h-auto! w-full gap-0.5 rounded-none bg-muted p-0.5 sm:gap-1 sm:p-1 ${role === 'student' ? 'grid-cols-4' : 'grid-cols-2'}`}>
             <TabsTrigger value="personal" className={profileTabClassName}>Personal</TabsTrigger>
             {role === 'student' && (
               <>
                 <TabsTrigger value="academics" className={profileTabClassName}>Academics</TabsTrigger>
+                <TabsTrigger value="payments" className={profileTabClassName}>Payments</TabsTrigger>
               </>
             )}
             <TabsTrigger value="security" className={profileTabClassName}>Security</TabsTrigger>
@@ -614,6 +616,9 @@ export function ProfilePage() {
           </TabsContent>
         )}
 
+        {role === 'student' && student && <TabsContent value="payments" className="m-0 p-4 sm:p-7">
+          <FinePaymentHistory studentId={student.id} />
+        </TabsContent>}
         <TabsContent value="security" className="m-0">
           <section className="max-w-2xl p-5 sm:p-7">
             <div className="mb-6">

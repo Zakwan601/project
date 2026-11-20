@@ -35,6 +35,7 @@ const pageLabels: Record<string, string> = {
   '/classes': 'Classes',
   '/attendance': 'Attendance',
   '/fine-details': 'Fine Details',
+  '/fine-collection': 'Fine Collection',
   '/punches': 'Punches',
   '/archived-punches': 'Archived Punches',
   '/reports': 'Reports',
@@ -70,6 +71,7 @@ export function AppLayout() {
   const requestedModule = permissionRoutes.find(item => location.pathname.startsWith(item.path))
   const firstAllowedPath = permissionRoutes.find(item => can(item.permission))?.path ?? '/profile'
   const requiresFullAdmin = location.pathname.startsWith('/settings')
+    || location.pathname.startsWith('/fine-collection')
     || location.pathname.startsWith('/archived-punches')
     || location.pathname.startsWith('/access-control')
 

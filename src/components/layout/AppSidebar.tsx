@@ -34,6 +34,7 @@ const navItems: NavItem[] = [
   { title: 'Classes', href: '/classes', icon: BookOpen, roles: ['admin'] },
   { title: 'Attendance', href: '/attendance', icon: ClipboardList, roles: ['admin', 'student'] },
   { title: 'Fine Details', href: '/fine-details', icon: Banknote, roles: ['student'] },
+  { title: 'Fine Collection', href: '/fine-collection', icon: Banknote, roles: ['admin'] },
   { title: 'Punches', href: '/punches', icon: ScanLine, roles: ['admin', 'student'] },
   { title: 'Report Issue', href: '/report-issue', icon: MessageSquareWarning, roles: ['student'] },
   { title: 'Vacations', href: '/vacations', icon: CalendarOff, roles: ['admin'] },

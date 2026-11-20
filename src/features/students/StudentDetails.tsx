@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { FinePaymentHistory } from '@/features/fines/FinePaymentHistory'
 import { Printer } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
@@ -74,6 +76,7 @@ function AttendanceSummary({ data }: { data: StudentAttendanceBreakdown }) {
 }
 
 export function StudentAttendanceReport({ student }: { student: StudentWithClass }) {
+  const { role } = useAuth()
   const studentId = student.id
   const reportRef = useRef<HTMLDivElement>(null)
   const query = useQuery({ queryKey: ['staff-student-attendance-report', studentId], staleTime: 60_000,
@@ -149,6 +152,7 @@ export function StudentAttendanceReport({ student }: { student: StudentWithClass
             </TableRow>)}</TableBody></Table>
                       </>}
       </section>
+      {role === 'admin' && <FinePaymentHistory studentId={student.id} />}
       <footer className="hidden justify-between gap-8 border-t pt-8 text-xs print:flex"><span>Office signature: __________________</span><span>Guardian signature: __________________</span></footer>
     </div>
   </div>

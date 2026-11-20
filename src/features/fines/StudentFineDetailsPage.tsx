@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FinePaymentHistory } from './FinePaymentHistory'
 import { endOfMonth, format, parseISO } from 'date-fns'
 import { useAuth } from '@/contexts/AuthContext'
 import { useStudentFineDetails } from '@/hooks/useStudentDashboard'
@@ -48,5 +49,6 @@ export function StudentFineDetailsPage() {
       loading={isLoading}
       error={Boolean(error)}
     />
+    <div className="mt-7"><FinePaymentHistory studentId={student.id} /></div>
   </div>
 }

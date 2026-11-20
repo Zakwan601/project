@@ -35,20 +35,26 @@ const detailQueries = {
   useQuery(options) {
     queries.push(options)
     if (queryData.has(options.queryKey[0])) return { data: queryData.get(options.queryKey[0]), isPending: false }
-    return options.queryKey[0].startsWith('staff-') ? { isPending: true } : { data: [] }
+    return options.queryKey[0].startsWith('staff-') || options.queryKey[0] === 'fine-account' ? { isPending: true } : { data: [] }
   },
   useQueryClient: () => ({ invalidateQueries() {} }),
+  useMutation: () => ({ isPending: false, mutate() {} }),
 }
 let details
 function load(path) {
   const code = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText
-  const context = { exports: {}, require(name) {
+  const context = { exports: {}, crypto: globalThis.crypto, require(name) {
     if (name === 'react') return fakeReact
     if (name === '@tanstack/react-query') return detailQueries
     if (name === 'framer-motion') return { motion: new Proxy({}, { get: () => element }) }
     if (name === './StudentDetails') return details
+    if (name === 'react-router-dom') return { Navigate: props => element({ ...props, 'data-navigation': true }) }
+    if (name === './FinePaymentHistory') return { FINE_ACCOUNTS_KEY: 'fine-account', FineStatus: element, PaymentReceipts: element,
+      useFineAccount: (id, until) => detailQueries.useQuery({ queryKey: ['fine-account', id, until] }) }
+    if (name === './FineReceipts') return load('../src/features/fines/FineReceipts.tsx')
+    if (name === '@/lib/dateTime') return load('../src/lib/dateTime.ts')
     if (name === '@/lib/attendanceFine') return load('../src/lib/attendanceFine.ts')
     if (name === '@/lib/printReportCard') return { printReportCards: sources => { printedSources = sources } }
     if (name === '@/contexts/AuthContext') return { useAuth: () => ({ role, can: (key, access = 'read') => role === 'admin' || grants.has(`${key}:${access}`) }) }
@@ -83,9 +89,10 @@ function visit(node) {
     nodes.push(node); visit(node.props?.children)
   }
 }
+let rootComponent = StudentsPage
 function render() {
   nodes = []; queries = []; tabContext = undefined
-  visit(React.createElement(StudentsPage))
+  visit(React.createElement(rootComponent))
   return queries.filter(query => query.queryKey[0].startsWith('staff-') && query.enabled !== false)
 }
 function click(label) {
@@ -166,3 +173,41 @@ assert.equal(render().length, 0, 'Opening a different student resets to Overview
 click('Attendance & fines')
 assert.deepEqual(render().map(query => Array.from(query.queryKey)), [['staff-student-attendance-report', 'student-b']])
 console.log('Passed actual student-list/detail rendering: lazy tab loading, permission gates, closed-dialog behavior, student isolation, pending marks and zero-mark tutorial results.')
+
+// Fine collection has its own full-admin gate, and loads no account data in the list.
+rootComponent = load('../src/features/fines/FineCollectionPage.tsx').FineCollectionPage
+role = 'sub_admin'; render()
+assert.ok(nodes.some(node => node.props['data-navigation']), 'Sub-admins must be redirected away from fine collection')
+assert.ok(!queries.some(query => query.queryKey[0] === 'fine-account'))
+role = 'admin'; render()
+assert.ok(!queries.some(query => query.queryKey[0] === 'fine-account'), 'Fine collection list must not load per-student financial details')
+nodes.find(node => node.props['aria-label'] === 'Collect fine for Example Student').props.onClick({ stopPropagation() {} })
+render()
+assert.ok(queries.some(query => query.queryKey[0] === 'fine-account' && query.queryKey[1] === 'student-a'))
+const financialAccount = { student_id: 'student-a', paid_through: null, next_start: '2026-11-01',
+  quote: { from_date: '2026-11-01', to_date: '2026-11-20', gross_amount: 100, eligible: true, fine: null }, months: [], payments: [] }
+queryData.set('fine-account', financialAccount)
+render()
+nodes.find(node => node.props.id === 'fine-waiver').props.onChange({ target: { value: '20' } })
+render()
+assert.ok(nodes.some(node => node.props.children === '\u09f380.00'), 'Waiver is deducted from the amount to receive')
+assert.ok(nodes.some(node => node.props.children === 'Mark paid' && !node.props.disabled))
+nodes.find(node => node.props.id === 'fine-waiver').props.onChange({ target: { value: '101' } })
+render()
+assert.ok(nodes.some(node => node.props.children === 'Mark paid' && node.props.disabled), 'Excess waivers must disable collection')
+financialAccount.quote.eligible = false
+nodes.find(node => node.props.id === 'fine-waiver').props.onChange({ target: { value: '0' } })
+render()
+assert.ok(nodes.some(node => node.props.children === 'Mark paid' && node.props.disabled), 'An already-paid date must not be collectible')
+// Render the actual two-copy receipt, then use its print action.
+const { FineReceiptButton } = load('../src/features/fines/FineReceipts.tsx')
+const receipt = { id: 'paid-1', receipt_number: 7, gross_amount: 100, waiver_amount: 20, paid_amount: 80,
+  period_start: '2026-11-01', period_end: '2026-11-20', collected_at: '2026-11-20T04:00:00Z', collector_name: 'Collector Example',
+  student_snapshot: { name: 'Example Student', student_id: '28001', class_name: 'Science', student_phone: '01712345678' } }
+nodes = []; visit(React.createElement(FineReceiptButton, { payment: receipt }))
+assert.equal(nodes.filter(node => node.props.className === 'fine-receipt-copy').length, 2)
+for (const text of ['Student copy', 'Office copy', 'Collector Example', '28001', '01712345678'])
+  assert.ok(nodes.some(node => node.props.children === text), `Receipt missing ${text}`)
+nodes.find(node => node.props['aria-label'] === 'Print receipt FC-000007').props.onClick()
+assert.equal(printedSources[0].props.className, 'fine-receipt-page')
+console.log('Passed admin-only collection, lazy financial loading, net/waiver controls, paid-date gating and printable two-copy receipt details.')

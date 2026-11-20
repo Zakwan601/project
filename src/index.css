@@ -169,6 +169,53 @@
 }
 
 @media print {
+  #report-card-print-root .fine-receipt-page {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    height: 277mm;
+    color: #111;
+    background: white;
+  }
+  #report-card-print-root .fine-receipt-copy {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-height: 0;
+    padding: 5mm 1mm;
+    border-bottom: 1px dashed #999;
+    break-inside: avoid;
+  }
+  #report-card-print-root .fine-receipt-logo {
+    width: 10mm;
+    height: 10mm;
+    object-fit: contain;
+  }
+  #report-card-print-root .fine-receipt-copy .text-xs {
+    font-size: 8pt;
+    line-height: 1.2;
+  }
+  #report-card-print-root .fine-receipt-copy .text-sm {
+    font-size: 9pt;
+    line-height: 1.2;
+  }
+  #report-card-print-root .fine-receipt-copy .text-base {
+    font-size: 10pt;
+    line-height: 1.2;
+  }
+  #report-card-print-root .fine-receipt-copy .text-lg {
+    font-size: 12pt;
+    line-height: 1.2;
+  }
+  #report-card-print-root .fine-receipt-footer {
+    margin-top: auto;
+    padding-top: 8mm;
+  }
+  #report-card-print-root .fine-receipt-copy:last-child {
+    border-bottom: 0;
+  }
+}
+
+@media print {
   #report-card-print-root .student-guardian-report {
     width: 100%;
     color: #111;
