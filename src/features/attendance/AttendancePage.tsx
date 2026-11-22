@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarCheck, CalendarDays, CalendarOff, CheckCircle, Loader2, MessageSquareWarning, Pencil, RefreshCw, Send, Trash2, UserX, Users } from 'lucide-react'
+import { CalendarCheck, CalendarDays, CalendarOff, CheckCircle, Loader2, MessageSquareWarning, MoreVertical, Pencil, RefreshCw, Send, Trash2, UserX, Users } from 'lucide-react'
 import { StudentSearchInput } from '@/components/shared/StudentSearchInput'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
@@ -29,6 +29,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -78,20 +79,22 @@ function StaffDailyAttendance() {
   const requestedStatus = searchParams.get('status')
   const initialStatus = isAttendanceStatus(requestedStatus) ? requestedStatus : 'all'
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || format(new Date(), 'yyyy-MM-dd'))
-  const [selectedClassId, setSelectedClassId] = useState(searchParams.get('class_id') || 'all')
+  const [selectedClassId, setSelectedClassId] = useState(() => {
+    const requestedClass = searchParams.get('class_id')
+    return requestedClass && requestedClass !== 'all' ? requestedClass : ''
+  })
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | 'all'>(initialStatus)
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [absenceNotificationDialogOpen, setAbsenceNotificationDialogOpen] = useState(false)
   const [absenceSendElapsedSeconds, setAbsenceSendElapsedSeconds] = useState(0)
   const [now, setNow] = useState(() => new Date())
 
-  const classFilter = selectedClassId === 'all' ? undefined : selectedClassId
+  const classFilter = selectedClassId || undefined
   const { data: sessions = [], isLoading, error } = useAttendanceSessions(classFilter, selectedDate)
-  const { data: classes = [] } = useClasses()
+  const { data: classes = [], isLoading: classesLoading, error: classesError } = useClasses()
   const { data: holidays = [] } = useHolidays(selectedDate, selectedDate, classFilter)
   const syncAttendance = useSyncDailyAttendance()
   const deleteHoliday = useDeleteHoliday()
-  const selectedHoliday = selectedClassId === 'all'
+  const selectedHoliday = !selectedClassId
     ? holidays.find(holiday => holiday.class_ids == null) ?? null
     : holidays[0] ?? null
   const selectedDateIsWeekend = isWeekend(selectedDate)
@@ -136,93 +139,87 @@ function StaffDailyAttendance() {
   }
 
   useEffect(() => {
-    if (sessions.length === 0) {
-      setActiveSessionId(null)
-      return
-    }
-    if (!sessions.some(session => session.id === activeSessionId)) {
-      setActiveSessionId(sessions[0].id)
-    }
-  }, [sessions, activeSessionId])
+    if (isLoading || classesLoading || classes.some(row => row.id === selectedClassId)) return
+    const initialClass = classes.find(row => row.id === sessions[0]?.class_id) ?? classes[0]
+    if (!initialClass) return
+    setSelectedClassId(initialClass.id)
+    setSearchParams(current => {
+      const next = new URLSearchParams(current)
+      next.set('class_id', initialClass.id)
+      return next
+    }, { replace: true })
+  }, [sessions, classes, selectedClassId, isLoading, classesLoading, setSearchParams])
 
-  const activeSession = sessions.find(session => session.id === activeSessionId) ?? null
+  const activeSession = sessions.find(session => session.class_id === selectedClassId) ?? null
 
-  if (isLoading) return <StaffAttendanceSkeleton canSync={isAdmin} />
-  if (error) return <ErrorState message={(error as Error).message} />
+  if (isLoading || classesLoading || (!selectedClassId && classes.length > 0)) return <StaffAttendanceSkeleton canSync={isAdmin} />
+  if (error || classesError) return <ErrorState message={((error || classesError) as Error).message} />
 
   return (
     <div>
-      <PageHeader
-        title="Daily Attendance"
-        description="One biometric result per student, per day"
-        action={canRunSchoolActions ? (
-          <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
+      <header className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 sm:mb-4 sm:flex sm:justify-between sm:gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Daily Attendance</h2>
+        </div>
+        {canRunSchoolActions && (
+          <div className="flex shrink-0 gap-2 sm:justify-end">
             {absenceNotificationAvailable && !isNonSchoolDay && (
               <Button
                 size="sm"
                 variant="outline"
-                className="min-w-0 flex-1 sm:flex-none"
+                className="w-8 px-0 sm:w-auto sm:px-3"
+                aria-label="Send Absence SMS"
                 onClick={() => {
                   sendAbsenceNotifications.reset()
                   setAbsenceNotificationDialogOpen(true)
                 }}
                 disabled={sendAbsenceNotifications.isPending || sessions.length === 0}
               >
-                <MessageSquareWarning className="mr-1.5 h-4 w-4" />
-                Send Absence SMS
+                <MessageSquareWarning className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Send Absence SMS</span>
               </Button>
             )}
-            
-            <Button
-              size="sm"
-              className="min-w-0 flex-1 sm:flex-none"
-              onClick={() => syncAttendance.mutate(selectedDate)}
-              disabled={syncAttendance.isPending || isNonSchoolDay}
-            >
-              <RefreshCw className={`mr-1.5 h-4 w-4 ${syncAttendance.isPending ? 'animate-spin' : ''}`} />
-              {syncAttendance.isPending ? 'Syncing…' : 'Sync Attendance'}
-            </Button>
           </div>
-        ) : undefined}
-      />
+        )}
+      </header>
 
       <section
         aria-label="Attendance filters"
-        className="mb-3 grid grid-cols-3 items-start gap-3 sm:mb-4 sm:grid-cols-2 sm:gap-4 lg:grid-cols-[minmax(260px,1.35fr)_minmax(200px,1fr)_minmax(180px,1fr)]"
+        className={`mb-3 grid items-end gap-1.5 sm:mb-4 sm:gap-4 ${canRunSchoolActions ? 'grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)]'}`}
       >
           <DateFilter
             mode="date"
+            className="min-w-0 max-sm:[&_label]:sr-only max-sm:[&>div]:space-y-0 max-sm:[&_button]:px-2 max-sm:[&_button]:text-xs max-sm:[&_svg]:hidden"
             value={selectedDate}
             onChange={value => {
               setSelectedDate(value)
               updateUrlFilter('date', value)
             }}
           />
-          <div className="min-w-0 space-y-2">
-            <Label className="text-xs">Class</Label>
+          <div className="min-w-0 space-y-0 sm:space-y-1.5">
+            <Label className="sr-only text-xs sm:not-sr-only">Class</Label>
             <Select value={selectedClassId} onValueChange={value => {
               setSelectedClassId(value)
               updateUrlFilter('class_id', value)
             }}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="All classes" /></SelectTrigger>
+              <SelectTrigger aria-label="Class" className="w-full gap-1 px-2 text-xs sm:gap-2 sm:px-3 sm:text-sm"><SelectValue placeholder="Choose a class" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
                 {classes.map(classItem => (
                   <SelectItem key={classItem.id} value={classItem.id}>
-                    {classItem.name} — Grade {classItem.grade} {classItem.section}
+                    {classItem.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-1">
-            <Label className="text-xs">Status</Label>
+          <div className="min-w-0 space-y-0 sm:space-y-1.5">
+            <Label className="sr-only text-xs sm:not-sr-only">Status</Label>
             <Select value={statusFilter} onValueChange={value => {
               const status = value as AttendanceStatus | 'all'
               setStatusFilter(status)
               updateUrlFilter('status', status)
             }}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Status" className="w-full gap-1 px-2 text-xs sm:gap-2 sm:px-3 sm:text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="present">Present</SelectItem>
@@ -233,6 +230,11 @@ function StaffDailyAttendance() {
               </SelectContent>
             </Select>
           </div>
+          {canRunSchoolActions && <Button type="button" size="icon" className="lg:w-auto lg:px-3" aria-label="Sync Attendance" title="Sync attendance"
+            onClick={() => syncAttendance.mutate(selectedDate)} disabled={syncAttendance.isPending || isNonSchoolDay}>
+            <RefreshCw className={`h-4 w-4 ${syncAttendance.isPending ? 'animate-spin' : ''}`} />
+            <span className="hidden lg:inline">{syncAttendance.isPending ? 'Syncing…' : 'Sync Attendance'}</span>
+          </Button>}
       </section>
 
       {isNonSchoolDay && (
@@ -281,35 +283,7 @@ function StaffDailyAttendance() {
             : 'An administrator has not synchronized this date yet.'}
         />
       ) : (
-        <div className=" min-w-0 gap-3 sm:gap-5 lg:grid-cols-[260px_minmax(0,1fr)] grid">
-          <Card className="min-w-0 h-fit hidden md:block">
-            <CardHeader className="px-3 py-3  ">
-              <CardTitle className="text-base">Classes</CardTitle>
-              <CardDescription className="hidden sm:block">{sessions.length} class{sessions.length === 1 ? '' : 'es'}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex gap-2 overflow-x-auto px-3 pb-3 lg:block lg:space-y-2 lg:overflow-visible lg:px-6 lg:pb-6">
-              {sessions.map(session => (
-                <button
-                  key={session.id}
-                  type="button"
-                  onClick={() => setActiveSessionId(session.id)}
-                  className={`min-w-36 shrink-0 rounded-lg border px-3 py-2 text-left transition-colors sm:min-w-44 sm:p-3 lg:w-full lg:min-w-0 ${
-                    activeSessionId === session.id
-                      ? 'border-primary bg-primary/5'
-                      : 'hover:bg-muted/50'
-                  }`}
-                >
-                  <p className="truncate text-sm font-medium sm:text-base">{session.classes.name}</p>
-                  <p className="truncate text-[11px] text-muted-foreground sm:mt-0.5 sm:text-xs">
-                    Grade {session.classes.grade}-{session.classes.section}
-                  </p>
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-
-          {activeSession && <DailyAttendanceSheet session={activeSession} isAdmin={isAdmin} statusFilter={statusFilter} />}
-        </div>
+        activeSession && <DailyAttendanceSheet session={activeSession} isAdmin={isAdmin} statusFilter={statusFilter} />
       )}
 
 
@@ -392,7 +366,7 @@ function StaffAttendanceSkeleton({ canSync }: { canSync: boolean }) {
     <div role="status" aria-label="Loading daily attendance" aria-busy="true">
       <PageHeader
         title="Daily Attendance"
-        description="One biometric result per student, per day"
+        description=""
         action={canSync ? <Skeleton className="h-9 w-36" /> : undefined}
       />
       <div className="mb-4 grid grid-cols-3 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(260px,1.35fr)_minmax(200px,1fr)_minmax(180px,1fr)]">
@@ -400,15 +374,7 @@ function StaffAttendanceSkeleton({ canSync }: { canSync: boolean }) {
         <Skeleton className="h-10 w-full" />
         <Skeleton className="col-span-3 h-10 w-full sm:col-span-2 lg:col-span-1" />
       </div>
-      <div className="grid min-w-0 gap-3 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
-        <div className="hidden rounded-lg border p-3 md:block">
-          <Skeleton className="h-4 w-20" />
-          <div className="mt-4 space-y-2">
-            {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-14 w-full" />)}
-          </div>
-        </div>
-        <AttendanceSheetSkeleton />
-      </div>
+      <AttendanceSheetSkeleton />
       <span className="sr-only">Loading attendance sessions</span>
     </div>
   )
@@ -452,7 +418,7 @@ function AttendanceSheetSkeleton() {
         <Skeleton className="h-10 flex-1" />
         <Skeleton className="h-10 w-28" />
       </div>
-      <div className="overflow-hidden rounded-md border">
+      <div className="overflow-hidden border">
         {Array.from({ length: 7 }, (_, index) => (
           <div key={index} className="flex min-h-14 items-center gap-3 border-b px-3 last:border-b-0">
             <Skeleton className="h-4 w-4" />
@@ -559,26 +525,41 @@ function DailyAttendanceSheet({
 
   return (
     <>
-    <Card className="min-w-0 gap-0 overflow-hidden py-0">
-      <CardHeader className=" ">
+    <section className="min-w-0 space-y-1.5 sm:space-y-4">
+      <header>
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <CardTitle className="text-base sm:text-lg pt-4">{session.classes.name} <br/><span className="text-xs sm:text-sm">Date: {databaseDate(session.date)}</span> </CardTitle>
+          <h2 className="text-base font-semibold sm:text-lg">{session.classes.name} <span className="text-xs sm:text-sm">(Date: {databaseDate(session.date)})</span> </h2>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-2 p-2 sm:p-3">
-        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-4 sm:gap-2 py-2 md:py-0 md:pb-2">
+      </header>
+      <div className="space-y-2">
+        <div className="grid grid-cols-4 gap-1.5 py-1 sm:grid-cols-4 sm:gap-2 sm:py-2 md:py-0 md:pb-2">
           <Summary icon={Users} label="Students" value={students.length} />
           <Summary icon={CheckCircle} label="Present" value={presentCount} tone="present" />
           <Summary icon={UserX} label="Absent" value={absentCount} tone="absent" />
           <Summary icon={CalendarDays} label="Approved leave" value={approvedLeaveCount} />
         </div>
 
-        <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+        <div className="flex items-center gap-2 sm:flex-col sm:items-stretch xl:flex-row xl:items-center">
         <StudentSearchInput value={studentSearch} onChange={setStudentSearch}
           placeholder="Search by student ID, roll number, or name" className="flex-1" />
 
         {isAdmin && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" className="shrink-0 sm:hidden" aria-label="Attendance actions"><MoreVertical /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="sm:hidden">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">{selectedStudentIds.size ? `${selectedStudentIds.size} selected` : 'Select students first'}</DropdownMenuLabel>
+              <DropdownMenuItem disabled={selectedStudentIds.size === 0} onSelect={() => openCorrection(
+                filteredStudents.filter(student => selectedStudentIds.has(student.id)).map(targetForStudent), 'excused',
+              )}><CalendarCheck />Approve leave</DropdownMenuItem>
+              <DropdownMenuItem disabled={selectedStudentIds.size === 0} onSelect={() => openCorrection(
+                filteredStudents.filter(student => selectedStudentIds.has(student.id)).map(targetForStudent),
+              )}><Pencil />Correct selected</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="hidden shrink-0 flex-wrap items-center gap-2 sm:flex">
             
             <div className="flex flex-wrap gap-2">
               <Button
@@ -606,6 +587,7 @@ function DailyAttendanceSheet({
               </Button>
             </div>
           </div>
+          </>
         )}
         </div>
 
@@ -617,7 +599,7 @@ function DailyAttendanceSheet({
           </div>
         )}
 
-<div className="overflow-x-auto rounded-md border">
+<div className="overflow-x-auto border">
   <Table>
     <TableHeader>
       <TableRow>
@@ -735,8 +717,8 @@ function DailyAttendanceSheet({
     </TableBody>
   </Table>
 </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
     <Dialog open={correctionDialogOpen} onOpenChange={setCorrectionDialogOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -991,7 +973,7 @@ function StudentDailyAttendance() {
         </Card>
       </div>
 
-      <Card className="overflow-x-auto">
+      <Card className="overflow-x-auto rounded-none">
         <CardHeader>
           <CardTitle className="text-base">Daily Attendance History</CardTitle>
           <CardDescription>{sortedRecords.length} recorded day{sortedRecords.length === 1 ? '' : 's'} this month</CardDescription>

@@ -132,7 +132,7 @@ export function PunchHistoryCard({
           </div>
         </section>
       )}
-      <Card className={isTable ? 'gap-0 overflow-hidden py-0' : undefined}>
+      <Card className={isTable ? 'gap-0 overflow-hidden rounded-none py-0' : undefined}>
         {!isTable && (
           <CardHeader className="border-b">
             <div className="flex items-start justify-between gap-4">

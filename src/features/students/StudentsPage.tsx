@@ -707,7 +707,7 @@ export function StudentsPage() {
           </div>
       </section>
 
-      <Card className="gap-0 overflow-hidden py-0">
+      <Card className="gap-0 overflow-hidden rounded-none py-0">
         {filtered.length === 0 ? (
           <EmptyState
             title="No students found"
@@ -1430,7 +1430,7 @@ function StudentsPageSkeleton() {
         <Skeleton className="h-10 w-full sm:w-52" />
       </div>
 
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden border">
         <div className="grid grid-cols-[2rem_minmax(10rem,1.5fr)_minmax(7rem,.7fr)_minmax(8rem,.8fr)] items-center gap-3 border-b bg-muted/30 px-3 py-3">
           <Skeleton className="h-4 w-4" />
           <Skeleton className="h-3 w-24" />

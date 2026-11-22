@@ -84,6 +84,9 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
+  --table-row-stripe: oklch(0.97 0 0);
+  --table-header-background: #e6f4f1;
+  --table-header-foreground: #14594f;
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
@@ -119,6 +122,9 @@
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
+  --table-row-stripe: oklch(0.28 0 0);
+  --table-header-background: #183b37;
+  --table-header-foreground: #d2f4eb;
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.371 0 0);
   --accent-foreground: oklch(0.985 0 0);
@@ -150,6 +156,13 @@
     @apply bg-background text-foreground;
   }
 
+  @media screen {
+    /* Stripe data rows across all tables; state and status utilities take priority. */
+    tbody > tr:nth-child(even) {
+      background-color: var(--table-row-stripe);
+    }
+  }
+
   /* Keep native date-picker indicators legible against each theme. */
   input:is([type="date"], [type="month"], [type="datetime-local"], [type="time"]) {
     color-scheme: light;
@@ -159,6 +172,14 @@
     color-scheme: dark;
   }
 }
+/* Give every header cell an opaque tint, including horizontally sticky columns. */
+@media screen {
+  thead > tr > th {
+    background-color: var(--table-header-background);
+    color: var(--table-header-foreground);
+  }
+}
+
 @media print {
   body { background: white !important; }
   .result-sheet { max-width: none !important; }

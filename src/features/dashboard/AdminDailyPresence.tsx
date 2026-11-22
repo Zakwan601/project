@@ -10,18 +10,18 @@ export function AdminDailyPresence() {
   const date = splitBangladeshDateTime(new Date()).date
   const { data, isLoading, error, refetch, isFetching } = useAdminDailyPresence(date)
   const classes = data?.classes.filter(row => row.class_id !== null) ?? []
-  return <section className="min-w-0 space-y-5 " aria-labelledby="daily-presence-title">
+  return <section className="min-w-0 space-y-2 sm:space-y-5" aria-labelledby="daily-presence-title">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h2 id="daily-presence-title" className="text-base font-semibold">Today's presence report</h2></div>
+      <div><h2 id="daily-presence-title" className="text-base font-semibold">Today's Presence Report</h2></div>
     </div>
     {isLoading ? <div className="space-y-3" role="status" aria-label="Loading daily presence report">{[0, 1, 2].map(row => <Skeleton key={row} className="h-8 w-full" />)}</div>
       : error ? <div className="flex flex-wrap items-center gap-3"><p className="text-sm text-destructive">Could not load the daily presence report.</p><Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</Button></div>
         : <>
           <section className="min-w-0" aria-labelledby="class-presence-title">
-            <Table className="min-w-[540px] text-xs sm:text-sm">
-              <TableHeader><TableRow><TableHead>Class</TableHead><CountHeadings /></TableRow></TableHeader>
+            <Table className="w-full table-fixed text-[10px] min-[380px]:text-[11px] sm:min-w-[540px] sm:table-auto sm:text-sm">
+              <TableHeader><TableRow><TableHead className="h-8 w-[40%] px-1 sm:h-10 sm:w-auto sm:px-2">Class</TableHead><CountHeadings /></TableRow></TableHeader>
               <TableBody>{classes.map(row => <TableRow key={row.class_id}>
-                <TableCell className="font-medium">{row.class_id ? <Link className="underline-offset-4 hover:underline" to={`/attendance?date=${date}&class_id=${row.class_id}`}>{row.class_name}</Link> : row.class_name}</TableCell>
+                <TableCell className="whitespace-normal px-1 py-1.5 font-medium leading-tight sm:whitespace-nowrap sm:p-2 sm:leading-normal">{row.class_id ? <Link className="underline-offset-4 hover:underline" to={`/attendance?date=${date}&class_id=${row.class_id}`}>{row.class_name}</Link> : row.class_name}</TableCell>
                 <CountCells row={row} />
               </TableRow>)}{!classes.length && <TableRow><TableCell colSpan={7} className="py-5 text-center text-muted-foreground">No classes to report.</TableCell></TableRow>}</TableBody>
             </Table>
@@ -32,11 +32,11 @@ export function AdminDailyPresence() {
 }
 
 function CountHeadings() {
-  return <>{['Students', 'Present', 'Late', 'Absent', 'Leave', 'Rate'].map(label => <TableHead key={label} className="text-right">{label}</TableHead>)}</>
+  return <>{[['Students', 'Std.'], ['Present', 'Pres.'], ['Late', 'Late'], ['Absent', 'Abs.'], ['Leave', 'Leave'], ['Rate', 'Rate']].map(([label, short]) => <TableHead key={label} aria-label={label} title={label} className="h-8 px-0.5 text-right sm:h-10 sm:px-2"><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span></TableHead>)}</>
 }
 function CountCells({ row }: { row: DailyPresenceCounts }) {
   return <>
-    {[row.students, row.present, row.late, row.absent, row.excused].map((value, index) => <TableCell key={index} className="text-right tabular-nums">{value}</TableCell>)}
-    <TableCell className="text-right font-medium tabular-nums">{row.rate === null ? '-' : `${row.rate}%`}</TableCell>
+    {[row.students, row.present, row.late, row.absent, row.excused].map((value, index) => <TableCell key={index} className="px-0.5 py-1.5 text-right tabular-nums sm:p-2">{value}</TableCell>)}
+    <TableCell className="px-0.5 py-1.5 text-right font-medium tabular-nums sm:p-2">{row.rate === null ? '-' : `${row.rate}%`}</TableCell>
   </>
 }
