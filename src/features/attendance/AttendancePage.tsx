@@ -14,8 +14,8 @@ import {
 import { useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAbsenceNotificationStatus, useSendAbsenceNotifications } from '@/hooks/useAbsenceNotifications'
 import { useClasses } from '@/hooks/useClasses'
+import { useStudentsForPeriod } from '@/hooks/useStudents'
 import { useAuth } from '@/contexts/AuthContext'
-import { studentsService } from '@/services/students'
 import { supabase } from '@/lib/supabase'
 import { formatBangladeshDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { PageHeader, ErrorState, EmptyState } from '@/components/shared/PageHeader'
@@ -445,14 +445,9 @@ function DailyAttendanceSheet({
   statusFilter: AttendanceStatus | 'all'
 }) {
   const { data: records = [], isLoading, error } = useAttendanceRecords(session.id)
-  const { data: students = [], isLoading: studentsLoading } = useQuery({
-    queryKey: ['students_by_class', session.class_id, session.date],
-    queryFn: async () => {
-      const students = await studentsService.getByClassForPeriod(session.class_id, session.date)
-      const today = format(new Date(), 'yyyy-MM-dd')
-      return session.date >= today ? students.filter(student => student.is_active) : students
-    },
-  })
+  const { data: students = [], isLoading: studentsLoading } = useStudentsForPeriod(
+    session.class_id, session.date, session.date, session.date >= format(new Date(), 'yyyy-MM-dd'),
+  )
   const correctAttendance = useCorrectAttendance()
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set())
   const [correctionTargets, setCorrectionTargets] = useState<CorrectionTarget[]>([])

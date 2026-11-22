@@ -1,26 +1,53 @@
+import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/contexts/AuthContext'
 import { studentsService } from '@/services/students'
-import type { Student } from '@/types/database'
+import type { Student, StudentWithClass } from '@/types/database'
 import { toast } from 'sonner'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
 
-export const STUDENTS_KEY = 'students'
-const STUDENTS_STALE_TIME = 10 * 60 * 1000
+import { STUDENTS_KEY, studentListKey, studentDetailKey, studentPeriodKey, studentCacheOptions } from '@/lib/studentQueryCache'
+export { STUDENTS_KEY } from '@/lib/studentQueryCache'
 
 export function useStudents(classId?: string) {
+  const { user, accessScope, loading } = useAuth()
+  const select = useCallback((students: StudentWithClass[]) => classId ? students.filter(student => student.class_id === classId) : students, [classId])
   return useQuery({
-    queryKey: [STUDENTS_KEY, { classId }],
-    queryFn: () => studentsService.getAll(classId),
-    staleTime: STUDENTS_STALE_TIME,
+    ...studentCacheOptions,
+    queryKey: studentListKey(user?.id ?? '', accessScope ?? ''),
+    queryFn: ({ signal }) => studentsService.getAll(undefined, signal),
+    enabled: Boolean(user && accessScope && !loading),
+    select,
   })
 }
 
 export function useStudent(id: string) {
+  const { user, accessScope, loading } = useAuth()
+  const qc = useQueryClient()
+  const listKey = studentListKey(user?.id ?? '', accessScope ?? '')
   return useQuery({
-    queryKey: [STUDENTS_KEY, id],
-    queryFn: () => studentsService.getById(id),
-    enabled: !!id,
-    staleTime: STUDENTS_STALE_TIME,
+    ...studentCacheOptions,
+    queryKey: studentDetailKey(user?.id ?? '', accessScope ?? '', id),
+    queryFn: ({ signal }) => studentsService.getById(id, signal),
+    enabled: Boolean(id && user && accessScope && !loading),
+    initialData: () => {
+      const list = qc.getQueryState<StudentWithClass[]>(listKey)
+      return list?.isInvalidated ? undefined : list?.data?.find(student => student.id === id)
+    },
+    initialDataUpdatedAt: () => qc.getQueryState(listKey)?.dataUpdatedAt,
+  })
+}
+
+// Historical enrollment is separate from today's list, but shares invalidation.
+export function useStudentsForPeriod(classId: string, startDate: string, endDate = startDate, activeOnly = false) {
+  const { user, accessScope, loading } = useAuth()
+  const select = useCallback((students: Student[]) => activeOnly ? students.filter(student => student.is_active) : students, [activeOnly])
+  return useQuery({
+    ...studentCacheOptions,
+    queryKey: studentPeriodKey(user?.id ?? '', accessScope ?? '', classId, startDate, endDate),
+    queryFn: ({ signal }) => studentsService.getByClassForPeriod(classId, startDate, endDate, signal),
+    enabled: Boolean(classId && startDate && user && accessScope && !loading),
+    select,
   })
 }
 
@@ -77,6 +104,7 @@ export function usePromoteStudents() {
       qc.invalidateQueries({ queryKey: ['classes'] })
       qc.invalidateQueries({ queryKey: ['student-enrollment-history'] })
       toast.success(`${count} student${count === 1 ? '' : 's'} promoted`)
+      void qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

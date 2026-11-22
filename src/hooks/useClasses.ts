@@ -3,6 +3,7 @@ import { classesService } from '@/services/classes'
 import type { Class } from '@/types/database'
 import { toast } from 'sonner'
 import { ADMIN_DASHBOARD_KEY } from '@/hooks/useDashboard'
+import { STUDENTS_KEY } from '@/lib/studentQueryCache'
 
 export const CLASSES_KEY = 'classes'
 
@@ -43,6 +44,7 @@ export function useUpdateClass() {
       qc.invalidateQueries({ queryKey: [CLASSES_KEY] })
       qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Class updated successfully')
+      void qc.invalidateQueries({ queryKey: [STUDENTS_KEY] })
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -56,6 +58,7 @@ export function useDeleteClass() {
       qc.invalidateQueries({ queryKey: [CLASSES_KEY] })
       qc.invalidateQueries({ queryKey: [ADMIN_DASHBOARD_KEY] })
       toast.success('Class deleted')
+      void qc.invalidateQueries({ queryKey: [STUDENTS_KEY] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

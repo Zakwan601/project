@@ -5,27 +5,35 @@ import type { Student, StudentEnrollmentWithDetails, StudentWithClass } from '@/
 const db = supabase as any
 
 export const studentsService = {
-  async getAll(classId?: string) {
-    let query = db
-      .from('students')
-      .select('*, classes(id, name, grade, section)')
-      .order('roll_number', { ascending: true, nullsFirst: false })
-      .order('first_name', { ascending: true })
-      .order('last_name', { ascending: true })
+  async getAll(classId?: string, signal?: AbortSignal) {
+    const students: StudentWithClass[] = []
+    const pageSize = 1000
+    for (let offset = 0; ; offset += pageSize) {
+      let query = db
+        .from('students')
+        .select('*, classes(id, name, grade, section)')
+        .order('roll_number', { ascending: true, nullsFirst: false })
+        .order('first_name', { ascending: true })
+        .order('last_name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + pageSize - 1)
 
-    if (classId) query = query.eq('class_id', classId)
+      if (classId) query = query.eq('class_id', classId)
 
-    const { data, error } = await query
-    if (error) throw error
-    return data as StudentWithClass[]
+      const { data, error } = await query.abortSignal(signal)
+      if (error) throw error
+      students.push(...data as StudentWithClass[])
+      if (data.length < pageSize) return students
+    }
   },
 
-  async getById(id: string) {
+  async getById(id: string, signal?: AbortSignal) {
     const { data, error } = await db
       .from('students')
       .select('*, classes(id, name, grade, section)')
       .eq('id', id)
       .maybeSingle()
+      .abortSignal(signal)
     if (error) throw error
     return data as StudentWithClass | null
   },
@@ -87,12 +95,12 @@ export const studentsService = {
     return data as Student[]
   },
 
-  async getByClassForPeriod(classId: string, startDate: string, endDate = startDate) {
+  async getByClassForPeriod(classId: string, startDate: string, endDate = startDate, signal?: AbortSignal) {
     const { data, error } = await db.rpc('get_class_students_for_period', {
       p_class_id: classId,
       p_start_date: startDate,
       p_end_date: endDate,
-    })
+    }).abortSignal(signal)
     if (error) throw error
     return data as Student[]
   },

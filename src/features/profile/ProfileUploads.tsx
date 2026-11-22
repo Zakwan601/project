@@ -1,5 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { STUDENTS_KEY } from '@/lib/studentQueryCache'
 import { ExternalLink, FileText, Loader2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -41,6 +43,7 @@ interface ProfileUploadsProps {
 }
 
 export function ProfileUploads({ profile, student, userId, refreshProfile, stacked = false, showPhotoPreview = false }: ProfileUploadsProps) {
+  const queryClient = useQueryClient()
   if (!profile && !student) throw new Error('A profile or student record is required')
 
   const avatarUrl = student?.photo_url ?? profile?.avatar_url ?? null
@@ -57,6 +60,7 @@ export function ProfileUploads({ profile, student, userId, refreshProfile, stack
       }
       const { error } = await db.from('students').update(studentUpdates).eq('id', recordId)
       if (error) throw error
+      void queryClient.invalidateQueries({ queryKey: [STUDENTS_KEY] })
 
       if (student.profile_id) {
         const { error: profileError } = await db.from('profiles').update(updates).eq('id', student.profile_id)

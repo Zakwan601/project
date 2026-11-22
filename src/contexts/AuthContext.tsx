@@ -12,6 +12,7 @@ interface AuthContextValue {
   student: Student | null
   role: UserRole | null
   permissions: SubAdminPermission[]
+  accessScope: string | null
   can: (permission: PermissionKey, access?: 'read' | 'write') => boolean
   loading: boolean
   profileError: string | null
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [student, setStudent] = useState<Student | null>(null)
   const [permissions, setPermissions] = useState<SubAdminPermission[]>([])
+  const [accessScope, setAccessScope] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileError, setProfileError] = useState<string | null>(null)
   const profileLoadRef = useRef<ProfileLoad | null>(null)
@@ -86,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               void queryClient.resetQueries().catch(() => undefined)
             }
             accessScopeRef.current = fingerprint
+            setAccessScope(fingerprint)
 
             setProfile(loadedProfile)
             setStudent(linkedStudent)
@@ -120,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null)
         setStudent(null)
         setPermissions([])
+        setAccessScope(null)
         setProfileError(error instanceof Error ? error.message : 'Profile loading failed')
       }
       throw error
@@ -146,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (activeUserIdRef.current !== nextUserId) {
         queryClient.clear()
         accessScopeRef.current = null
+        setAccessScope(null)
       }
       activeUserIdRef.current = nextUserId
       setSession(nextSession)
@@ -237,6 +242,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, student, role: profile?.role ?? null, permissions, can,
+      accessScope,
       loading, profileError, signIn, signUp, signOut, refreshProfile, applySavedProfileChanges,
     }}>
       {children}

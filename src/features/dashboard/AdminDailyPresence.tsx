@@ -18,8 +18,8 @@ export function AdminDailyPresence() {
       : error ? <div className="flex flex-wrap items-center gap-3"><p className="text-sm text-destructive">Could not load the daily presence report.</p><Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</Button></div>
         : <>
           <section className="min-w-0" aria-labelledby="class-presence-title">
-            <Table className="w-full table-fixed text-[10px] min-[380px]:text-[11px] sm:min-w-[540px] sm:table-auto sm:text-sm">
-              <TableHeader><TableRow><TableHead className="h-8 w-[40%] px-1 sm:h-10 sm:w-auto sm:px-2">Class</TableHead><CountHeadings /></TableRow></TableHeader>
+            <Table className="w-full table-auto text-[10px] min-[380px]:text-[11px] sm:min-w-[540px] sm:text-sm">
+              <TableHeader><TableRow><TableHead className="h-8 w-[28%] px-1 sm:h-10 sm:w-auto sm:px-2">Class</TableHead><CountHeadings /></TableRow></TableHeader>
               <TableBody>{classes.map(row => <TableRow key={row.class_id}>
                 <TableCell className="whitespace-normal px-1 py-1.5 font-medium leading-tight sm:whitespace-nowrap sm:p-2 sm:leading-normal">{row.class_id ? <Link className="underline-offset-4 hover:underline" to={`/attendance?date=${date}&class_id=${row.class_id}`}>{row.class_name}</Link> : row.class_name}</TableCell>
                 <CountCells row={row} />
@@ -32,7 +32,7 @@ export function AdminDailyPresence() {
 }
 
 function CountHeadings() {
-  return <>{[['Students', 'Std.'], ['Present', 'Pres.'], ['Late', 'Late'], ['Absent', 'Abs.'], ['Leave', 'Leave'], ['Rate', 'Rate']].map(([label, short]) => <TableHead key={label} aria-label={label} title={label} className="h-8 px-0.5 text-right sm:h-10 sm:px-2"><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span></TableHead>)}</>
+  return <>{['Students', 'Present', 'Late', 'Absent', 'Leave', 'Rate'].map(label => <TableHead key={label} className="h-8 px-0.5 text-right sm:h-10 sm:px-2">{label}</TableHead>)}</>
 }
 function CountCells({ row }: { row: DailyPresenceCounts }) {
   return <>
