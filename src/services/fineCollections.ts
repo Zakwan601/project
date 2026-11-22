@@ -24,6 +24,11 @@ export interface FineMonthDetails {
   missed_exams: { id: string; date: string; exam: string; subject: string }[]
 }
 export const fineCollectionsService = {
+  async totals(from: string, to: string, signal?: AbortSignal): Promise<{ received: number; waived: number; assessed: number; receipts: number }> {
+    const { data, error } = await db.rpc('get_fine_collection_totals', { p_from: from || null, p_to: to || null }).abortSignal(signal)
+    if (error) throw error
+    return data
+  },
   async account(studentId: string, until: string, signal?: AbortSignal): Promise<FineAccount> {
     const { data, error } = await db.rpc('get_student_fine_account', { p_student_id: studentId, p_until: until }).abortSignal(signal)
     if (error) throw error

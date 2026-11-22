@@ -42,6 +42,7 @@ function FineCollectionWorkspace() {
     {student ? <><Button variant="ghost" className="px-0" onClick={() => setStudentId(null)}><ArrowLeft className="mr-2 h-4 w-4" />All students</Button>
       <StudentFineCollection key={student.id} student={student} /></>
       : <>
+        <CollectionTotals />
         <div className="flex flex-col gap-3 sm:flex-row"><div className="w-full space-y-1.5 sm:w-72"><Label htmlFor="collection-class">Class</Label>
           <Select value={classId} onValueChange={value => { setClassId(value); setPage(1) }}><SelectTrigger id="collection-class" className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="all">All classes</SelectItem>{classes.data?.map(row => <SelectItem key={row.id} value={row.id}>{row.name} · {row.academic_years?.name}</SelectItem>)}</SelectContent></Select></div>
@@ -57,6 +58,30 @@ function FineCollectionWorkspace() {
           </>}
       </>}
   </div>
+}
+
+function CollectionTotals() {
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const invalid = Boolean(from && to && from > to)
+  const totals = useQuery({ queryKey: ['fine-collection-totals', from, to], enabled: !invalid,
+    queryFn: ({ signal }) => fineCollectionsService.totals(from, to, signal) })
+  return <section aria-label="Collection totals" className=" py-4">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div><p className="text-xs text-muted-foreground">{from || to ? 'Collected in selected dates' : 'All-time collection'}</p>
+        <p className="mt-1 text-2xl font-semibold tabular-nums">{invalid || totals.isPending || totals.isError ? '—' : formatFine(Number(totals.data?.received ?? 0))}</p>
+        {!invalid && totals.data && <p className="mt-1 text-xs text-muted-foreground">{totals.data.receipts} receipts · Waived {formatFine(Number(totals.data.waived))}</p>}
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1"><Label htmlFor="collection-from">From</Label><Input id="collection-from" type="date" value={from} max={to || undefined} onChange={event => setFrom(event.target.value)} /></div>
+        <div className="space-y-1"><Label htmlFor="collection-to">To</Label><Input id="collection-to" type="date" value={to} min={from || undefined} onChange={event => setTo(event.target.value)} /></div>
+        {(from || to) && <Button variant="ghost" size="sm" onClick={() => { setFrom(''); setTo('') }}>All time</Button>}
+      </div>
+    </div>
+    <p className="mt-2 text-xs text-muted-foreground">Net money received, after waivers.</p>
+    {invalid && <p role="alert" className="mt-2 text-xs text-destructive">From date must be on or before To date.</p>}
+    {totals.isError && <p role="alert" className="mt-2 text-xs text-destructive">Could not load totals. <button className="underline" onClick={() => void totals.refetch()}>Retry</button></p>}
+  </section>
 }
 
 function StudentFineCollection({ student }: { student: StudentWithClass }) {
@@ -80,6 +105,7 @@ function StudentFineCollection({ student }: { student: StudentWithClass }) {
     onSuccess: receipt => {
       setReceipt(receipt); setWaiverInput('0')
       void qc.invalidateQueries({ queryKey: [FINE_ACCOUNTS_KEY, student.id] })
+      void qc.invalidateQueries({ queryKey: ['fine-collection-totals'] })
       toast.success('Payment recorded. Receipt is ready to print.')
     },
     onError: (error: Error) => { toast.error(error.message); if (/changed|Refresh/.test(error.message)) void account.refetch() },

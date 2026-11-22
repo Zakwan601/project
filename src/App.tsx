@@ -1,5 +1,6 @@
 import { StudentFineDetailsPage } from '@/features/fines/StudentFineDetailsPage'
 import { FineCollectionPage } from '@/features/fines/FineCollectionPage'
+import { ClassRoutinePage } from '@/features/routines/ClassRoutinePage'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
@@ -47,6 +48,7 @@ function App() {
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/class-routine" element={<ClassRoutinePage publicView />} />
               <Route path="/shared-result/:token" element={<SharedResultPage />} />
 
               {/* Protected app routes */}
@@ -54,6 +56,7 @@ function App() {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/students" element={<StudentsPage />} />
                 <Route path="/classes" element={<ClassesPage />} />
+                <Route path="/routine" element={<ClassRoutinePage />} />
                 <Route path="/attendance" element={<AttendancePage />} />
                 <Route path="/fine-collection" element={<FineCollectionPage />} />
                 <Route path="/fine-details" element={(

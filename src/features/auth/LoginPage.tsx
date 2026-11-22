@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { ArrowRight, CalendarDays, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { AUTH_CAPTCHA_ENABLED } from '@/lib/authCaptcha'
 import { Button } from '@/components/ui/button'
@@ -430,6 +430,15 @@ export function LoginPage() {
             </CardFooter>
           </form>
         </Card>
+        <div className="mt-5">
+          <Button asChild className="h-12 w-full justify-between bg-teal-700 px-4 text-base text-white hover:bg-teal-800 dark:bg-teal-400 dark:text-teal-950 dark:hover:bg-teal-300">
+            <Link to="/class-routine">
+              <span className="flex items-center gap-3"><CalendarDays className="size-5" />View class routine</span>
+              <ArrowRight className="size-5" />
+            </Link>
+          </Button>
+          <p className="mt-2 text-center text-xs text-muted-foreground">Check your weekly timetable. No sign-in needed.</p>
+        </div>
       </div>
     </div>
   )

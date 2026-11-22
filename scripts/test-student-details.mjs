@@ -50,7 +50,7 @@ function load(path) {
     if (name === '@tanstack/react-query') return detailQueries
     if (name === 'framer-motion') return { motion: new Proxy({}, { get: () => element }) }
     if (name === './StudentDetails') return details
-    if (name === 'react-router-dom') return { Navigate: props => element({ ...props, 'data-navigation': true }) }
+    if (name === 'react-router-dom') return { Link: element, Navigate: props => element({ ...props, 'data-navigation': true }) }
     if (name === './FinePaymentHistory') return { FINE_ACCOUNTS_KEY: 'fine-account', FineStatus: element, PaymentReceipts: element,
       useFineAccount: (id, until) => detailQueries.useQuery({ queryKey: ['fine-account', id, until] }) }
     if (name === './FineReceipts') return load('../src/features/fines/FineReceipts.tsx')
@@ -181,6 +181,18 @@ assert.ok(nodes.some(node => node.props['data-navigation']), 'Sub-admins must be
 assert.ok(!queries.some(query => query.queryKey[0] === 'fine-account'))
 role = 'admin'; render()
 assert.ok(!queries.some(query => query.queryKey[0] === 'fine-account'), 'Fine collection list must not load per-student financial details')
+queryData.set('fine-collection-totals', { received: 1234, waived: 100, assessed: 1334, receipts: 3 })
+render()
+assert.ok(nodes.some(node => node.props.children === '\u09f31,234.00'), 'Collection header shows net receipts, not assessed fines')
+nodes.find(node => node.props.id === 'collection-from').props.onChange({ target: { value: '2026-11-01' } })
+nodes.find(node => node.props.id === 'collection-to').props.onChange({ target: { value: '2026-11-22' } })
+render()
+assert.deepEqual(Array.from(queries.find(query => query.queryKey[0] === 'fine-collection-totals').queryKey), ['fine-collection-totals', '2026-11-01', '2026-11-22'])
+nodes.find(node => node.props.id === 'collection-from').props.onChange({ target: { value: '2026-11-23' } })
+render()
+assert.equal(queries.find(query => query.queryKey[0] === 'fine-collection-totals').enabled, false, 'Invalid date ranges must not query totals')
+click('All time'); render()
+assert.deepEqual(Array.from(queries.find(query => query.queryKey[0] === 'fine-collection-totals').queryKey), ['fine-collection-totals', '', ''])
 nodes.find(node => node.props['aria-label'] === 'Collect fine for Example Student').props.onClick({ stopPropagation() {} })
 render()
 assert.ok(queries.some(query => query.queryKey[0] === 'fine-account' && query.queryKey[1] === 'student-a'))
@@ -206,8 +218,31 @@ const receipt = { id: 'paid-1', receipt_number: 7, gross_amount: 100, waiver_amo
   student_snapshot: { name: 'Example Student', student_id: '28001', class_name: 'Science', student_phone: '01712345678' } }
 nodes = []; visit(React.createElement(FineReceiptButton, { payment: receipt }))
 assert.equal(nodes.filter(node => node.props.className === 'fine-receipt-copy').length, 2)
+assert.equal(nodes.filter(node => node.props.children === 'Internal Money Receipt').length, 2, 'Both receipt copies include the small internal receipt heading')
 for (const text of ['Student copy', 'Office copy', 'Collector Example', '28001', '01712345678'])
   assert.ok(nodes.some(node => node.props.children === text), `Receipt missing ${text}`)
 nodes.find(node => node.props['aria-label'] === 'Print receipt FC-000007').props.onClick()
 assert.equal(printedSources[0].props.className, 'fine-receipt-page')
 console.log('Passed admin-only collection, lazy financial loading, net/waiver controls, paid-date gating and printable two-copy receipt details.')
+
+const { ClassRoutinePage } = load('../src/features/routines/ClassRoutinePage.tsx')
+rootComponent = () => React.createElement(ClassRoutinePage, { publicView: true })
+queryData.set('class-routines', { classes: [{ id: 'science', name: 'Science', session: '2026–2027' }], entries: [
+  { id: 'period-1', class_id: 'science', day_of_week: 0, start_time: '08:30:00', end_time: '09:15:00', subject_name: 'Bangla / English', teacher_name: 'Example teacher', room: '1' },
+] })
+role = null; render()
+assert.ok(nodes.some(node => node.props.children === 'Bangla / English'), 'Routine is readable before login')
+assert.ok(nodes.some(node => node.props.children === 'Sign in'))
+assert.ok(!nodes.some(node => node.props['aria-label']?.startsWith('Edit ')), 'Visitors cannot edit routines')
+role = 'sub_admin'; render()
+assert.ok(!nodes.some(node => node.props['aria-label']?.startsWith('Delete ')), 'Sub-admins cannot remove routines')
+role = 'admin'; render()
+click('Edit Bangla / English on Sunday'); render()
+assert.ok(nodes.some(node => node.props.children === 'Edit period'))
+nodes.find(node => node.props.id === 'routine-end').props.onChange({ target: { value: '08:00' } })
+render()
+assert.ok(nodes.some(node => node.props.children === 'Save period' && node.props.disabled), 'Invalid period times cannot be saved')
+nodes.find(node => node.props.id === 'routine-end').props.onChange({ target: { value: '09:15' } })
+render()
+assert.ok(nodes.some(node => node.props.children === 'Save period' && !node.props.disabled))
+console.log('Passed collection total filters, internal receipt labels, public class routine visibility and admin-only routine controls.')

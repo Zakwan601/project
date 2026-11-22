@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
   { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'student'] },
   { title: 'Students', href: '/students', icon: Users, roles: ['admin'] },
   { title: 'Classes', href: '/classes', icon: BookOpen, roles: ['admin'] },
+  { title: 'Class Routine', href: '/routine', icon: BookOpen, roles: ['admin', 'student', 'sub_admin'] },
   { title: 'Attendance', href: '/attendance', icon: ClipboardList, roles: ['admin', 'student'] },
   { title: 'Fine Details', href: '/fine-details', icon: Banknote, roles: ['student'] },
   { title: 'Fine Collection', href: '/fine-collection', icon: Banknote, roles: ['admin'] },
@@ -91,6 +92,7 @@ export function AppSidebar() {
   const canAccessNavItem = (item: NavItem) => {
     if (!role) return false
     if (role === 'sub_admin') {
+      if (item.href === '/routine') return true
       if (item.href === '/profile') return true
       const permission = permissionByHref[item.href]
       return Boolean(permission && can(permission))

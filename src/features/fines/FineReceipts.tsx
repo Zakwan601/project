@@ -18,6 +18,7 @@ export function FineReceiptButton({ payment }: { payment: FinePayment }) {
     }}><Printer className="mr-1.5 h-3.5 w-3.5" />Print receipt</Button>
     <div className="hidden"><div ref={receiptRef} className="fine-receipt-page">
       {['Student copy', 'Office copy'].map(copy => <section key={copy} className="fine-receipt-copy">
+        <p className="mb-1 text-center text-xs">Internal Money Receipt</p>
         <div className="flex items-start justify-between gap-4"><div>
           <img src="https://ik.imagekit.io/nmdc/nmdc_logo.jpg" alt="NMDC Logo" className="fine-receipt-logo mb-2 h-10 w-10 object-contain" />
           <p className="text-lg font-bold">New Model Degree College</p>
