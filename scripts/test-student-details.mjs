@@ -13,6 +13,7 @@ const student = { id: 'student-a', first_name: 'Example', last_name: 'Student', 
 const secondStudent = { ...student, id: 'student-b', first_name: 'Another', class_id: 'business' }
 let grants = new Set(['students:read', 'students:write', 'reports:read', 'results:read'])
 let role = 'sub_admin'
+let authStudent = null, authLoading = false
 let frames = new Map(), currentFrame, cursor, nodes, queries, tabContext
 let formValues = {}
 let printedSources = []
@@ -54,10 +55,12 @@ function load(path) {
     if (name === './FinePaymentHistory') return { FINE_ACCOUNTS_KEY: 'fine-account', FineStatus: element, PaymentReceipts: element,
       useFineAccount: (id, until) => detailQueries.useQuery({ queryKey: ['fine-account', id, until] }) }
     if (name === './FineReceipts') return load('../src/features/fines/FineReceipts.tsx')
+    if (name === './RoutineTimetable') return load('../src/features/routines/RoutineTimetable.tsx')
+    if (name === '@/services/classRoutines') return { classRoutinesService: { downloadUrl: path => `https://example.test/storage/v1/object/public/class-routines/${path}?download=` } }
     if (name === '@/lib/dateTime') return load('../src/lib/dateTime.ts')
     if (name === '@/lib/attendanceFine') return load('../src/lib/attendanceFine.ts')
     if (name === '@/lib/printReportCard') return { printReportCards: sources => { printedSources = sources } }
-    if (name === '@/contexts/AuthContext') return { useAuth: () => ({ role, can: (key, access = 'read') => role === 'admin' || grants.has(`${key}:${access}`) }) }
+    if (name === '@/contexts/AuthContext') return { useAuth: () => ({ role, student: authStudent, loading: authLoading, can: (key, access = 'read') => role === 'admin' || grants.has(`${key}:${access}`) }) }
     if (name === '@/hooks/useStudents') return new Proxy({ STUDENTS_KEY: 'students', useStudents: () => ({ data: [student, secondStudent] }) },
       { get: (target, key) => target[key] ?? (() => ({})) })
     if (name === '@/hooks/useClasses') return { useClasses: () => ({ data: [] }) }
@@ -227,15 +230,51 @@ console.log('Passed admin-only collection, lazy financial loading, net/waiver co
 
 const { ClassRoutinePage } = load('../src/features/routines/ClassRoutinePage.tsx')
 rootComponent = () => React.createElement(ClassRoutinePage, { publicView: true })
-queryData.set('class-routines', { classes: [{ id: 'science', name: 'Science', session: '2026–2027' }], entries: [
+queryData.set('class-routines', { classes: [
+  { id: 'science', name: 'Class 12 - Science', grade: '12', class_group: 'science', session: '2025-2026' },
+  { id: 'humanities', name: 'Class 12 - Humanities', grade: '12', class_group: 'humanities', session: '2025-2026' },
+], entries: [
   { id: 'period-1', class_id: 'science', day_of_week: 0, start_time: '08:30:00', end_time: '09:15:00', subject_name: 'Bangla / English', teacher_name: 'Example teacher', room: '1' },
+  { id: 'period-2', class_id: 'humanities', day_of_week: 0, start_time: '08:30:00', end_time: '09:15:00', subject_name: 'Logic only for Humanities', teacher_name: '', room: '' },
+], settings: [
+  { class_id: 'science', periods: [], download_path: 'grade-12/2025-2026/science.jpg' },
+  { class_id: 'humanities', periods: [], download_path: 'grade-12/2025-2026/humanities.jpg' },
 ] })
 role = null; render()
+nodes.find(node => node.props.value === '' && node.props.onValueChange).props.onValueChange('science')
+render()
 assert.ok(nodes.some(node => node.props.children === 'Bangla / English'), 'Routine is readable before login')
+assert.ok(nodes.some(node => node.type === 'a' && node.props.download === true && node.props.href.endsWith('/science.jpg?download=')), 'Selected routine offers the original Supabase image as a download')
+assert.ok(!nodes.some(node => node.props.children === 'Logic only for Humanities'), 'Science routine excludes other groups even with a previously cached combined response')
+assert.ok(!nodes.some(node => node.props.children === 'All groups'), 'Combined group view is removed')
+nodes.find(node => node.props.value === 'science' && node.props.onValueChange).props.onValueChange('humanities')
+render()
+assert.ok(nodes.some(node => node.props.children === 'Logic only for Humanities'))
+assert.ok(nodes.some(node => node.type === 'a' && node.props.href.endsWith('/humanities.jpg?download=')), 'Download follows the selected group')
+assert.ok(!nodes.some(node => node.props.children === 'Bangla / English'), 'Switching groups removes the previous routine')
+nodes.find(node => node.props.value === 'humanities' && node.props.onValueChange).props.onValueChange('science')
+render()
 assert.ok(nodes.some(node => node.props.children === 'Sign in'))
 assert.ok(!nodes.some(node => node.props['aria-label']?.startsWith('Edit ')), 'Visitors cannot edit routines')
 role = 'sub_admin'; render()
 assert.ok(!nodes.some(node => node.props['aria-label']?.startsWith('Delete ')), 'Sub-admins cannot remove routines')
+role = 'student'; authStudent = { class_id: 'humanities' }; render()
+assert.ok(nodes.some(node => node.type === 'a' && node.props.href.endsWith('/humanities.jpg?download=')), 'Student download follows their assigned class')
+assert.ok(!nodes.some(node => node.props.id === 'routine-class'), 'Students have no class filter, including on the public routine route')
+assert.deepEqual(Array.from(queries.find(query => query.queryKey[0] === 'class-routines').queryKey), ['class-routines', 'humanities'])
+assert.ok(nodes.some(node => node.props.children === 'Logic only for Humanities'))
+assert.ok(!nodes.some(node => node.props.children === 'Bangla / English'), 'Student assignment overrides a previously selected class')
+authStudent = { class_id: 'science' }; render()
+assert.ok(nodes.some(node => node.props.children === 'Bangla / English'), 'Changing the assigned class immediately changes the displayed routine')
+assert.ok(!nodes.some(node => node.props.children === 'Logic only for Humanities'))
+authStudent = { class_id: null }; render()
+assert.ok(!nodes.some(node => node.type === 'a' && node.props.download), 'Unassigned students have no unrelated download')
+assert.equal(queries.find(query => query.queryKey[0] === 'class-routines').enabled, false)
+assert.ok(nodes.some(node => typeof node.props.children === 'string' && node.props.children.startsWith('No class is assigned')))
+assert.ok(!nodes.some(node => node.props.children === 'Bangla / English'), 'Unassigned students never fall back to another class')
+authLoading = true; render()
+assert.equal(queries.find(query => query.queryKey[0] === 'class-routines').enabled, false, 'Wait for authentication before fetching routines')
+authLoading = false; authStudent = null
 role = 'admin'; render()
 click('Edit Bangla / English on Sunday'); render()
 assert.ok(nodes.some(node => node.props.children === 'Edit period'))
@@ -246,3 +285,41 @@ nodes.find(node => node.props.id === 'routine-end').props.onChange({ target: { v
 render()
 assert.ok(nodes.some(node => node.props.children === 'Save period' && !node.props.disabled))
 console.log('Passed collection total filters, internal receipt labels, public class routine visibility and admin-only routine controls.')
+
+const { RoutineTimetable, routineCell } = load('../src/features/routines/RoutineTimetable.tsx')
+const periods = [
+  { number: 1, start_time: '08:30', end_time: '09:00', kind: 'lesson' },
+  { number: 2, start_time: '09:00', end_time: '09:45', kind: 'lesson' },
+  { number: 3, start_time: '09:45', end_time: '10:30', kind: 'lesson' },
+  { number: 0, start_time: '10:30', end_time: '10:45', kind: 'break' },
+  { number: 4, start_time: '10:45', end_time: '11:30', kind: 'lesson' },
+  { number: 5, start_time: '11:30', end_time: '12:15', kind: 'lesson' },
+  { number: 6, start_time: '12:15', end_time: '13:00', kind: 'lesson' },
+  { number: 7, start_time: '13:00', end_time: '13:45', kind: 'lesson' },
+]
+const routineClasses = ['business', 'science', 'humanities'].map(group => ({ id: group, name: group, class_group: group, grade: '12', session: '2025-2026' }))
+const routineSettings = routineClasses.map(row => ({ class_id: row.id, periods, room: '' }))
+const routineEntries = routineClasses.map(row => ({ id: `${row.id}-support`, class_id: row.id, day_of_week: 0, start_time: '11:30:00', end_time: '13:45:00', subject_name: 'Academic Support Program', subject_name_bn: 'একাডেমিক সাপোর্ট প্রোগ্রাম', entry_kind: 'support', teacher_name: '', room: '' }))
+routineEntries.push({ id: 'science-lab', class_id: 'science', day_of_week: 1, start_time: '12:15:00', end_time: '13:45:00', subject_name: 'Physics practical', subject_name_bn: 'পদার্থবিজ্ঞান ব্যবহারিক', entry_kind: 'lab', teacher_name: '', room: '' })
+rootComponent = () => React.createElement(RoutineTimetable, { classes: routineClasses, entries: routineEntries, settings: routineSettings, admin: false })
+render()
+assert.equal(nodes.filter(node => node.type === 'td' && node.props.rowSpan === 6).length, 1, 'One break column spans all group/day rows')
+assert.equal(nodes.filter(node => node.type === 'td' && node.props.colSpan === 3).length, 3, 'Support sessions span periods 5–7')
+assert.equal(nodes.filter(node => node.type === 'td' && node.props.colSpan === 2).length, 1, 'Lab blocks span their configured periods')
+assert.ok(nodes.some(node => node.props.children === 'Physics practical'))
+assert.ok(nodes.some(node => node.props.children === 'পদার্থবিজ্ঞান ব্যবহারিক'))
+assert.equal(routineCell({ start_time: '09:45', end_time: '11:30' }, periods), null, 'Break-crossing entries must not corrupt merged cells')
+console.log('Passed bilingual timetable grid, group/day rows, shared break column and merged lab/support periods.')
+
+const class11Periods = periods.filter(period => period.number !== 7).map(period => period.number === 3
+  ? { ...period, end_time: '10:25' } : period.kind === 'break' ? { ...period, start_time: '10:25' } : period)
+const class11Settings = routineClasses.map(row => ({ class_id: row.id, periods: class11Periods, room: '', assembly_time: '08:00:00', effective_from: '2026-09-27' }))
+const games = { id: 'indoor-games', class_id: 'business', day_of_week: 1, start_time: '11:30:00', end_time: '13:00:00', subject_name: 'Indoor Games', subject_name_bn: 'ইনডোর গেমস', entry_kind: 'activity', teacher_name: '', room: '' }
+rootComponent = () => React.createElement(RoutineTimetable, { classes: routineClasses.map(row => ({ ...row, grade: '11', session: '2026-2027' })), entries: [games], settings: class11Settings, admin: false })
+render()
+assert.equal(nodes.filter(node => node.type === 'td' && node.props.colSpan === 2).length, 1, 'Indoor games span the last two Class 11 periods')
+assert.ok(nodes.some(node => node.props.children === 'ইনডোর গেমস'))
+assert.ok(nodes.some(node => typeof node.props.children === 'string' && node.props.children.includes('Assembly 8:00 AM')))
+assert.ok(nodes.some(node => typeof node.props.children === 'string' && node.props.children.includes('27-09-2026')))
+assert.equal(routineCell({ start_time: '09:45', end_time: '10:25' }, class11Periods).span, 1)
+console.log('Passed Class 11 period boundaries, merged activities, assembly and effective date.')

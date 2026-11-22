@@ -49,7 +49,7 @@ BEGIN
  payload:=public.get_public_class_routines(class_id);
  IF NOT EXISTS(SELECT 1 FROM jsonb_array_elements(payload->'entries') r WHERE r->>'id'=routine_id::text AND r->>'room'='2') THEN
    RAISE EXCEPTION 'Visitor cannot view published routine'; END IF;
- IF EXISTS(SELECT 1 FROM jsonb_array_elements(payload->'classes') c WHERE c - ARRAY['id','name','session'] <> '{}'::jsonb) THEN
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(payload->'classes') c WHERE c - ARRAY['id','name','session','grade','class_group','has_routine'] <> '{}'::jsonb) THEN
    RAISE EXCEPTION 'Public class response contains unexpected fields'; END IF;
  BEGIN
    PERFORM public.get_fine_collection_totals();
