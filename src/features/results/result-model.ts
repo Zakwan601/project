@@ -1,7 +1,7 @@
 import type { ClassGroup, ResultExam, Student, SubjectCourseOption } from '@/types/database'
 
 export interface ExamWithDetails extends ResultExam {
-  result_exam_types: { name: string; marks_mode?: 'sectioned' | 'total_only' }
+  result_exam_types: { name: string; marks_mode?: 'sectioned' | 'total_only' | 'total_pass' }
   academic_years: { name: string; start_date?: string; end_date?: string }
   classes: { name: string; grade: string; section: string; class_group: ClassGroup }
 }
@@ -176,18 +176,24 @@ export function isTotalOnlyExam(exam: ExamWithDetails | undefined) {
   return exam?.result_exam_types.marks_mode === 'total_only'
 }
 
-export function examSubjectConfigValues(row: ExamSubjectConfigDraft, totalOnly: boolean) {
+export function isTotalPassExam(exam: ExamWithDetails | undefined) {
+  return exam?.result_exam_types.marks_mode === 'total_pass'
+}
+
+export function examSubjectConfigValues(row: ExamSubjectConfigDraft, totalOnly: boolean, totalPass = false) {
   return totalOnly ? [0, Number(row.total), 0, 0, Number(row.total), 0, 0, 0]
+    : totalPass ? [Number(row.creative), Number(row.written), 0, Number(row.pass), Number(row.total), 0, 0, 0]
     : [row.creative, row.written, row.practical, row.pass, row.total, row.creativePass, row.writtenPass, row.practicalPass].map(Number)
 }
 
-export function validExamSubjectConfig(values: number[], totalOnly: boolean) {
+export function validExamSubjectConfig(values: number[], totalOnly: boolean, totalPass = false) {
   return values.every(value => Number.isFinite(value) && value >= 0)
     && values[4] > 0 && Math.abs(values[0] + values[1] + values[2] - values[4]) <= 0.009
     && (totalOnly || (values[3] > 0 && values[3] <= values[4]
-      && [0, 1, 2].every(index => values[index] > 0
+      && (totalPass ? values[0] > 0 && values[1] > 0 && values[2] === 0 && values.slice(5).every(value => value === 0)
+        : [0, 1, 2].every(index => values[index] > 0
         ? values[index + 5] > 0 && values[index + 5] <= values[index]
-        : values[index + 5] === 0)))
+        : values[index + 5] === 0))))
 }
 
 export function examSubjectAppliesToStudent(

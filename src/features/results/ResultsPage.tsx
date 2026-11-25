@@ -37,6 +37,7 @@ import {
   examSubjectConfigValues,
   validExamSubjectConfig,
   isTotalOnlyExam,
+  isTotalPassExam,
   buildExamSubjectCatalogue,
   examSubjectAppliesToStudent,
   calculateOfficialGpa,
@@ -327,6 +328,7 @@ function StaffResults() {
 
   const selectedExam = routeExamQuery.data ?? examsQuery.data?.find(item => item.id === activeExamId)
   const totalOnly = isTotalOnlyExam(selectedExam)
+  const totalPass = isTotalPassExam(selectedExam)
   const examSubjectsQuery = useQuery<ExamSubject[]>({
     queryKey: ['result-exam-subjects', activeExamId], enabled: Boolean(activeExamId),
     queryFn: async () => {
@@ -644,14 +646,14 @@ function StaffResults() {
       const current = configured.get(subject.id)
       return [subject.id, {
         selected: Boolean(current),
-        creative: current ? String(current.creative_max) : '',
-        written: current ? String(current.written_max) : '',
+        creative: current ? String(current.creative_max) : totalPass ? '10' : '',
+        written: current ? String(current.written_max) : totalPass ? '10' : '',
         practical: current ? String(current.practical_max) : '',
-        pass: current ? String(current.pass_mark) : '',
+        pass: current ? String(current.pass_mark) : totalPass ? '6.6' : '',
         creativePass: current?.creative_pass_mark ? String(current.creative_pass_mark) : '',
         writtenPass: current?.written_pass_mark ? String(current.written_pass_mark) : '',
         practicalPass: current?.practical_pass_mark ? String(current.practical_pass_mark) : '',
-        total: current ? String(examSubjectTotal(current)) : '',
+        total: current ? String(examSubjectTotal(current)) : totalPass ? '20' : '',
       }]
     })))
     setConfigDialog(true)
@@ -669,10 +671,10 @@ function StaffResults() {
     if (!selected.length) return toast.error('Select at least one subject')
     const rows = selected.map((subject, index) => {
       const row = configRows[subject.id]
-      const values = examSubjectConfigValues(row, totalOnly)
+      const values = examSubjectConfigValues(row, totalOnly, totalPass)
       return { subject, row, values, index }
     })
-    const invalid = rows.find(({ values }) => !validExamSubjectConfig(values, totalOnly))
+    const invalid = rows.find(({ values }) => !validExamSubjectConfig(values, totalOnly, totalPass))
     if (invalid) return toast.error(`Check the marks configuration for ${invalid.subject.name}`)
     const { error } = await db.from('result_exam_subjects').upsert(rows.map(({ subject, values, index }) => ({
       exam_id: examId, subject_id: subject.id,
@@ -971,10 +973,10 @@ function StaffResults() {
       <SimpleDialog open={subjectDialog} onOpenChange={open => { setSubjectDialog(open); if (!open) { setEditingSubjectId(null); setSubjectForm({ name: '', code: '', isFourthSubject: false }) } }} title={editingSubjectId ? 'Edit group subject' : 'Add group subject'} description={`This subject belongs to the ${settingsGroup} group and will be available to all its exams.`} onSave={saveSubject} saveLabel={editingSubjectId ? 'Save changes' : 'Add subject'}><Label>Subject name</Label><Input value={subjectForm.name} onChange={event => setSubjectForm(current => ({ ...current, name: event.target.value }))} placeholder="Bangla" /><Label>Subject code</Label><Input value={subjectForm.code} onChange={event => setSubjectForm(current => ({ ...current, code: event.target.value }))} placeholder="BAN-101" /><label className="flex items-center gap-2 text-sm"><Checkbox checked={subjectForm.isFourthSubject} onCheckedChange={checked => setSubjectForm(current => ({ ...current, isFourthSubject: checked === true }))} /><span> Available as optional subject</span></label></SimpleDialog>
       <Dialog open={configDialog} onOpenChange={setConfigDialog}>
         <DialogContent className="flex h-[90dvh] max-h-[90dvh] flex-col overflow-hidden p-0 sm:h-auto sm:max-w-5xl">
-          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>{totalOnly ? "Select subjects and enter the total marks for each. Tutorial exams have no section distribution or pass marks." : <>{selectedExam?.combine_subject_papers ? 'Paired 1st and 2nd papers are combined into one subject. Define one marks configuration for each combined subject.' : 'Select subjects and define their creative, MCQ, practical, and pass marks.'} Each active section and the overall total must pass independently. Enter a pass mark for every active section.</>}</DialogDescription></DialogHeader>
+          <DialogHeader className="shrink-0 border-b bg-muted/30 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>Configure exam subjects</DialogTitle><DialogDescription>{totalOnly ? "Select subjects and enter the total marks for each." : totalPass ? "Tutorial exams have separate CQ and MCQ marks. Only the combined total has a pass mark; there are no separate CQ or MCQ pass marks." : <>{selectedExam?.combine_subject_papers ? 'Paired 1st and 2nd papers are combined into one subject. Define one marks configuration for each combined subject.' : 'Select subjects and define their creative, MCQ, practical, and pass marks.'} Each active section and the overall total must pass independently. Enter a pass mark for every active section.</>}</DialogDescription></DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto">
-            <Table className={totalOnly ? "min-w-[320px]" : "min-w-[1350px]"}>
-              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead>{!totalOnly && <><TableHead className="w-32">Creative max</TableHead><TableHead className="w-32">MCQ max</TableHead><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Creative pass</TableHead><TableHead className="w-32">MCQ pass</TableHead><TableHead className="w-32">Practical pass</TableHead><TableHead className="w-32">Total pass</TableHead></>}<TableHead className="w-32">{totalOnly ? "Total marks" : "Total max"}</TableHead></TableRow></TableHeader>
+            <Table className={totalOnly ? "min-w-[320px]" : totalPass ? "min-w-[650px]" : "min-w-[1350px]"}>
+              <TableHeader><TableRow><TableHead className="w-12"><Checkbox checked={unusedSubjects.length > 0 && unusedSubjects.every(subject => configRows[subject.id]?.selected)} onCheckedChange={checked => setConfigRows(current => Object.fromEntries(unusedSubjects.map(subject => [subject.id, { ...current[subject.id], selected: Boolean(checked) }]))) } aria-label="Select all subjects" /></TableHead><TableHead className="min-w-48">Subject</TableHead>{!totalOnly && <><TableHead className="w-32">{totalPass ? 'CQ max' : 'Creative max'}</TableHead><TableHead className="w-32">MCQ max</TableHead>{!totalPass && <><TableHead className="w-32">Practical max</TableHead><TableHead className="w-32">Creative pass</TableHead><TableHead className="w-32">MCQ pass</TableHead><TableHead className="w-32">Practical pass</TableHead></>}<TableHead className="w-32">Total pass</TableHead></>}<TableHead className="w-32">{totalOnly ? "Total marks" : "Total max"}</TableHead></TableRow></TableHeader>
               <TableBody>{unusedSubjects.map(subject => {
                 const row = configRows[subject.id] ?? { selected: false, creative: '', written: '', practical: '', creativePass: '', writtenPass: '', practicalPass: '', pass: '', total: '' }
                 const update = (field: keyof ExamSubjectConfigDraft, value: string | boolean) => setConfigRows(current => ({ ...current, [subject.id]: { ...row, [field]: value } }))
@@ -989,7 +991,9 @@ function StaffResults() {
                     const passField = { creative: 'creativePass', written: 'writtenPass', practical: 'practicalPass' } as const
                     next[passField[field]] = ''
                   }
+                  if (totalPass) next.practical = '0'
                   next.total = String((Number(next.creative) || 0) + (Number(next.written) || 0) + (Number(next.practical) || 0))
+                  if (totalPass) next.pass = String(Math.round(Number(next.total) * 33) / 100)
                   setConfigRows(current => ({ ...current, [subject.id]: next }))
                 }
                 const updateTotal = (value: string) => {
@@ -1011,7 +1015,7 @@ function StaffResults() {
                     practicalPass: row.practicalPass ? String(Math.round(Number(row.practicalPass) * requested / currentTotal * 100) / 100) : '',
                   } }))
                 }
-                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}{subject.is_fourth_subject ? ' · Fourth subject' : ''}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => updateComponent('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => updateComponent('written', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => updateComponent('practical', event.target.value)} /></TableCell>{([
+                return <TableRow key={subject.id} className={row.selected ? 'bg-primary/5' : undefined}><TableCell><Checkbox checked={row.selected} onCheckedChange={checked => update('selected', Boolean(checked))} aria-label={`Select ${subject.name}`} /></TableCell><TableCell><p className="font-medium">{subject.name}</p><p className="text-xs text-muted-foreground">{subject.code}{subject.is_fourth_subject ? ' · Fourth subject' : ''}</p></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.creative} disabled={!row.selected} onChange={event => updateComponent('creative', event.target.value)} /></TableCell><TableCell><Input type="number" min={0} step="0.01" value={row.written} disabled={!row.selected} onChange={event => updateComponent('written', event.target.value)} /></TableCell>{!totalPass && <TableCell><Input type="number" min={0} step="0.01" value={row.practical} disabled={!row.selected} onChange={event => updateComponent('practical', event.target.value)} /></TableCell>}{!totalPass && ([
                     ['creativePass', 'creative', 'Creative'],
                     ['writtenPass', 'written', 'MCQ'],
                     ['practicalPass', 'practical', 'Practical'],

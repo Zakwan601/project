@@ -12,6 +12,7 @@ const showMark = (value: number | null, maximum: number, absent: boolean) => {
 export function ResultSheet({ result, publicView = false }: { result: StudentResultPayload; publicView?: boolean }) {
   const { exam, student, subjects, summary } = result
   const totalOnly = exam.marks_mode === 'total_only'
+  const totalPass = exam.marks_mode === 'total_pass'
   return (
     <Card className="result-sheet mx-auto max-w-5xl overflow-hidden print:border-0 print:shadow-none">
       <CardContent className="p-4 sm:p-8">
@@ -50,9 +51,9 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
             <TableHeader>
               <TableRow>
                 <TableHead className="sticky left-0 z-20 w-32 min-w-32 border-r bg-background text-xs sm:w-44 sm:min-w-44 sm:text-sm print:static print:border-r-0">Subject</TableHead>
-                {!totalOnly && <><TableHead className="text-center">Creative</TableHead>
+                {!totalOnly && <><TableHead className="text-center">{totalPass ? 'CQ' : 'Creative'}</TableHead>
                 <TableHead className="text-center">MCQ</TableHead>
-                <TableHead className="text-center">Practical</TableHead></>}
+                {!totalPass && <TableHead className="text-center">Practical</TableHead>}</>}
                 <TableHead className="text-center">Obtained</TableHead>
                 {!totalOnly && <><TableHead className="text-center">Letter</TableHead>
                 <TableHead className="text-center">Point</TableHead></>}
@@ -67,8 +68,8 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
                   </TableCell>
                   {!totalOnly && <><SectionMark value={subject.creative_marks} maximum={subject.creative_max} passMark={subject.creative_pass_mark} absent={subject.is_absent} />
                   <SectionMark value={subject.written_marks} maximum={subject.written_max} passMark={subject.written_pass_mark} absent={subject.is_absent} />
-                  <SectionMark value={subject.practical_marks} maximum={subject.practical_max} passMark={subject.practical_pass_mark} absent={subject.is_absent} /></>}
-                  <TableCell className="text-center font-semibold">{subject.is_absent ? 'Absent' : `${subject.obtained} / ${subject.total_max}`}</TableCell>
+                  {!totalPass && <SectionMark value={subject.practical_marks} maximum={subject.practical_max} passMark={subject.practical_pass_mark} absent={subject.is_absent} />}</>}
+                  <TableCell className="text-center font-semibold">{subject.is_absent ? 'Absent' : `${subject.obtained} / ${subject.total_max}`}{totalPass && <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground">Total pass: {subject.pass_mark}</span>}</TableCell>
                   {!totalOnly && <><TableCell className="text-center"><Badge variant={subject.passed ? 'secondary' : 'destructive'}>{subject.letter_grade}</Badge></TableCell>
                   <TableCell className="text-center font-semibold">{subject.grade_point}</TableCell></>}
                 </TableRow>

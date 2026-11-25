@@ -159,4 +159,17 @@ assert.throws(() => subjectMarkValues(subject, { creative: '71', written: '', pr
 assert.throws(() => subjectMarkValues(subject, { creative: '-1', written: '', practical: '', absent: false }), /between/)
 assert.equal(subjectMarkValues(subject, { creative: '', written: '0', practical: '', absent: false }).written_marks, 0)
 assert.equal(subjectMarkValues(subject, { creative: '', written: '', practical: '', absent: false }).written_marks, null)
+// Revised tutorial type retains distinct CQ/MCQ inputs and no practical column.
+exams[1].result_exam_types.marks_mode = 'total_pass'
+Object.assign(tutorial, { creative_max: 10, written_max: 10, pass_mark: 6.6 })
+stored = []; frames = new Map(); roleCanWrite = true; render()
+select('marks-class', 'humanities'); select('marks-subject', tutorial.id); render()
+assert.ok(input('Other', 'CQ')); assert.ok(input('Other', 'MCQ'))
+assert.ok(!input('Other', 'total') && !input('Other', 'practical'))
+assert.equal(input('Other', 'CQ').props.max, 10); assert.equal(input('Other', 'MCQ').props.max, 10)
+assert.ok(nodes.some(node => String(node.props.children).includes('No separate CQ or MCQ pass marks')))
+input('Other', 'CQ').props.onChange('0'); render()
+input('Other', 'MCQ').props.onChange('6.6'); render(); await tick()
+assert.equal(writes.at(-1).creative_marks, 0); assert.equal(writes.at(-1).written_marks, 6.6)
+assert.equal(writes.at(-1).practical_marks, null)
 console.log('Passed subject-first marks UI: class isolation, elective/fourth eligibility, existing zeros, independent autosaves, pending edits on class changes, retry, absence, tutorial totals and published/permission locks.')

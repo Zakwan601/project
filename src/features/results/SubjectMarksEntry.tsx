@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { MarkInput } from './ResultControls'
-import { examSubjectAppliesToStudent, examSubjectRoleForStudent, isTotalOnlyExam,
+import { examSubjectAppliesToStudent, examSubjectRoleForStudent, isTotalOnlyExam, isTotalPassExam,
   type ExamSubject, type ExamWithDetails, type MarkDraft, type MarkRow, type ResultSubjectPaperGroup } from './result-model'
 
 const db = supabase as any
@@ -118,6 +118,7 @@ export function SubjectMarksEntry({ exam }: { exam: ExamWithDetails }) {
   const visible = eligible.filter(student => `${student.first_name} ${student.last_name} ${student.roll_number ?? ''} ${student.admission_number}`.toLowerCase().includes(search.trim().toLowerCase()))
   const marksByStudent = new Map((marks.data ?? []).map(mark => [mark.student_id, mark]))
   const totalOnly = isTotalOnlyExam(selectedExam)
+  const totalPass = isTotalPassExam(selectedExam)
 
   return <div className="min-w-0 space-y-3">
     <div className="grid gap-3 sm:grid-cols-2">
@@ -132,13 +133,13 @@ export function SubjectMarksEntry({ exam }: { exam: ExamWithDetails }) {
       : !subjects.data?.length ? <p className="py-6 text-sm text-muted-foreground">Configure subjects for this examination first.</p>
       : !subject ? <p className="py-6 text-sm text-muted-foreground">Choose a subject to enter marks for the class.</p>
       : loading ? <LoadingState message="Loading students and marks…" /> : <>
-        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-muted-foreground">{eligible.length} students · {selectedExam?.status === 'published' ? 'Published results are read-only.' : 'Changes save automatically.'}</p><Input aria-label="Search marks roster" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, roll or ID" className="h-8 w-full sm:w-64" /></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-muted-foreground">{eligible.length} students · {selectedExam?.status === 'published' ? 'Published results are read-only.' : 'Changes save automatically.'}{totalPass && ` Total pass: ${subject.pass_mark}/${subject.creative_max + subject.written_max}. No separate CQ or MCQ pass marks.`}</p><Input aria-label="Search marks roster" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, roll or ID" className="h-8 w-full sm:w-64" /></div>
         <div className="border"><Table className="text-xs [&_td]:px-2 [&_th]:px-2 sm:text-sm"><TableHeader><TableRow>
           <TableHead className="w-12">Roll</TableHead><TableHead className="min-w-36">Student</TableHead>
-          {!totalOnly && <TableHead>Creative / {subject.creative_max}</TableHead>}<TableHead>{totalOnly ? 'Marks' : 'MCQ'} / {subject.written_max}</TableHead>{!totalOnly && <TableHead>Practical / {subject.practical_max}</TableHead>}<TableHead>Total</TableHead><TableHead>Absent</TableHead><TableHead className="w-20">Status</TableHead>
+          {!totalOnly && <TableHead>{totalPass ? 'CQ' : 'Creative'} / {subject.creative_max}</TableHead>}<TableHead>{totalOnly ? 'Marks' : 'MCQ'} / {subject.written_max}</TableHead>{!totalOnly && !totalPass && <TableHead>Practical / {subject.practical_max}</TableHead>}<TableHead>Total</TableHead><TableHead>Absent</TableHead><TableHead className="w-20">Status</TableHead>
         </TableRow></TableHeader><TableBody>{visible.map(student => <SubjectMarkRow key={`${subject.id}:${student.id}`} student={student} subject={subject} exam={selectedExam!} mark={marksByStudent.get(student.id)} totalOnly={totalOnly}
           fourth={examSubjectRoleForStudent(subject, curriculumById.get(student.id)!, options.data ?? [], paperGroups.data ?? []) === 'fourth'} />)}
-          {!visible.length && <TableRow><TableCell colSpan={totalOnly ? 6 : 8} className="py-8 text-center text-muted-foreground">{eligible.length ? 'No students match your search.' : 'No students take this subject.'}</TableCell></TableRow>}
+          {!visible.length && <TableRow><TableCell colSpan={totalOnly ? 6 : totalPass ? 7 : 8} className="py-8 text-center text-muted-foreground">{eligible.length ? 'No students match your search.' : 'No students take this subject.'}</TableCell></TableRow>}
         </TableBody></Table></div>
       </>}
   </div>
@@ -156,6 +157,7 @@ function SubjectMarkRow({ student, subject, exam, mark, totalOnly, fourth }: {
   const savedVersion = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const writable = can('results', 'write') && exam.status === 'draft'
+  const totalPass = isTotalPassExam(exam)
   const save = useMutation({
     scope: { id: `subject-marks:${subject.id}:${student.id}` },
     mutationFn: async ({ value, revision }: { value: MarkDraft; revision: number }) => {
@@ -195,9 +197,9 @@ function SubjectMarkRow({ student, subject, exam, mark, totalOnly, fourth }: {
   const total = [draft.creative, draft.written, draft.practical].reduce((sum, value) => sum + (Number(value) || 0), 0)
   return <TableRow onBlur={() => flush()}>
     <TableCell className="font-medium">{student.roll_number ?? '—'}</TableCell><TableCell><p className="font-medium">{name}</p><p className="text-[10px] text-muted-foreground">{student.admission_number}{fourth ? ' · Fourth subject' : ''}</p></TableCell>
-    {!totalOnly && <TableCell><MarkInput label={`${name} creative marks`} value={draft.creative} max={subject.creative_max} disabled={!writable || draft.absent} onChange={value => update('creative', value)} /></TableCell>}
+    {!totalOnly && <TableCell><MarkInput label={`${name} ${totalPass ? 'CQ' : 'creative'} marks`} value={draft.creative} max={subject.creative_max} disabled={!writable || draft.absent} onChange={value => update('creative', value)} /></TableCell>}
     <TableCell><MarkInput label={`${name} ${totalOnly ? 'total' : 'MCQ'} marks`} value={draft.written} max={subject.written_max} disabled={!writable || draft.absent} onChange={value => update('written', value)} /></TableCell>
-    {!totalOnly && <TableCell><MarkInput label={`${name} practical marks`} value={draft.practical} max={subject.practical_max} disabled={!writable || draft.absent} onChange={value => update('practical', value)} /></TableCell>}
+    {!totalOnly && !totalPass && <TableCell><MarkInput label={`${name} practical marks`} value={draft.practical} max={subject.practical_max} disabled={!writable || draft.absent} onChange={value => update('practical', value)} /></TableCell>}
     <TableCell className="tabular-nums">{draft.absent ? '—' : total}<span className="text-muted-foreground">/{subject.creative_max + subject.written_max + subject.practical_max}</span></TableCell>
     <TableCell><Checkbox aria-label={`Mark ${name} as absent`} checked={draft.absent} disabled={!writable} onCheckedChange={checked => update('absent', Boolean(checked))} /></TableCell>
     <TableCell className="text-[10px] text-muted-foreground" aria-live="polite">{status === 'Save failed' ? <Button variant="ghost" size="sm" className="px-0 text-destructive" onClick={() => { setStatus('Saving…'); save.mutate({ value: { ...draftRef.current }, revision: version.current }) }}>Retry save</Button> : status}</TableCell>

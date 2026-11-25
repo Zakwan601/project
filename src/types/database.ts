@@ -457,7 +457,7 @@ export type ResultExamStatus = 'draft' | 'published'
 export interface ResultExamType {
   id: string
   name: string
-  marks_mode: 'sectioned' | 'total_only'
+  marks_mode: 'sectioned' | 'total_only' | 'total_pass'
   is_active: boolean
   sort_order: number
   created_by: string | null
@@ -532,7 +532,7 @@ export interface StudentResultPayload {
     status: ResultExamStatus
     title: string | null
     exam_type: string
-    marks_mode: 'sectioned' | 'total_only'
+    marks_mode: 'sectioned' | 'total_only' | 'total_pass'
     class_id: string
     class_name: string
     grade: string

@@ -7,7 +7,9 @@ DECLARE
   suffix text:=substr(replace(gen_random_uuid()::text,'-',''),1,12);
 BEGIN
   SELECT id INTO STRICT admin_id FROM public.profiles WHERE role='admin' AND is_active ORDER BY id LIMIT 1;
-  SELECT id INTO STRICT tutorial_type FROM public.result_exam_types WHERE name='Tutorial exam' AND marks_mode='total_only' AND is_active;
+  -- Preserve regression coverage for the legacy ungraded total-only mode.
+  INSERT INTO public.result_exam_types(name,marks_mode,sort_order)
+    VALUES('Legacy total-only test '||suffix,'total_only',999) RETURNING id INTO tutorial_type;
   SELECT id INTO STRICT regular_type FROM public.result_exam_types WHERE marks_mode='sectioned' AND is_active ORDER BY sort_order,id LIMIT 1;
   PERFORM set_config('request.jwt.claim.sub',admin_id::text,true);
   PERFORM set_config('request.jwt.claim.role','authenticated',true);

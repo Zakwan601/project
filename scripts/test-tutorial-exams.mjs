@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 const modelSource=readFileSync(new URL('../src/features/results/result-model.ts',import.meta.url),'utf8')
 const modelCode=ts.transpileModule(modelSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
-const { examSubjectConfigValues,validExamSubjectConfig,isTotalOnlyExam }=await import(`data:text/javascript;base64,${Buffer.from(modelCode).toString('base64')}`)
+const { examSubjectConfigValues,validExamSubjectConfig,isTotalOnlyExam,isTotalPassExam,gradeSubject,subjectSectionsPassed }=await import(`data:text/javascript;base64,${Buffer.from(modelCode).toString('base64')}`)
 const draft={selected:true,total:'20',creative:'',written:'',practical:'',pass:'',creativePass:'',writtenPass:'',practicalPass:''}
 assert.equal(isTotalOnlyExam({result_exam_types:{name:'Custom title',marks_mode:'total_only'}}),true)
 assert.equal(isTotalOnlyExam({result_exam_types:{name:'Tutorial exam',marks_mode:'sectioned'}}),false,'Behavior comes from type metadata, not a title string')
@@ -20,6 +20,18 @@ assert.equal(validExamSubjectConfig(examSubjectConfigValues({...draft,total:'abc
 assert.equal(validExamSubjectConfig(examSubjectConfigValues({...draft,total:'12.5'},true),true),true)
 assert.equal(validExamSubjectConfig(examSubjectConfigValues(draft,false),false),false,'Regular exams still require section distribution and pass marks')
 assert.equal(validExamSubjectConfig(examSubjectConfigValues({...draft,total:'100',creative:'70',written:'30',pass:'33',creativePass:'23',writtenPass:'10'},false),false),true)
+const cqMcqDraft={...draft,creative:'10',written:'10',pass:'6.6'}
+const cqMcq=examSubjectConfigValues(cqMcqDraft,false,true)
+assert.deepEqual(cqMcq,[10,10,0,6.6,20,0,0,0])
+assert.equal(isTotalPassExam({result_exam_types:{marks_mode:'total_pass'}}),true)
+assert.equal(validExamSubjectConfig(cqMcq,false,true),true)
+assert.equal(validExamSubjectConfig(cqMcq,false),false,'Regular exams still require individual section passing')
+assert.equal(validExamSubjectConfig(examSubjectConfigValues({...cqMcqDraft,pass:'0'},false,true),false,true),false)
+assert.equal(validExamSubjectConfig([10,10,0,6.6,20,1,0,0],false,true),false)
+const cqMcqSubject={creative_max:10,written_max:10,practical_max:0,creative_pass_mark:0,written_pass_mark:0,practical_pass_mark:0}
+for(const [cq,mcq,passed] of [[0,6.6,true],[6.6,0,true],[3,3.6,true],[3,3.5,false],[0,0,false]]) {
+  assert.equal(gradeSubject(cq+mcq,20,6.6,false,subjectSectionsPassed(cqMcqSubject,{creativeMarks:cq,writtenMarks:mcq,practicalMarks:0})).passed,passed)
+}
 
 // Render the real report component with lightweight native table/card primitives.
 const require=createRequire(import.meta.url)
@@ -34,4 +46,8 @@ for(const label of ['GPA','Failed subjects','Creative','MCQ','Practical','Pass m
 assert.ok(markup.includes('0 / 20'),'A zero mark must be displayed as a real total')
 const regular=renderToStaticMarkup(React.createElement(context.exports.ResultSheet,{result:{...result,exam:{...result.exam,marks_mode:'sectioned'},summary:{...result.summary,gpa:0,letter_grade:'F',failed_subjects:1}}}))
 assert.ok(regular.includes('GPA')&&regular.includes('Creative')&&regular.includes('MCQ'))
+const tutorialReport=renderToStaticMarkup(React.createElement(context.exports.ResultSheet,{result:{...result,exam:{...result.exam,marks_mode:'total_pass'},
+  subjects:[{...result.subjects[0],...cqMcqSubject,creative_marks:0,written_marks:6.6,obtained:6.6,pass_mark:6.6,passed:true,letter_grade:'D',grade_point:1}]}}))
+assert.ok(tutorialReport.includes('CQ')&&tutorialReport.includes('MCQ')&&tutorialReport.includes('Total pass: 6.6'))
+assert.ok(!tutorialReport.includes('Practical')&&!tutorialReport.includes('Pass mark:'),'Tutorial reports have no practical or individual section passing')
 console.log('Passed tutorial configuration, metadata-driven behavior, positive totals, zero-mark rendering, no grading/section fields in reports, and regular-exam regressions.')
