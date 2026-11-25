@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, ChevronRight, ClipboardList, Copy, Download, EllipsisVertical, Link2, Pencil, Plus, Printer, Search, Send, Settings, Users } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronRight, Copy, Download, EllipsisVertical, Link2, Pencil, Plus, Printer, Search, Send, Settings, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
@@ -28,7 +28,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ClassGroup, ResultExamType, StudentResultPayload, Student, SubjectCourseOption } from '@/types/database'
 import { downloadCsv } from '@/lib/csv'
-import { MarkInput, SimpleDialog } from '@/features/results/ResultControls'
+import { SimpleDialog } from '@/features/results/ResultControls'
+import { SubjectMarksEntry } from './SubjectMarksEntry'
 import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
@@ -38,7 +39,6 @@ import {
   isTotalOnlyExam,
   buildExamSubjectCatalogue,
   examSubjectAppliesToStudent,
-  examSubjectRoleForStudent,
   calculateOfficialGpa,
   gradeSubject,
   subjectSectionsPassed,
@@ -50,7 +50,6 @@ import {
   type ExamSubject,
   type ExamSubjectConfigDraft,
   type ExamWithDetails,
-  type MarkDraft,
   type MarkRow,
   type ResultShareLink,
   type ResultSubjectPaperGroup,
@@ -185,7 +184,7 @@ function StaffResults() {
   const { examId: routeExamId } = useParams<{ examId: string }>()
   const navigate = useNavigate()
   const isExamPage = Boolean(routeExamId)
-  const { user, can, role } = useAuth()
+  const { can, role } = useAuth()
   const canWrite = can('results', 'write')
   const canPublishResults = role === 'admin'
   const canEditExamination = role === 'admin'
@@ -194,8 +193,6 @@ function StaffResults() {
   const [activeTab, setActiveTab] = useState(isExamPage ? 'routine' : 'overview')
   const [classId, setClassId] = useState('')
   const [examId, setExamId] = useState('')
-  const [selectedStudentId, setSelectedStudentId] = useState('')
-  const [studentSearch, setStudentSearch] = useState('')
   const [previewStudentId, setPreviewStudentId] = useState('')
   const [preparingReportCards, setPreparingReportCards] = useState(false)
   const [previewStudentSearch, setPreviewStudentSearch] = useState('')
@@ -211,13 +208,8 @@ function StaffResults() {
   const [subjectForm, setSubjectForm] = useState({ name: '', code: '', isFourthSubject: false })
   const [settingsGroup, setSettingsGroup] = useState<ClassGroup>('science')
   const [configRows, setConfigRows] = useState<Record<string, ExamSubjectConfigDraft>>({})
-  const [drafts, setDrafts] = useState<Record<string, MarkDraft>>({})
-  const [marksSaveStatus, setMarksSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const draftsRef = useRef<Record<string, MarkDraft>>({})
-  const marksSaveTimerRef = useRef<number | null>(null)
   const [shareUrl, setShareUrl] = useState('')
   const [publishing, setPublishing] = useState(false)
-  const [mobileRosterOpen, setMobileRosterOpen] = useState(false)
   const [mobilePreviewRosterOpen, setMobilePreviewRosterOpen] = useState(false)
   const activeExamId = routeExamId || examId
 
@@ -274,8 +266,6 @@ function StaffResults() {
   }, [routeExamId, routeExamQuery.data])
 
   useEffect(() => {
-    setSelectedStudentId('')
-    setStudentSearch('')
     setPreviewStudentId('')
     setPreviewStudentSearch('')
     setShareUrl('')
@@ -375,18 +365,6 @@ function StaffResults() {
     [studentCurriculumQuery.data],
   )
 
-  const marksQuery = useQuery<MarkRow[]>({
-    queryKey: ['result-student-marks', examId, selectedStudentId],
-    enabled: Boolean(selectedStudentId && examSubjectsQuery.data?.length),
-    queryFn: async () => {
-      const subjectIds = examSubjectsQuery.data!.map(item => item.id)
-      const { data, error } = await db.from('result_marks').select('*')
-        .eq('student_id', selectedStudentId).in('exam_subject_id', subjectIds)
-      if (error) throw error
-      return data as MarkRow[]
-    },
-  })
-
   const examMarksQuery = useQuery<MarkRow[]>({
     queryKey: ['result-exam-marks', examId],
     enabled: Boolean(examId && examSubjectsQuery.data?.length),
@@ -398,25 +376,6 @@ function StaffResults() {
       return data as MarkRow[]
     },
   })
-
-  useEffect(() => {
-    if (!selectedStudentId || !examSubjectsQuery.data || !studentCurriculumQuery.data) return
-    const studentCurriculum = curriculumByStudentId.get(selectedStudentId)
-    if (!studentCurriculum) return
-    const applicableSubjects = examSubjectsQuery.data.filter(subject =>
-      examSubjectAppliesToStudent(subject, studentCurriculum, courseOptionsQuery.data ?? [], paperGroupsQuery.data ?? []),
-    )
-    const bySubject = new Map((marksQuery.data ?? []).map(mark => [mark.exam_subject_id, mark]))
-    const nextDrafts = Object.fromEntries(applicableSubjects.map(examSubject => {
-      const mark = bySubject.get(examSubject.id)
-      return [examSubject.id, {
-        creative: mark?.creative_marks?.toString() ?? '', written: mark?.written_marks?.toString() ?? '',
-        practical: mark?.practical_marks?.toString() ?? '', absent: mark?.is_absent ?? false,
-      }]
-    }))
-    draftsRef.current = nextDrafts
-    setDrafts(nextDrafts)
-  }, [selectedStudentId, examSubjectsQuery.data, marksQuery.data, studentCurriculumQuery.data, curriculumByStudentId, courseOptionsQuery.data, paperGroupsQuery.data])
 
   const previewQuery = useQuery<StudentResultPayload>({
     queryKey: ['result-preview', activeExamId, previewStudentId], enabled: Boolean(activeExamId && previewStudentId),
@@ -733,75 +692,6 @@ function StaffResults() {
     toast.success(`Exam configured with ${selected.length} subject${selected.length === 1 ? '' : 's'}`)
   }
 
-  const saveMarks = useMutation({
-    scope: { id: 'result-marks-autosave' },
-    mutationFn: async ({ marksExamId, studentId, subjects, nextDrafts }: {
-      marksExamId: string
-      studentId: string
-      subjects: ExamSubject[]
-      nextDrafts: Record<string, MarkDraft>
-    }) => {
-      const parseMark = (value: string, max: number, subject: string, component: string) => {
-        if (value.trim() === '') return null
-        const mark = Number(value)
-        if (!Number.isFinite(mark) || mark < 0 || mark > max) {
-          throw new Error(`${subject} ${component} marks must be between 0 and ${max}`)
-        }
-        return mark
-      }
-      const rows = subjects.map(examSubject => ({
-        exam_subject_id: examSubject.id, student_id: studentId,
-        creative_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.creative ?? '', examSubject.creative_max, examSubjectName(examSubject), 'creative'),
-        written_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.written ?? '', examSubject.written_max, examSubjectName(examSubject), totalOnly ? 'total' : 'MCQ'),
-        practical_marks: nextDrafts[examSubject.id]?.absent ? null : parseMark(nextDrafts[examSubject.id]?.practical ?? '', examSubject.practical_max, examSubjectName(examSubject), 'practical'),
-        is_absent: nextDrafts[examSubject.id]?.absent ?? false, entered_by: user?.id,
-      }))
-      const { error } = await db.from('result_marks')
-        .upsert(rows, { onConflict: 'exam_subject_id,student_id' })
-      if (error) throw error
-      return { marksExamId, studentId }
-    },
-    onMutate: () => setMarksSaveStatus('saving'),
-    onSuccess: async result => {
-      await qc.invalidateQueries({
-        queryKey: ['result-student-marks', result.marksExamId, result.studentId],
-        exact: true,
-        refetchType: 'none',
-      })
-      await qc.invalidateQueries({ queryKey: ['result-preview', result.marksExamId, result.studentId] })
-      await qc.invalidateQueries({ queryKey: ['result-exam-marks', result.marksExamId] })
-      await qc.invalidateQueries({ queryKey: ['student_attendance_fine_details'] })
-      await qc.invalidateQueries({ queryKey: ['class_attendance_fine_details'] })
-      setMarksSaveStatus('saved')
-    },
-    onError: error => {
-      setMarksSaveStatus('error')
-      toast.error((error as Error).message)
-    },
-  })
-
-  const updateMarkDraft = (examSubjectId: string, field: keyof MarkDraft, value: string | boolean) => {
-    const currentDraft = draftsRef.current[examSubjectId]
-      ?? { creative: '', written: '', practical: '', absent: false }
-    const nextDrafts = {
-      ...draftsRef.current,
-      [examSubjectId]: { ...currentDraft, [field]: value },
-    }
-    draftsRef.current = nextDrafts
-    setDrafts(nextDrafts)
-
-    if (!selectedStudentId || !examId || !examSubjectsQuery.data || selectedExam?.status !== 'draft' || !canWrite) return
-    if (marksSaveTimerRef.current !== null) window.clearTimeout(marksSaveTimerRef.current)
-    setMarksSaveStatus('saving')
-    const subjects = applicableExamSubjects
-    const studentId = selectedStudentId
-    const marksExamId = examId
-    marksSaveTimerRef.current = window.setTimeout(() => {
-      marksSaveTimerRef.current = null
-      saveMarks.mutate({ marksExamId, studentId, subjects, nextDrafts })
-    }, 400)
-  }
-
   const getOrCreateShareLink = async (studentId: string): Promise<ResultShareLink> => {
     const { data: links, error: linksError } = await db.from('result_share_links')
       .select('id,token,expires_at')
@@ -920,23 +810,8 @@ function StaffResults() {
   // Kept as a local alias while the compact exam-action markup is transitioned.
   const unusedSubjects = configurableSubjects
   const attachSubjects = saveExamSubjects
-  const selectedStudent = studentsQuery.data?.find(student => student.id === selectedStudentId)
   const previewStudent = studentsQuery.data?.find(student => student.id === previewStudentId)
-  const selectedStudentCurriculum = curriculumByStudentId.get(selectedStudentId)
-  const applicableExamSubjects = useMemo(
-    () => selectedStudentCurriculum
-      ? (examSubjectsQuery.data ?? []).filter(subject =>
-        examSubjectAppliesToStudent(subject, selectedStudentCurriculum, courseOptionsQuery.data ?? [], paperGroupsQuery.data ?? []),
-      )
-      : [],
-    [selectedStudentCurriculum, examSubjectsQuery.data, courseOptionsQuery.data, paperGroupsQuery.data],
-  )
   const completedResults = examResultRows.filter(row => row.complete).length
-  const filteredStudents = useMemo(() => {
-    const query = studentSearch.trim().toLowerCase()
-    if (!query) return studentsQuery.data ?? []
-    return (studentsQuery.data ?? []).filter(student => `${student.first_name} ${student.last_name} ${student.admission_number} ${student.roll_number ?? ''}`.toLowerCase().includes(query))
-  }, [studentSearch, studentsQuery.data])
   const filteredPreviewStudents = useMemo(() => {
     const query = previewStudentSearch.trim().toLowerCase()
     if (!query) return studentsQuery.data ?? []
@@ -976,7 +851,7 @@ function StaffResults() {
             {role === 'admin' && <div className="flex justify-end gap-3">
               {!isExamPage && 
                 <div className="max-w-xl">
-                  <Select value={classId || '__all__'} onValueChange={value => { setClassId(value === '__all__' ? '' : value); setExamId(''); setSelectedStudentId(''); setStudentSearch('') }}>
+                  <Select value={classId || '__all__'} onValueChange={value => { setClassId(value === '__all__' ? '' : value); setExamId('') }}>
                       <SelectTrigger className="h-11">
                         <SelectValue />
                       </SelectTrigger>
@@ -1003,52 +878,7 @@ function StaffResults() {
             </>}
           </TabsContent>
           {canWrite && <TabsContent value="marks" className="mt-0">
-            {examSubjectsQuery.isLoading && <ExamWorkspaceSkeleton />}
-            {examSubjectsQuery.error && <ErrorState message={(examSubjectsQuery.error as Error).message} />}
-            <div className={examSubjectsQuery.isLoading || examSubjectsQuery.error ? 'hidden' : undefined}>
-            {!examSubjectsQuery.data?.length ? <Card className="border-0 bg-transparent shadow-none"><CardContent className="py-14"><EmptyState title="Configure subjects first" description="Add the subjects and component maximums for this examination." />{canWrite && <div className="mt-4 flex justify-center"><Button onClick={openSubjectConfiguration} disabled={!unusedSubjects.length}><Plus className="mr-2 h-4 w-4" /> Configure subjects</Button></div>}</CardContent></Card> : <><div className="mb-3 xl:hidden"><Sheet open={mobileRosterOpen} onOpenChange={setMobileRosterOpen}><SheetTrigger asChild><Button variant="outline" className="w-full justify-between"><span className="flex items-center gap-2"><Users className="h-4 w-4" /> Students</span><span className="flex min-w-0 items-center gap-2 text-muted-foreground"><span className="max-w-48 truncate">{selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name}` : `${studentsQuery.data?.length ?? 0} available`}</span><ChevronRight className="h-4 w-4" /></span></Button></SheetTrigger><SheetContent side="left" className="w-[88%] gap-0 p-0"><SheetHeader className="border-b pr-12"><SheetTitle>Student roster</SheetTitle><SheetDescription>{studentsQuery.data?.length ?? 0} students in this class</SheetDescription><div className="relative pt-2"><Search className="absolute left-3 top-4.5 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="pl-9" /></div></SheetHeader><ScrollArea className="min-h-0 flex-1"><div className="space-y-1 p-2">{filteredStudents.map(student => { const result = examResultRows.find(row => row.id === student.id); const active = student.id === selectedStudentId; const initials = `${student.first_name[0] ?? ''}${student.last_name[0] ?? ''}`.toUpperCase(); return <button type="button" key={student.id} onClick={() => { setSelectedStudentId(student.id); setShareUrl(''); setMobileRosterOpen(false) }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Avatar className="h-9 w-9"><AvatarFallback className={active ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>{initials}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{student.first_name} {student.last_name}</span><span className={`block truncate text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>Roll {student.roll_number ?? '—'} · {student.admission_number}</span></span>{result?.complete && <CheckCircle2 className={`h-4 w-4 ${active ? '' : 'text-emerald-600'}`} />}</button> })}{filteredStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea></SheetContent></Sheet></div><div className="grid min-w-0 xl:grid-cols-[300px_minmax(0,1fr)]">
-              <Card className="hidden h-fit gap-0 rounded-none border-0 bg-transparent py-0 shadow-none xl:sticky xl:top-4 xl:flex xl:border-r xl:pr-5">
-                <CardHeader className="border-b px-0 pb-3"><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" /> Student roster</CardTitle><CardDescription>{studentsQuery.data?.length ?? 0} students in this class</CardDescription><div className="relative pt-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={studentSearch} onChange={event => setStudentSearch(event.target.value)} placeholder="Search name, roll, ID…" className="h-9 pl-9" /></div></CardHeader>
-                <ScrollArea className="h-[420px] xl:h-[600px]"><div className="space-y-1 p-2">{filteredStudents.map(student => {
-                  const result = examResultRows.find(row => row.id === student.id)
-                  const active = student.id === selectedStudentId
-                  const initials = `${student.first_name[0] ?? ''}${student.last_name[0] ?? ''}`.toUpperCase()
-                  return <button type="button" key={student.id} onClick={() => { setSelectedStudentId(student.id); setShareUrl('') }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Avatar className="h-9 w-9"><AvatarFallback className={active ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>{initials}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{student.first_name} {student.last_name}</span><span className={`block truncate text-xs ${active ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>Roll {student.roll_number ?? '—'} · {student.admission_number}</span></span>{result?.complete ? <CheckCircle2 className={`h-4 w-4 ${active ? '' : 'text-emerald-600'}`} /> : <span className={`h-2 w-2 rounded-full ${active ? 'bg-primary-foreground/70' : 'bg-amber-500'}`} />}</button>
-                })}{filteredStudents.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No students match your search.</p>}</div></ScrollArea>
-              </Card>
-
-              {!selectedStudentId ? <Card className="min-h-56 min-w-0 gap-0 rounded-none border-0 bg-transparent py-0 shadow-none xl:min-h-[420px]"><CardContent className="flex min-h-56 items-center justify-center xl:min-h-[420px]"><div className="max-w-sm text-center"><ClipboardList className="mx-auto mb-4 h-7 w-7 text-muted-foreground" /><h3 className="text-lg font-semibold">Select a student</h3><p className="mt-2 text-sm text-muted-foreground">Choose a student from the roster to enter marks across all configured subjects.</p></div></CardContent></Card> : <div className="min-w-0 space-y-2 pl-0 xl:pl-5">
-                <Card className="gap-0 rounded-none border-0 border-b bg-transparent py-0 shadow-none"><CardContent className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-0 pb-3 pt-0"><div className="flex min-w-0 items-center gap-2 sm:gap-3"><Avatar className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"><AvatarFallback>{`${selectedStudent?.first_name[0] ?? ''}${selectedStudent?.last_name[0] ?? ''}`}</AvatarFallback></Avatar><div className="min-w-0"><h3 className="truncate text-sm font-semibold sm:text-base">{selectedStudent?.first_name} {selectedStudent?.last_name}</h3><p className="truncate text-[10px] text-muted-foreground sm:text-xs">Roll - {selectedStudent?.roll_number ?? '—'}</p></div></div><div className="flex shrink-0 items-center gap-2"><div className="flex items-center gap-1"><span className={`whitespace-nowrap text-[10px] sm:text-xs ${marksSaveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite"><span className="sm:hidden">{marksSaveStatus === 'saving' ? 'Saving…' : marksSaveStatus === 'saved' ? 'Saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Auto-save on'}</span><span className="hidden sm:inline">{marksSaveStatus === 'saving' ? 'Saving changes…' : marksSaveStatus === 'saved' ? 'All changes saved' : marksSaveStatus === 'error' ? 'Save failed' : 'Changes save automatically'}</span></span>{marksSaveStatus === 'saved' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}</div></div></CardContent></Card>
-                <div className="min-w-0 max-w-full overflow-hidden border-b">
-                  <Table className={totalOnly ? "min-w-[320px] text-xs [&_td]:p-1 [&_th]:px-1 sm:text-sm" : "min-w-[520px] text-[10px] [&_td]:p-1 [&_th]:h-8 [&_th]:px-1 sm:min-w-[720px] sm:text-sm"}>
-                    <TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-28 min-w-28 border-r bg-background text-[10px] sm:w-48 sm:min-w-48 sm:text-sm">Subject</TableHead>{!totalOnly && <TableHead className="w-20">Creative</TableHead>}<TableHead className="w-20">{totalOnly ? "Marks" : "MCQ"}</TableHead>{!totalOnly && <TableHead className="w-20">Practical</TableHead>}<TableHead className="w-14 text-center sm:w-24">Total</TableHead><TableHead className="w-12 text-center sm:w-24">Absent</TableHead></TableRow></TableHeader>
-                    <TableBody>{applicableExamSubjects.map(examSubject => {
-                      const draft = drafts[examSubject.id] ?? { creative: '', written: '', practical: '', absent: false }
-                      const subjectRole = selectedStudentCurriculum
-                        ? examSubjectRoleForStudent(examSubject, selectedStudentCurriculum, courseOptionsQuery.data ?? [], paperGroupsQuery.data ?? [])
-                        : null
-                      const total = [draft.creative, draft.written, draft.practical].reduce((sum, value) => sum + (Number(value) || 0), 0)
-                      const maximum = examSubject.creative_max + examSubject.written_max + examSubject.practical_max
-                      const update = (field: keyof MarkDraft, value: string | boolean) => updateMarkDraft(examSubject.id, field, value)
-                      const disabled = draft.absent || selectedExam?.status === 'published' || !canWrite
-                      return <TableRow key={examSubject.id} className={draft.absent ? 'opacity-60' : undefined}>
-                        <TableCell className="sticky left-0 z-10 w-28 min-w-28 whitespace-normal border-r bg-card text-[10px] leading-tight sm:w-48 sm:min-w-48 sm:text-sm"><div className="flex flex-wrap items-center gap-1"><p className="font-medium">{examSubjectName(examSubject)}</p>{subjectRole === 'fourth' && <Badge variant="outline" className="h-4 px-1 text-[8px] font-medium sm:h-5 sm:text-[10px]">Fourth subject</Badge>}</div><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{examSubjectCode(examSubject)} · {!totalOnly && <>Total pass {examSubject.pass_mark}</>}</p><p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">{[
-                          examSubject.creative_max > 0 && examSubject.creative_pass_mark > 0 ? `CQ pass ${examSubject.creative_pass_mark}` : null,
-                          examSubject.written_max > 0 && examSubject.written_pass_mark > 0 ? `MCQ pass ${examSubject.written_pass_mark}` : null,
-                          examSubject.practical_max > 0 && examSubject.practical_pass_mark > 0 ? `Practical pass ${examSubject.practical_pass_mark}` : null,
-                        ].filter(Boolean).join(' / ')}</p></TableCell>
-                        {!totalOnly && <TableCell><MarkInput label={`${examSubjectName(examSubject)} creative marks`} value={draft.creative} max={examSubject.creative_max} disabled={disabled} onChange={value => update('creative', value)} /></TableCell>}
-                        <TableCell><MarkInput label={`${examSubjectName(examSubject)} ${totalOnly ? "total" : "MCQ"} marks`} value={draft.written} max={examSubject.written_max} disabled={disabled} onChange={value => update('written', value)} /></TableCell>
-                        {!totalOnly && <TableCell><MarkInput label={`${examSubjectName(examSubject)} practical marks`} value={draft.practical} max={examSubject.practical_max} disabled={disabled} onChange={value => update('practical', value)} /></TableCell>}
-                        <TableCell className="text-center text-[10px]"><span className="font-semibold tabular-nums">{draft.absent ? '—' : total}</span><span className="block text-[9px] text-muted-foreground sm:text-xs">/ {maximum}</span></TableCell>
-                        <TableCell className="text-center"><Checkbox aria-label={`Mark ${examSubjectName(examSubject)} as absent`} checked={draft.absent} disabled={selectedExam?.status === 'published' || !canWrite} onCheckedChange={checked => update('absent', Boolean(checked))} /></TableCell>
-                      </TableRow>
-                    })}</TableBody>
-                  </Table>
-                </div>
-              </div>}
-            </div></>}
-            </div>
+            {selectedExam && <SubjectMarksEntry key={selectedExam.id} exam={selectedExam} />}
           </TabsContent>}
           <TabsContent value="results" className="mt-0 min-w-0 max-w-full overflow-hidden">
             <Card className="min-w-0 max-w-full rounded-none border-0 bg-transparent shadow-none">
