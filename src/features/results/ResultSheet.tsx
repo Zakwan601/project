@@ -10,13 +10,13 @@ const showMark = (value: number | null, maximum: number, absent: boolean) => {
 }
 
 export function ResultSheet({ result, publicView = false }: { result: StudentResultPayload; publicView?: boolean }) {
-  const { exam, student, subjects, summary } = result
+  const { exam, student, subjects, summary, attendance } = result
   const totalOnly = exam.marks_mode === 'total_only'
   const totalPass = exam.marks_mode === 'total_pass'
   return (
     <Card className="result-sheet mx-auto max-w-5xl overflow-hidden print:border-0 print:shadow-none">
       <CardContent className="p-4 sm:p-8">
-        <div className="mb-6 text-center">
+        <div className="mb-6 text-center print:mb-4">
           <img src="https://ik.imagekit.io/nmdc/nmdc_logo.jpg"
             alt="NMDC Logo"
             className="mx-auto h-20 w-20 object-contain mb-4"
@@ -31,14 +31,21 @@ export function ResultSheet({ result, publicView = false }: { result: StudentRes
           
         </div>
 
-        <div className="mb-5 grid grid-cols-2 gap-x-3 gap-y-3 rounded-lg border bg-muted/30 p-3 text-sm sm:p-4 lg:grid-cols-4">
+        <div className="mb-5 grid grid-cols-2 gap-x-3 gap-y-3 rounded-lg border bg-muted/30 p-3 text-sm sm:p-4 lg:grid-cols-4 print:mb-3">
           <div className="min-w-0"><span className="text-muted-foreground">Student</span><p className="break-words font-semibold">{student.full_name}</p></div>
           <div className="min-w-0"><span className="text-muted-foreground">Student ID</span><p className="break-words font-semibold">{student.admission_number}</p></div>
           <div className="min-w-0"><span className="text-muted-foreground">Class</span><p className="break-words font-semibold">{exam.class_name} ({exam.grade}-{exam.section})</p></div>
           <div className="min-w-0"><span className="text-muted-foreground">Exam date</span><p className="break-words font-semibold">{exam.exam_date}</p></div>
         </div>
 
-        <div className={totalOnly ? 'my-5 grid grid-cols-2 gap-2' : 'my-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5'}>
+        {attendance && <div className="mb-4 grid grid-cols-3 gap-x-3 gap-y-1 text-xs print:mb-2 print:gap-y-0 print:text-[10px]" data-report-attendance>
+          <div><p className="text-muted-foreground">Amount of classes</p><p className="font-semibold tabular-nums">{attendance.total_classes}</p></div>
+          <div><p className="text-muted-foreground">Present</p><p className="font-semibold tabular-nums">{attendance.present_count}</p></div>
+          <div><p className="text-muted-foreground">Present percentage</p><p className="font-semibold tabular-nums">{attendance.present_percentage}%</p></div>
+          <p className="col-span-3 text-[10px] text-muted-foreground print:text-[8px]">Attendance period: {attendance.start_date} to {attendance.end_date}. Includes late and approved leave.</p>
+        </div>}
+
+        <div className={totalOnly ? 'my-5 grid grid-cols-2 gap-2 print:my-3' : 'my-5 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5 print:my-3'}>
           <Summary label="Total" value={`${summary.total_obtained} / ${summary.total_max}`} />
           {!totalOnly && <Summary label="GPA" value={Number(summary.gpa).toFixed(2)} />}
           {!totalOnly && <Summary label="Grade" value={summary.letter_grade ?? '-'} />}

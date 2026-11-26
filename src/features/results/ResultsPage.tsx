@@ -35,6 +35,7 @@ import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
+  positionExamResults,
   examResultColumns,
   examResultComponentText,
   orderResultSubjects,
@@ -489,17 +490,7 @@ function StaffResults() {
         position: null,
       }
     })
-    const positions = new Map<string, number>()
-    let previousTotal: number | null = null
-    let previousPosition = 0
-    rows.filter(row => row.complete)
-      .sort((a, b) => b.totalObtained - a.totalObtained || a.name.localeCompare(b.name))
-      .forEach((row, index) => {
-        if (previousTotal == null || row.totalObtained !== previousTotal) previousPosition = index + 1
-        positions.set(row.id, previousPosition)
-        previousTotal = row.totalObtained
-      })
-    return rows.map(row => ({ ...row, position: positions.get(row.id) ?? null }))
+    return positionExamResults(rows, totalOnly)
   }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data, curriculumByStudentId, courseOptionsQuery.data, paperGroupsQuery.data, selectedExam?.count_fourth_subject, totalOnly])
 
   const exportExamResults = () => {

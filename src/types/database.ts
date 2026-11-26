@@ -547,6 +547,13 @@ export interface StudentResultPayload {
     roll_number: number | null
   }
   subjects: ResultPayloadSubject[]
+  attendance?: {
+    start_date: string
+    end_date: string
+    total_classes: number
+    present_count: number
+    present_percentage: number
+  }
   summary: {
     total_obtained: number
     total_max: number

@@ -545,6 +545,11 @@
     text-align: left !important;
   }
 
+  .exam-results-print-table th[scope="col"] {
+    font-size: 5.5pt;
+    letter-spacing: -0.2px;
+  }
+
   .exam-results-print-table .result-subject-code,
   .exam-results-print-table .result-component-max {
     display: block;

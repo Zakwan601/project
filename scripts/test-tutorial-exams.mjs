@@ -57,4 +57,8 @@ const tutorialReport=renderToStaticMarkup(React.createElement(context.exports.Re
   subjects:[{...result.subjects[0],...cqMcqSubject,creative_marks:0,written_marks:6.6,obtained:6.6,pass_mark:6.6,passed:true,letter_grade:'D',grade_point:1}]}}))
 assert.ok(tutorialReport.includes('CQ')&&tutorialReport.includes('MCQ')&&tutorialReport.includes('Total pass: 6.6'))
 assert.ok(!tutorialReport.includes('Practical')&&!tutorialReport.includes('Pass mark:'),'Tutorial reports have no practical or individual section passing')
+const attendanceReport=renderToStaticMarkup(React.createElement(context.exports.ResultSheet,{result:{...result,attendance:{
+  start_date:'2035-01-08',end_date:'2035-01-16',total_classes:5,present_count:3,present_percentage:60}}}))
+for(const text of ['Amount of classes','Present percentage','60%','2035-01-08 to 2035-01-16']) assert.ok(attendanceReport.includes(text),`Report attendance missing ${text}`)
+assert.ok(attendanceReport.includes('data-report-attendance'))
 console.log('Passed tutorial configuration, metadata-driven behavior, positive totals, zero-mark rendering, no grading/section fields in reports, and regular-exam regressions.')

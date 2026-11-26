@@ -189,7 +189,7 @@ export function examSubjectShortName(subject: ExamSubject) {
 }
 
 export interface ExamResultColumn {
-  field: 'written_marks' | 'creative_marks' | 'practical_marks'
+  field: 'written_marks' | 'creative_marks' | 'practical_marks' | 'total'
   label: string
   maximum: number
 }
@@ -202,12 +202,13 @@ export function examResultColumns(subject: ExamSubject, totalOnly: boolean): Exa
     // Preserve practical marks for regular exams that include that component.
     ...(subject.practical_max > 0 ? [{ field: 'practical_marks' as const, label: 'Prac', maximum: subject.practical_max }] : []),
   ]
-  return columns.filter(column => column.maximum !== 0)
+  return [...columns.filter(column => column.maximum !== 0), { field: 'total', label: 'Total', maximum: examSubjectTotal(subject) }]
 }
 
 export function examResultComponentText(row: ExamResultReportRow, subject: ExamSubject, column: ExamResultColumn, mark?: MarkRow) {
   if (!row.subjects[subject.id]) return '—'
   if (row.subjects[subject.id].absent) return 'Absent'
+  if (column.field === 'total') return row.subjects[subject.id].complete ? String(row.subjects[subject.id].obtained) : '—'
   if (column.maximum <= 0 || mark?.[column.field] == null) return '—'
   return String(mark[column.field])
 }
@@ -387,4 +388,19 @@ export function calculateOfficialGpa(
     : Math.min(5, Number(((mainGradePointTotal + fourthBonus) / 6).toFixed(2)))
 
   return { gpa, failedMainSubjects, mainSubjectCount: main.length, fourthBonus }
+}
+
+export function positionExamResults<T extends ExamResultReportRow>(rows: T[], totalOnly: boolean): T[] {
+  const score = (row: T) => totalOnly ? row.totalObtained : row.gpa ?? 0
+  const ranked = rows.filter(row => row.complete && (totalOnly || (row.failedSubjects === 0 && (row.gpa ?? 0) >= 1)))
+    .sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name))
+  const positions = new Map<string, number>()
+  let previousScore: number | null = null
+  let position = 0
+  ranked.forEach((row, index) => {
+    if (previousScore === null || score(row) !== previousScore) position = index + 1
+    positions.set(row.id, position)
+    previousScore = score(row)
+  })
+  return rows.map(row => ({ ...row, position: positions.get(row.id) ?? null }))
 }
