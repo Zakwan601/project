@@ -53,6 +53,17 @@ for(const label of ['GPA','Failed subjects','Creative','MCQ','Practical','Pass m
 assert.ok(markup.includes('0 / 20'),'A zero mark must be displayed as a real total')
 const regular=renderToStaticMarkup(React.createElement(context.exports.ResultSheet,{result:{...result,exam:{...result.exam,marks_mode:'sectioned'},summary:{...result.summary,gpa:0,letter_grade:'F',failed_subjects:1}}}))
 assert.ok(regular.includes('GPA')&&regular.includes('Creative')&&regular.includes('MCQ'))
+assert.match(regular, /<dt>Position<\/dt><dd>Failed<\/dd>/, 'An overall failure must display Failed instead of a position')
+const unorderedSubjects = [
+  ['Chemistry', '178+179', 'fourth'], ['ICT', '275', 'main'], ['English', '107+108', 'main'], ['Bangla', '101+102', 'main'], ['Physics', '174+175', 'main'],
+].map(([name,code,subject_role],index)=>({...result.subjects[0],id:String(index),name,code,subject_role}))
+const orderedReport=renderToStaticMarkup(React.createElement(context.exports.ResultSheet,{result:{...result,subjects:unorderedSubjects}}))
+const names=[...orderedReport.matchAll(/<span class="block">([^<]+)<\/span>/g)].map(match=>match[1])
+assert.deepEqual(names,['Bangla','English','ICT','Chemistry','Physics'])
+assert.deepEqual(unorderedSubjects.map(subject=>subject.name),['Chemistry','ICT','English','Bangla','Physics'],'Rendering must not mutate query data')
+assert.equal((orderedReport.match(/4th subject/g)??[]).length,1,'Only the student-assigned fourth subject is labelled')
+assert.ok(orderedReport.indexOf('178+179')<orderedReport.indexOf('4th subject'))
+assert.match(markup, /<dt>Position<\/dt><dd>2 of 2<\/dd>/, 'Ungraded exams retain their existing position')
 const tutorialReport=renderToStaticMarkup(React.createElement(context.exports.ResultSheet,{result:{...result,exam:{...result.exam,marks_mode:'total_pass'},
   subjects:[{...result.subjects[0],...cqMcqSubject,creative_marks:0,written_marks:6.6,obtained:6.6,pass_mark:6.6,passed:true,letter_grade:'D',grade_point:1}]}}))
 assert.ok(tutorialReport.includes('CQ')&&tutorialReport.includes('MCQ')&&tutorialReport.includes('Total pass: 6.6'))

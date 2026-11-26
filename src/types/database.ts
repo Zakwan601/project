@@ -506,6 +506,7 @@ export interface ResultPayloadSubject {
   id: string
   name: string
   code: string
+  subject_role?: 'main' | 'fourth' | null
   creative_max: number
   creative_marks: number | null
   written_max: number

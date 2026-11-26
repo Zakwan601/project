@@ -1,3 +1,5 @@
+import { ResultSignatures } from '@/features/results/ResultSheet'
+import { prepareResultSignatures } from '@/lib/printReportCard'
 import { StudentProfileReview } from './StudentProfileReview'
 import { StudentAttendanceReport, StudentInformation, StudentResultDetails } from './StudentDetails'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -263,7 +265,7 @@ export function StudentsPage() {
     ])
   }
 
-  const printStudentList = () => {
+  const printStudentList = async () => {
     if (!selectedClassDetails || filtered.length === 0) return
 
     const pageStyle = document.createElement('style')
@@ -278,6 +280,7 @@ export function StudentsPage() {
 
     document.body.classList.add('student-report-printing')
     window.addEventListener('afterprint', cleanup, { once: true })
+    await prepareResultSignatures(document.querySelector('.student-report-print') ?? document)
     window.print()
   }
 
@@ -926,6 +929,7 @@ export function StudentsPage() {
               </tbody>
             </table>
           </section>
+          <ResultSignatures />
         </div>
       )}
 

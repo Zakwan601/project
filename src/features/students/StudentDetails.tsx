@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatFine } from '@/lib/attendanceFine'
 import { printReportCards } from '@/lib/printReportCard'
+import { ResultSignatures } from '@/features/results/ResultSheet'
 
 // Database types are maintained manually in this project.
 const db = supabase as any
@@ -153,7 +154,7 @@ export function StudentAttendanceReport({ student }: { student: StudentWithClass
                       </>}
       </section>
       {role === 'admin' && <FinePaymentHistory studentId={student.id} />}
-      <footer className="hidden justify-between gap-8 border-t pt-8 text-xs print:flex"><span>Office signature: __________________</span><span>Guardian signature: __________________</span></footer>
+      <div className="hidden print:block"><ResultSignatures guardian /></div>
     </div>
   </div>
 }

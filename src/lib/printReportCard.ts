@@ -1,6 +1,15 @@
 const PRINT_ROOT_ID = 'report-card-print-root'
 const PAGE_STYLE_ID = 'report-card-page-style'
 
+export async function prepareResultSignatures(root: ParentNode) {
+  const urls = new Set(Array.from(root.querySelectorAll('.result-signature image'), image => image.getAttribute('href')).filter((url): url is string => Boolean(url)))
+  await Promise.all(Array.from(urls, async url => {
+    const image = new Image()
+    image.src = url
+    await image.decode().catch(() => undefined)
+  }))
+}
+
 export function printReportCard() {
   const source = document.querySelector<HTMLElement>('.result-sheet')
   if (!source) return
@@ -41,7 +50,9 @@ export function printReportCards(sources: HTMLElement[]) {
   document.title = ' '
   window.addEventListener('afterprint', cleanup, { once: true })
 
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => window.print())
+  void prepareResultSignatures(printRoot).then(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.print())
+    })
   })
 }

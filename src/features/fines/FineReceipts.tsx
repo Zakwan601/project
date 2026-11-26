@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { formatFine } from '@/lib/attendanceFine'
 import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
 import { printReportCards } from '@/lib/printReportCard'
+import { ResultSignatures } from '@/features/results/ResultSheet'
 import type { FinePayment } from '@/services/fineCollections'
 
 export function fineReceiptNumber(payment: FinePayment) {
@@ -35,8 +36,9 @@ export function FineReceiptButton({ payment }: { payment: FinePayment }) {
           <Amount label="Waiver" value={Number(payment.waiver_amount)} />
           <Amount label="Amount received" value={Number(payment.paid_amount)} bold />
         </dl>
-        <div className="fine-receipt-footer mt-8 flex items-end justify-between gap-6 text-xs"><p>Paid upto {formatDisplayDate(payment.period_end)}.<br /></p>
-          <div className="min-w-44 text-center"><p className="border-t pt-2">Collector signature</p><p className="mt-1 font-semibold">{payment.collector_name}</p></div></div>
+        <div className="fine-receipt-footer text-xs"><p>Paid upto {formatDisplayDate(payment.period_end)}.</p>
+          <ResultSignatures collector={payment.collector_name} className="fine-receipt-signatures" />
+        </div>
       </section>)}
     </div></div>
   </>

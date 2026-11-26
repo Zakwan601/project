@@ -9,8 +9,8 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useClasses } from '@/hooks/useClasses'
 import { EmptyState, ErrorState } from '@/components/shared/PageHeader'
-import { ResultSheet } from '@/features/results/ResultSheet'
-import { printReportCard, printReportCards } from '@/lib/printReportCard'
+import { ResultSheet, ResultSignatures } from '@/features/results/ResultSheet'
+import { printReportCard, printReportCards, prepareResultSignatures } from '@/lib/printReportCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -98,7 +98,7 @@ function ExaminationContentSkeleton({ detail }: { detail: boolean }) {
     <div className="space-y-4">
       {detail ? (
         <div className="flex gap-2 border-b pb-2">
-          {['Routine', 'Enter marks', 'All results', 'Report card'].map(label => (
+          {['Routine', 'Enter marks', 'Tabulation sheet', 'Report card'].map(label => (
             <div key={label} className="px-3 py-1.5">
               <Skeleton className="h-4 w-20" />
             </div>
@@ -521,7 +521,7 @@ function StaffResults() {
     downloadCsv(`results-${classSlug}-${examSlug}-${selectedExam.exam_date}.csv`, [headers, ...rows])
   }
 
-  const printExamResults = () => {
+  const printExamResults = async () => {
     if (!examResultRows.length) return
     const pageStyle = document.createElement('style')
     pageStyle.id = 'exam-results-page-style'
@@ -539,6 +539,7 @@ function StaffResults() {
     }
     document.body.classList.add('student-report-printing')
     window.addEventListener('afterprint', cleanup, { once: true })
+    await prepareResultSignatures(document.querySelector('.student-report-print') ?? document)
     window.print()
   }
 
@@ -835,16 +836,16 @@ function StaffResults() {
           <Button variant="outline" size="sm" onClick={() => navigate('/results')}><ArrowLeft className="mr-2 h-4 w-4" /> All examinations</Button>
           {canWrite && selectedExam?.status === 'draft' &&
             <Button size="sm" variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}
-          {canPublishResults && selectedExam && <Button size="sm" variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div><div className="sm:hidden"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" aria-label="Exam actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => navigate('/results')}><ArrowLeft /> All examinations</DropdownMenuItem>{canWrite && selectedExam && <>{(selectedExam.status === 'draft' || canPublishResults) && <DropdownMenuSeparator />}{selectedExam.status === 'draft' && <DropdownMenuItem disabled={!unusedSubjects.length || publishing} onSelect={openSubjectConfiguration}><Plus /> Add subjects</DropdownMenuItem>}{canPublishResults && <DropdownMenuItem disabled={publishing} onSelect={() => void setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</DropdownMenuItem>}</>}{activeTab === 'results' && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={exportExamResults}><Download /> Export CSV</DropdownMenuItem><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={printExamResults}><Printer /> Print report</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></>}
+          {canPublishResults && selectedExam && <Button size="sm" variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div><div className="sm:hidden"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" aria-label="Exam actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => navigate('/results')}><ArrowLeft /> All examinations</DropdownMenuItem>{canEditExamination && selectedExam?.status === 'draft' && <DropdownMenuItem onSelect={openEditExamDialog}><Pencil /> Edit examination</DropdownMenuItem>}{canWrite && selectedExam && <>{(selectedExam.status === 'draft' || canPublishResults) && <DropdownMenuSeparator />}{selectedExam.status === 'draft' && <DropdownMenuItem disabled={!unusedSubjects.length || publishing} onSelect={openSubjectConfiguration}><Plus /> Add subjects</DropdownMenuItem>}{canPublishResults && <DropdownMenuItem disabled={publishing} onSelect={() => void setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</DropdownMenuItem>}</>}{activeTab === 'results' && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={exportExamResults}><Download /> Export CSV</DropdownMenuItem><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={printExamResults}><Printer /> Print report</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></>}
         </div>
       </section>
       {isExamPage && !classId ? <EmptyState title="Select a class" /> : examsQuery.isLoading ? <ExaminationContentSkeleton detail={isExamPage} /> : examsQuery.error ? <ErrorState message={(examsQuery.error as Error).message} /> : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 max-w-full">
-          {isExamPage && <div className={activeTab === 'results' ? 'mb-0 sm:mb-3' : 'mb-3'}>
-            <TabsList className=" justify-start gap-1 bg-transparent p-0">
+          {isExamPage && <div className={activeTab === 'results' || activeTab === 'preview' ? 'mb-0 sm:mb-3' : 'mb-3'}>
+            <TabsList className="exam-detail-tabs justify-start gap-1 bg-transparent p-0">
               <TabsTrigger value="routine" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Routine</TabsTrigger>
               {canWrite && <TabsTrigger value="marks" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Enter marks</TabsTrigger>}
-              <TabsTrigger value="results" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> All results</TabsTrigger>
+              <TabsTrigger value="results" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Tabulation sheet</TabsTrigger>
               <TabsTrigger value="preview" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Report card</TabsTrigger>
             </TabsList>
           </div>}
@@ -892,7 +893,7 @@ function StaffResults() {
           </TabsContent>
           <TabsContent value="routine" className="mt-0">
             {selectedExam && <>
-              {canEditExamination && selectedExam.status === 'draft' && <div className="mb-3 flex justify-end"><Button type="button" variant="outline" size="sm" onClick={openEditExamDialog}><Pencil className="mr-2 h-4 w-4" /> Edit examination</Button></div>}
+              {canEditExamination && selectedExam.status === 'draft' && <div className="mb-3 hidden justify-end sm:flex"><Button type="button" variant="outline" size="sm" onClick={openEditExamDialog}><Pencil className="mr-2 h-4 w-4" /> Edit examination</Button></div>}
               <ExamScheduleManager examGroupId={selectedExam.exam_group_id} classId={selectedExam.class_id} canWrite={canWrite} hasRegularClasses={selectedExam.has_regular_classes} combineSubjectPapers={selectedExam.combine_subject_papers} />
             </>}
           </TabsContent>
@@ -903,7 +904,7 @@ function StaffResults() {
             <Card className="min-w-0 max-w-full rounded-none border-0 bg-transparent py-0 shadow-none sm:py-3">
               <CardHeader className="px-0 pb-5 pt-0">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div><p className="hidden text-xs font-semibold uppercase tracking-wide text-primary sm:block">Class performance</p><CardTitle className="mt-0 text-xl sm:mt-1">All student results</CardTitle><CardDescription className="mt-1 hidden sm:block">{selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam && format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')}</CardDescription></div>
+                  <div><p className="hidden text-xs font-semibold uppercase tracking-wide text-primary sm:block">Class performance</p><CardTitle className="mt-0 text-xl sm:mt-1">Tabulation sheet</CardTitle><CardDescription className="mt-1 hidden sm:block">{selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam && format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')}</CardDescription></div>
                   <div className="hidden flex-wrap gap-2 sm:flex"><Button type="button" variant="outline" onClick={exportExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Download className="mr-2 h-4 w-4" /> Export CSV</Button><Button type="button" variant="outline" onClick={printExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Printer className="mr-2 h-4 w-4" /> Print report</Button></div>
                 </div>
                 <div className="mt-1 grid grid-cols-4 gap-2 [&_p:first-child]:text-lg [&_p:last-child]:text-[10px] sm:gap-3 sm:[&_p:first-child]:text-xl sm:[&_p:last-child]:text-xs"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div>{!totalOnly && <div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div>}<div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
@@ -918,8 +919,8 @@ function StaffResults() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="preview" className="mt-0 space-y-4">
-            <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-4 px-0 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{previewStudent ? `${previewStudent.first_name} ${previewStudent.last_name} · ` : ''}{selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && previewStudentId && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button variant="outline" disabled={!studentsQuery.data?.length || studentsQuery.isFetching || studentsQuery.isError || preparingReportCards} onClick={() => void printAllReportCards()}><Printer className="mr-2 h-4 w-4" /> {preparingReportCards ? 'Preparing report cards…' : 'Print all report cards'}</Button><Button disabled={!previewQuery.data || previewQuery.isLoading || previewQuery.isError || preparingReportCards} onClick={printReportCard}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
+          <TabsContent value="preview" className="report-card-preview-tab mt-0 space-y-2 sm:space-y-4">
+            <Card className="rounded-none border-0 border-b bg-transparent py-0 shadow-none sm:py-3"><CardContent className="flex flex-col gap-2 px-0 pb-2 pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:pb-4"><div className="flex items-center gap-3"><div><p className="font-semibold">Report card preview</p><p className="text-sm text-muted-foreground">{previewStudent ? `${previewStudent.first_name} ${previewStudent.last_name} · ` : ''}{selectedExam?.title || selectedExam?.result_exam_types.name}</p></div></div><div className="flex flex-wrap gap-2">{canWrite && previewStudentId && selectedExam?.status === 'published' && <Button variant="outline" onClick={createShareLink}><Link2 className="mr-2 h-4 w-4" /> Guardian link</Button>}<Button variant="outline" disabled={!studentsQuery.data?.length || studentsQuery.isFetching || studentsQuery.isError || preparingReportCards} onClick={() => void printAllReportCards()}><Printer className="mr-2 h-4 w-4" /> {preparingReportCards ? 'Preparing report cards…' : 'Print all report cards'}</Button><Button disabled={!previewQuery.data || previewQuery.isLoading || previewQuery.isError || preparingReportCards} onClick={printReportCard}><Printer className="mr-2 h-4 w-4" /> Print report card</Button></div></CardContent></Card>
             <div className="hidden xl:block">
               <Select value={previewStudentId} onValueChange={value => { setPreviewStudentId(value); setShareUrl('') }}>
                 <SelectTrigger className="max-w-md"><SelectValue placeholder="Choose a student to preview" /></SelectTrigger>
@@ -933,7 +934,7 @@ function StaffResults() {
               </Sheet>
             </div>
             {shareUrl && <Card className="rounded-none border-0 border-b bg-transparent shadow-none"><CardContent className="flex flex-col gap-2 px-0 pb-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-sm font-medium">Guardian link copied</p><p className="truncate text-xs text-muted-foreground">{shareUrl}</p></div><Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(shareUrl)}><Copy className="mr-2 h-4 w-4" /> Copy again</Button></CardContent></Card>}
-            {!previewStudentId ? <Card className="border-0 bg-transparent shadow-none"><CardContent className="py-14"><EmptyState title="Select a student" description="Choose a student to preview and print their report card." /></CardContent></Card> : previewQuery.isLoading ? <ReportPreviewSkeleton /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden"><ResultSheet result={previewQuery.data} /></div> : null}
+            {!previewStudentId ? <Card className="border-0 bg-transparent shadow-none"><CardContent className="py-4 sm:py-14"><EmptyState title="Select a student" description="Choose a student to preview and print their report card." /></CardContent></Card> : previewQuery.isLoading ? <ReportPreviewSkeleton /> : previewQuery.error ? <ErrorState message={(previewQuery.error as Error).message} /> : previewQuery.data ? <div className="overflow-hidden"><ResultSheet result={previewQuery.data} /></div> : null}
           </TabsContent>
         </Tabs>
       )}
@@ -1052,7 +1053,7 @@ function StaffResults() {
         <div className="student-report-print" aria-hidden="true">
           <header className="print-report-header">
             <div>
-              <h1>Examination Results Report</h1>
+              <h1>Tabulation Sheet</h1>
               <p>{selectedExam.title || selectedExam.result_exam_types.name} · {selectedExam.classes.name}</p>
             </div>
             <dl>
@@ -1069,6 +1070,7 @@ function StaffResults() {
             </div>
             <ExamResultsTable subjects={resultSubjects} rows={examResultRows} marks={examMarksQuery.data ?? []} totalOnly={totalOnly} print />
           </section>
+          <ResultSignatures />
         </div>
       )}
     </div>

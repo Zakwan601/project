@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { ResultSheet } from '@/features/results/ResultSheet'
+import { printReportCard } from '@/lib/printReportCard'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/shared/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -33,7 +34,7 @@ export function SharedResultPage() {
   return (
     <main className="min-h-screen bg-muted/30 p-3 sm:p-8">
       <div className="mx-auto mb-4 flex max-w-5xl justify-end print:hidden">
-        <Button onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print result</Button>
+        <Button onClick={printReportCard}><Printer className="mr-2 h-4 w-4" /> Print result</Button>
       </div>
       <ResultSheet result={resultQuery.data} publicView />
     </main>

@@ -1,3 +1,5 @@
+import { ResultSignatures } from '@/features/results/ResultSheet'
+import { prepareResultSignatures } from '@/lib/printReportCard'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
@@ -355,7 +357,7 @@ export function ReportsPage() {
     downloadCsv('attendance-' + classSlug + '-' + startDate + '-to-' + endDate + '.csv', [title, headers, ...rows])
   }
 
-  const printStudentReport = () => {
+  const printStudentReport = async () => {
     if (!reportRows.length || !dailyStudentAttendance) return
 
     const pageStyle = document.createElement('style')
@@ -368,6 +370,7 @@ export function ReportsPage() {
     }
     document.body.classList.add('student-report-printing')
     window.addEventListener('afterprint', cleanup, { once: true })
+    await prepareResultSignatures(document.querySelector('.student-report-print') ?? document)
     window.print()
   }
 
@@ -706,7 +709,7 @@ export function ReportsPage() {
             <div className="print-section-heading">
               <h2>Attendance Summary</h2>
             </div>
-            <table className="print-summary-table">
+            <table className="print-summary-table print-attendance-summary">
               <thead>
                 <tr>
                   <th>SN</th><th>Roll</th><th>Student</th>
@@ -724,6 +727,7 @@ export function ReportsPage() {
                 ))}
               </tbody>
             </table>
+            <ResultSignatures />
           </section>
 
           {chunkDates(dailyStudentAttendance.dates, 12).map(dates => (
@@ -754,6 +758,7 @@ export function ReportsPage() {
                   ))}
                 </tbody>
               </table>
+              <ResultSignatures />
             </section>
           ))}
         </div>

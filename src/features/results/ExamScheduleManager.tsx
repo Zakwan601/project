@@ -169,23 +169,23 @@ export function ExamScheduleManager({
   }
 
   return <>
-    <Card className="border-0 bg-transparent shadow-none">
+    <Card className="exam-routine-panel border-0 bg-transparent shadow-none">
       <CardHeader className="grid grid-cols-1 gap-3 px-0 pb-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:px-0">
         <div>
           <CardTitle>Examination routine</CardTitle>
           <CardDescription className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant={modeHasClasses ? 'secondary' : 'default'}>{modeHasClasses ? 'Exam + classes' : 'Exam only'}</Badge>
             <Badge variant="outline">{modeCombinesPapers ? 'Combined papers' : 'Separate papers'}</Badge>
-            <span>{currentExam ? `${currentExam.classes.name}` : 'This class has its own routine.'}</span>
+            <span className="hidden sm:inline">{currentExam ? `${currentExam.classes.name}` : 'This class has its own routine.'}</span>
           </CardDescription>
         </div>
-        {canWrite && <Button size="sm" className="w-full self-start sm:w-auto" onClick={openRoutineDialog}>Add routine row</Button>}
+        {canWrite && <Button size="sm" className="w-full self-start sm:w-auto" onClick={openRoutineDialog}><span className="sm:hidden">Add routine</span><span className="hidden sm:inline">Add routine row</span></Button>}
       </CardHeader>
       <CardContent className="px-0 sm:px-0">
         {routineQuery.isLoading ? <div className="overflow-hidden rounded-md border">{Array.from({ length: 5 }, (_, index) => <div key={index} className="grid min-h-12 grid-cols-[minmax(8rem,1fr)_7rem_6rem] items-center gap-3 border-b px-3 last:border-b-0"><Skeleton className="h-3 w-36 max-w-full" /><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-16" /></div>)}</div>
           : routineQuery.error ? <p className="py-8 text-center text-sm text-destructive">{(routineQuery.error as Error).message}</p>
             : !routineSlots.length ? <p className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">No routine rows added for this class yet.</p>
-              : <div className="overflow-x-auto"><Table className="min-w-[480px]"><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{routineSlots.map(row => <TableRow key={row.id}><TableCell><span className="font-medium">{row.subject_name}</span></TableCell><TableCell>{format(new Date(`${row.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell>{displayTime(row.exam_time)}</TableCell></TableRow>)}</TableBody></Table></div>}
+              : <div className="overflow-x-auto"><Table className="exam-routine-table min-w-[480px]"><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{routineSlots.map(row => <TableRow key={row.id}><TableCell><span className="font-medium">{row.subject_name}</span></TableCell><TableCell>{format(new Date(`${row.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell>{displayTime(row.exam_time)}</TableCell></TableRow>)}</TableBody></Table></div>}
       </CardContent>
     </Card>
 
