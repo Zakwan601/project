@@ -28,6 +28,13 @@ assert.equal(validExamSubjectConfig(cqMcq,false,true),true)
 assert.equal(validExamSubjectConfig(cqMcq,false),false,'Regular exams still require individual section passing')
 assert.equal(validExamSubjectConfig(examSubjectConfigValues({...cqMcqDraft,pass:'0'},false,true),false,true),false)
 assert.equal(validExamSubjectConfig([10,10,0,6.6,20,1,0,0],false,true),false)
+for (const [cq,mcq] of [[20,0],[0,20],[10,10]]) {
+  const config=examSubjectConfigValues({...cqMcqDraft,creative:String(cq),written:String(mcq)},false,true)
+  assert.equal(validExamSubjectConfig(config,false,true),true,`Tutorial CQ ${cq} / MCQ ${mcq} must be configurable`)
+}
+assert.equal(validExamSubjectConfig([0,0,0,0,0,0,0,0],false,true),false,'A subject still requires a positive total')
+assert.equal(validExamSubjectConfig([-1,21,0,6.6,20,0,0,0],false,true),false,'Negative section maximums are rejected')
+assert.equal(validExamSubjectConfig([20,0,0,21,20,0,0,0],false,true),false,'Passing cannot exceed the total')
 const cqMcqSubject={creative_max:10,written_max:10,practical_max:0,creative_pass_mark:0,written_pass_mark:0,practical_pass_mark:0}
 for(const [cq,mcq,passed] of [[0,6.6,true],[6.6,0,true],[3,3.6,true],[3,3.5,false],[0,0,false]]) {
   assert.equal(gradeSubject(cq+mcq,20,6.6,false,subjectSectionsPassed(cqMcqSubject,{creativeMarks:cq,writtenMarks:mcq,practicalMarks:0})).passed,passed)

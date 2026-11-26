@@ -190,7 +190,7 @@ export function validExamSubjectConfig(values: number[], totalOnly: boolean, tot
   return values.every(value => Number.isFinite(value) && value >= 0)
     && values[4] > 0 && Math.abs(values[0] + values[1] + values[2] - values[4]) <= 0.009
     && (totalOnly || (values[3] > 0 && values[3] <= values[4]
-      && (totalPass ? values[0] > 0 && values[1] > 0 && values[2] === 0 && values.slice(5).every(value => value === 0)
+      && (totalPass ? values[0] + values[1] > 0 && values[2] === 0 && values.slice(5).every(value => value === 0)
         : [0, 1, 2].every(index => values[index] > 0
         ? values[index + 5] > 0 && values[index + 5] <= values[index]
         : values[index + 5] === 0))))
