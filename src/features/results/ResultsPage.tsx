@@ -34,6 +34,7 @@ import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
+  orderResultSubjects,
   examSubjectConfigValues,
   validExamSubjectConfig,
   isTotalOnlyExam,
@@ -338,6 +339,8 @@ function StaffResults() {
     },
   })
 
+  const resultSubjects = useMemo(() => orderResultSubjects(examSubjectsQuery.data ?? []), [examSubjectsQuery.data])
+
   const studentsQuery = useQuery<Student[]>({
     queryKey: ['result-roster', selectedExam?.class_id, selectedExam?.exam_date], enabled: Boolean(selectedExam),
     queryFn: async () => {
@@ -507,7 +510,7 @@ function StaffResults() {
     if (!selectedExam || !examResultRows.length || !examSubjectsQuery.data) return
     const headers = [
       'SN', 'Class', 'Exam', 'Exam Date', 'Roll', 'Student', 'Admission Number',
-      ...examSubjectsQuery.data.map(subject => `${examSubjectName(subject)} (${examSubjectCode(subject)}) / ${examSubjectTotal(subject)}`),
+      ...resultSubjects.map(subject => `${examSubjectName(subject)} (${examSubjectCode(subject)}) / ${examSubjectTotal(subject)}`),
       'Total', ...(!totalOnly ? ['GPA', 'Grade'] : []), 'Position', ...(!totalOnly ? ['Failed Subjects'] : []),
     ]
     const rows = examResultRows.map((row, index) => [
@@ -518,7 +521,7 @@ function StaffResults() {
       row.roll,
       row.name,
       row.admission,
-      ...examSubjectsQuery.data!.map(subject => examSubjectResultText(row, subject)),
+      ...resultSubjects.map(subject => examSubjectResultText(row, subject)),
       row.complete ? `${row.totalObtained} / ${row.totalMax}` : '',
       ...(!totalOnly ? [row.gpa, row.grade] : []),
       row.position,
@@ -833,15 +836,16 @@ function StaffResults() {
               </div>
             </div>
           </div>
-          {isExamPage && <><div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">{canWrite && selectedExam?.status === 'draft' && 
-            <Button size="sm" variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}
+          {isExamPage && <><div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
           <Button variant="outline" size="sm" onClick={() => navigate('/results')}><ArrowLeft className="mr-2 h-4 w-4" /> All examinations</Button>
+          {canWrite && selectedExam?.status === 'draft' &&
+            <Button size="sm" variant="outline" onClick={openSubjectConfiguration} disabled={!unusedSubjects.length || publishing}><Plus className="mr-2 h-4 w-4" /> Add subjects</Button>}
           {canPublishResults && selectedExam && <Button size="sm" variant={selectedExam.status === 'published' ? 'outline' : 'default'} disabled={publishing} onClick={() => setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send className="mr-2 h-4 w-4" /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</Button>}</div><div className="sm:hidden"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" aria-label="Exam actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => navigate('/results')}><ArrowLeft /> All examinations</DropdownMenuItem>{canWrite && selectedExam && <>{(selectedExam.status === 'draft' || canPublishResults) && <DropdownMenuSeparator />}{selectedExam.status === 'draft' && <DropdownMenuItem disabled={!unusedSubjects.length || publishing} onSelect={openSubjectConfiguration}><Plus /> Add subjects</DropdownMenuItem>}{canPublishResults && <DropdownMenuItem disabled={publishing} onSelect={() => void setStatus(selectedExam.status === 'published' ? 'draft' : 'published')}><Send /> {publishing ? 'Working…' : selectedExam.status === 'published' ? 'Return to draft' : 'Publish results'}</DropdownMenuItem>}</>}{activeTab === 'results' && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={exportExamResults}><Download /> Export CSV</DropdownMenuItem><DropdownMenuItem disabled={!examResultRows.length || examMarksQuery.isLoading} onSelect={printExamResults}><Printer /> Print report</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></>}
         </div>
       </section>
       {isExamPage && !classId ? <EmptyState title="Select a class" /> : examsQuery.isLoading ? <ExaminationContentSkeleton detail={isExamPage} /> : examsQuery.error ? <ErrorState message={(examsQuery.error as Error).message} /> : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 max-w-full">
-          {isExamPage && <div className="mb-3 ">
+          {isExamPage && <div className={activeTab === 'results' ? 'mb-0 sm:mb-3' : 'mb-3'}>
             <TabsList className=" justify-start gap-1 bg-transparent p-0">
               <TabsTrigger value="routine" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Routine</TabsTrigger>
               {canWrite && <TabsTrigger value="marks" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent"> Enter marks</TabsTrigger>}
@@ -849,13 +853,13 @@ function StaffResults() {
               <TabsTrigger value="preview" disabled={!selectedExam} className="rounded-none border-b-2 border-transparent px-3 py-2 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent">Report card</TabsTrigger>
             </TabsList>
           </div>}
-          <TabsContent value="overview" className="mt-0 space-y-5">
-            {role === 'admin' && <div className="flex justify-end gap-3">
+          <TabsContent value="overview" className="mt-0 space-y-3 sm:space-y-5">
+            {role === 'admin' && <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
               {!isExamPage && 
-                <div className="max-w-xl">
+                <div className="min-w-0 flex-1 sm:max-w-xl sm:flex-none">
                   <Select value={classId || '__all__'} onValueChange={value => { setClassId(value === '__all__' ? '' : value); setExamId('') }}>
-                      <SelectTrigger className="h-11">
-                        <SelectValue />
+                      <SelectTrigger aria-label="Filter examinations by class" className="h-8 w-full text-xs sm:h-11 sm:w-fit sm:text-sm">
+                        <SelectValue placeholder="All classes" />
                       </SelectTrigger>
                       <SelectContent>
                       <SelectItem value="__all__">All classes</SelectItem>
@@ -864,12 +868,30 @@ function StaffResults() {
                     </Select>
                 </div>
               }  
-              <Button type="button" variant="outline" size="sm" onClick={() => setSettingsDialog(true)}><Settings className="mr-2 h-4 w-4" /> Subject Settings</Button>
-              {canWrite && <Button size="sm" onClick={openExamDialog}><Plus className="mr-2 h-4 w-4" /> New examination</Button>}
+              <Button type="button" variant="outline" size="sm" className="hidden sm:inline-flex" onClick={() => setSettingsDialog(true)}><Settings className="mr-2 h-4 w-4" /> Subject Settings</Button>
+              {canWrite && <Button size="sm" className="hidden sm:inline-flex" onClick={openExamDialog}><Plus className="mr-2 h-4 w-4" /> New examination</Button>}
+              <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0 sm:hidden" aria-label="Examination actions"><EllipsisVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => setSettingsDialog(true)}><Settings /> Subject Settings</DropdownMenuItem>{canWrite && <DropdownMenuItem onSelect={openExamDialog}><Plus /> New examination</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>
             </div>}
-            <Card className="border-0 bg-transparent shadow-none">
-              <CardContent className="px-0 py-2">
-                {!examsQuery.data?.length ? <EmptyState title="No examinations found" description={classId ? 'No examinations are available for this class.' : 'Create an examination to begin.'} /> : <div className="max-w-full overflow-x-auto"><Table className="min-w-[820px]"><TableHeader><TableRow><TableHead>Examination</TableHead><TableHead>Class</TableHead><TableHead>Session</TableHead><TableHead>Mode</TableHead><TableHead>Reference date</TableHead><TableHead>Status</TableHead><TableHead className="w-24 text-right">Action</TableHead></TableRow></TableHeader><TableBody>{examsQuery.data.map(exam => <TableRow key={exam.id} className="cursor-pointer" onClick={() => navigate(`/results/${exam.id}`)}><TableCell className="font-semibold">{exam.title || exam.result_exam_types.name}</TableCell><TableCell>{exam.classes.name}<span className="block text-xs text-muted-foreground">{exam.classes.grade}-{exam.classes.section}</span></TableCell><TableCell>{exam.academic_years.name}</TableCell><TableCell><Badge variant={exam.has_regular_classes ? 'secondary' : 'default'}>{exam.has_regular_classes ? 'Exam + classes' : 'Exam only'}</Badge></TableCell><TableCell className="whitespace-nowrap">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell><TableCell><Badge variant={exam.status === 'published' ? 'default' : 'secondary'} className="capitalize">{exam.status}</Badge></TableCell><TableCell className="text-right"><Button type="button" variant="ghost" size="sm" onClick={event => { event.stopPropagation(); navigate(`/results/${exam.id}`) }}>Manage<ChevronRight className="ml-1 h-4 w-4" /></Button></TableCell></TableRow>)}</TableBody></Table></div>}
+            <Card className="border-0 bg-transparent py-0 shadow-none sm:py-3">
+              <CardContent className="px-0 py-0 sm:py-2">
+                {!examsQuery.data?.length ? <EmptyState title="No examinations found" description={classId ? 'No examinations are available for this class.' : 'Create an examination to begin.'} /> : <div className="max-w-full overflow-x-auto">
+                  <Table className="w-full min-w-0 table-fixed text-[11px] leading-tight [&_td]:px-1 [&_td]:py-1.5 [&_th]:h-8 [&_th]:px-1 sm:min-w-[820px] sm:table-auto sm:text-sm sm:leading-normal sm:[&_td]:p-2 sm:[&_th]:h-10 sm:[&_th]:px-2">
+                    <TableHeader><TableRow>
+                      <TableHead className="w-[40%] sm:w-auto">Examination</TableHead><TableHead>Class</TableHead>
+                      <TableHead className="hidden sm:table-cell">Session</TableHead><TableHead className="hidden sm:table-cell">Mode</TableHead><TableHead className="hidden sm:table-cell">Reference date</TableHead>
+                      <TableHead className="w-16 sm:w-auto">Status</TableHead><TableHead className="w-7 text-right sm:w-24"><span className="sr-only sm:not-sr-only">Action</span></TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>{examsQuery.data.map(exam => <TableRow key={exam.id} className="cursor-pointer" onClick={() => navigate(`/results/${exam.id}`)}>
+                      <TableCell className="whitespace-normal font-semibold sm:whitespace-nowrap"><span>{exam.title || exam.result_exam_types.name}</span><span className="mt-0.5 block text-[9px] font-normal text-muted-foreground sm:hidden">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')}</span></TableCell>
+                      <TableCell className="whitespace-normal sm:whitespace-nowrap"><span className="sm:hidden">{exam.classes.name.replace(/^class\s+/i, '')}</span><span className="hidden sm:inline">{exam.classes.name}</span><span className="mt-0.5 block text-[9px] text-muted-foreground sm:hidden">{exam.academic_years.name}</span><span className="hidden text-xs text-muted-foreground sm:block">{exam.classes.grade}-{exam.classes.section}</span></TableCell>
+                      <TableCell className="hidden sm:table-cell">{exam.academic_years.name}</TableCell>
+                      <TableCell className="hidden sm:table-cell"><Badge variant={exam.has_regular_classes ? 'secondary' : 'default'}>{exam.has_regular_classes ? 'Exam + classes' : 'Exam only'}</Badge></TableCell>
+                      <TableCell className="hidden whitespace-nowrap sm:table-cell">{format(new Date(`${exam.exam_date}T00:00:00`), 'dd MMM yyyy')}</TableCell>
+                      <TableCell><Badge variant={exam.status === 'published' ? 'default' : 'secondary'} className="px-1 py-0 text-[9px] capitalize sm:px-2 sm:py-0.5 sm:text-xs">{exam.status}</Badge></TableCell>
+                      <TableCell className="text-right"><Button type="button" variant="ghost" size="sm" className="h-7 w-5 p-0 sm:h-8 sm:w-auto sm:px-3" aria-label={`Manage ${exam.title || exam.result_exam_types.name} for ${exam.classes.name}`} onClick={event => { event.stopPropagation(); navigate(`/results/${exam.id}`) }}><span className="hidden sm:inline">Manage</span><ChevronRight className="h-3.5 w-3.5 sm:ml-1 sm:h-4 sm:w-4" /></Button></TableCell>
+                    </TableRow>)}</TableBody>
+                  </Table>
+                </div>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -883,20 +905,20 @@ function StaffResults() {
             {selectedExam && <SubjectMarksEntry key={selectedExam.id} exam={selectedExam} />}
           </TabsContent>}
           <TabsContent value="results" className="mt-0 min-w-0 max-w-full overflow-hidden">
-            <Card className="min-w-0 max-w-full rounded-none border-0 bg-transparent shadow-none">
-              <CardHeader className="border-b px-0 pb-5 pt-0">
+            <Card className="min-w-0 max-w-full rounded-none border-0 bg-transparent py-0 shadow-none sm:py-3">
+              <CardHeader className="px-0 pb-5 pt-0">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Class performance</p><CardTitle className="mt-1 text-xl">All student results</CardTitle><CardDescription className="mt-1">{selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam && format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')}</CardDescription></div>
+                  <div><p className="hidden text-xs font-semibold uppercase tracking-wide text-primary sm:block">Class performance</p><CardTitle className="mt-0 text-xl sm:mt-1">All student results</CardTitle><CardDescription className="mt-1 hidden sm:block">{selectedExam?.title || selectedExam?.result_exam_types.name} · {selectedExam?.classes.name} · {selectedExam && format(new Date(`${selectedExam.exam_date}T00:00:00`), 'dd MMM yyyy')}</CardDescription></div>
                   <div className="hidden flex-wrap gap-2 sm:flex"><Button type="button" variant="outline" onClick={exportExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Download className="mr-2 h-4 w-4" /> Export CSV</Button><Button type="button" variant="outline" onClick={printExamResults} disabled={!examResultRows.length || examMarksQuery.isLoading}><Printer className="mr-2 h-4 w-4" /> Print report</Button></div>
                 </div>
-                <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 sm:grid-cols-4"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div>{!totalOnly && <div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div>}<div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
+                <div className="mt-1 grid grid-cols-4 gap-2 [&_p:first-child]:text-lg [&_p:last-child]:text-[10px] sm:gap-3 sm:[&_p:first-child]:text-xl sm:[&_p:last-child]:text-xs"><div><p className="text-xl font-bold">{examResultRows.length}</p><p className="text-xs text-muted-foreground">Students</p></div><div><p className="text-xl font-bold text-emerald-600">{completedResults}</p><p className="text-xs text-muted-foreground">Complete</p></div>{!totalOnly && <div><p className="text-xl font-bold">{examResultRows.filter(row => row.complete && row.grade !== 'F').length}</p><p className="text-xs text-muted-foreground">Passed</p></div>}<div><p className="text-xl font-bold text-amber-600">{examResultRows.length - completedResults}</p><p className="text-xs text-muted-foreground">Incomplete</p></div></div>
               </CardHeader>
               <CardContent className="min-w-0 max-w-full p-0">
                 {examMarksQuery.isLoading || studentsQuery.isLoading ? <ResultsTableSkeleton />
                   : examMarksQuery.error ? <ErrorState message={(examMarksQuery.error as Error).message} />
                     : studentsQuery.error ? <ErrorState message={(studentsQuery.error as Error).message} />
                       : examResultRows.length === 0 ? <EmptyState title="No students found" description="No students belong to this exam roster." />
-                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{examSubjectsQuery.data?.map(subject => <TableHead key={subject.id} className="min-w-14 text-center"><span className="block">{examSubjectCode(subject)}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead>{!totalOnly && <><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead></>}<TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{examSubjectsQuery.data?.map(subject => <TableCell key={subject.id} className="text-center text-[11px]">{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell>{!totalOnly && <><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell></>}<TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
+                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{resultSubjects.map(subject => <TableHead key={subject.id} className="min-w-14 text-center" title={examSubjectName(subject)}><span className="block">{examSubjectCode(subject)}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead>{!totalOnly && <><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead></>}<TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{resultSubjects.map(subject => <TableCell key={subject.id} className={`text-center text-[11px] ${row.subjects[subject.id]?.absent ? 'bg-red-50 font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300' : ''}`}>{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell>{!totalOnly && <><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell></>}<TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1051,8 +1073,8 @@ function StaffResults() {
               <p>{totalOnly ? "Subject totals and class position" : "Subject totals, overall result, GPA, grade, and class position"}</p>
             </div>
             <table className="print-summary-table exam-results-print-table">
-              <thead><tr><th>SN</th><th>Roll</th><th>Student</th><th>Admission</th>{examSubjectsQuery.data.map(subject => <th key={subject.id}>{examSubjectCode(subject)}<br />/{examSubjectTotal(subject)}</th>)}<th>Total</th>{!totalOnly && <><th>GPA</th><th>Grade</th></>}<th>Pos.</th></tr></thead>
-              <tbody>{examResultRows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>{examSubjectsQuery.data!.map(subject => <td key={subject.id}>{examSubjectResultText(row, subject)}</td>)}<td>{row.complete ? `${row.totalObtained}/${row.totalMax}` : '-'}</td>{!totalOnly && <><td>{row.gpa == null ? '-' : row.gpa.toFixed(2)}</td><td>{row.grade}</td></>}<td>{row.position ?? '-'}</td></tr>)}</tbody>
+              <thead><tr><th>SN</th><th>Roll</th><th>Student</th><th>Admission</th>{resultSubjects.map(subject => <th key={subject.id}>{examSubjectCode(subject)}<br />/{examSubjectTotal(subject)}</th>)}<th>Total</th>{!totalOnly && <><th>GPA</th><th>Grade</th></>}<th>Pos.</th></tr></thead>
+              <tbody>{examResultRows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>{resultSubjects.map(subject => <td key={subject.id} className={row.subjects[subject.id]?.absent ? 'bg-red-50 font-semibold text-red-700' : undefined}>{examSubjectResultText(row, subject)}</td>)}<td>{row.complete ? `${row.totalObtained}/${row.totalMax}` : '-'}</td>{!totalOnly && <><td>{row.gpa == null ? '-' : row.gpa.toFixed(2)}</td><td>{row.grade}</td></>}<td>{row.position ?? '-'}</td></tr>)}</tbody>
             </table>
             <p className="print-footnote">A dash indicates an incomplete result. Subject columns show obtained marks over the configured maximum.</p>
           </section>

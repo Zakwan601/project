@@ -172,6 +172,19 @@ export function examSubjectTotal(subject: ExamSubject) {
   return subject.creative_max + subject.written_max + subject.practical_max
 }
 
+export function orderResultSubjects(subjects: ExamSubject[]) {
+  const priority = (subject: ExamSubject) => {
+    const code = (subject.result_subject_paper_groups?.code ?? subject.subjects.code).split('+')[0].trim()
+    const name = subject.result_subject_paper_groups?.name ?? subject.subjects.name
+    if (['101', '102'].includes(code) || /^bangla\b/i.test(name)) return 0
+    if (['107', '108'].includes(code) || /^english\b/i.test(name)) return 1
+    if (code === '275' || /^(ict\b|information.*communication)/i.test(name)) return 2
+    return 3
+  }
+  // Keep the configured order for all remaining subjects without mutating query data.
+  return [...subjects].sort((a, b) => priority(a) - priority(b))
+}
+
 export function isTotalOnlyExam(exam: ExamWithDetails | undefined) {
   return exam?.result_exam_types.marks_mode === 'total_only'
 }
