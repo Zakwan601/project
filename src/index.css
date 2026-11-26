@@ -525,21 +525,41 @@
   }
 
   .exam-results-print-table {
-    table-layout: auto !important;
-    font-size: 7pt;
+    table-layout: fixed !important;
+    width: 100% !important;
+    font-size: 6.5pt;
+    line-height: 1.2;
   }
 
   .exam-results-print-table th,
   .exam-results-print-table td {
-    width: auto !important;
     padding: 2px !important;
+    font-size: inherit;
     text-align: center !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .exam-results-print-table th:nth-child(3),
-  .exam-results-print-table td:nth-child(3) {
-    min-width: 90px;
+  .exam-results-print-table .result-student-name {
     text-align: left !important;
+  }
+
+  .exam-results-print-table .result-subject-code,
+  .exam-results-print-table .result-component-max {
+    display: block;
+    font-size: 5.5pt;
+    font-weight: 400;
+  }
+
+  .exam-results-print-table .result-subject-end {
+    border-right-width: 1.5px;
+  }
+
+  .exam-results-print-table .result-absent {
+    color: #b91c1c;
+    background: #fef2f2;
+    font-weight: 700;
   }
 
   .print-footnote {

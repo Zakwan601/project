@@ -172,6 +172,46 @@ export function examSubjectTotal(subject: ExamSubject) {
   return subject.creative_max + subject.written_max + subject.practical_max
 }
 
+export function examSubjectShortName(subject: ExamSubject) {
+  const name = subject.result_subject_paper_groups?.name ?? subject.subjects.name
+  const labels: [RegExp, string][] = [
+    [/^bangla\b/i, 'Ban'], [/^english\b/i, 'Eng'], [/^(ict\b|information.*communication)/i, 'ICT'],
+    [/^physics\b/i, 'Phy'], [/^chemistry\b/i, 'Chem'], [/^biology\b/i, 'Bio'], [/^higher\s+math/i, 'H.Math'],
+    [/^accounting\b/i, 'Acc'], [/^finance\b/i, 'Fin'], [/^business\s+organi[sz]ation/i, 'BOM'],
+    [/^production\s+management/i, 'PMM'], [/^civics\b/i, 'Civics'], [/^economics\b/i, 'Econ'],
+    [/^islamic\s+history/i, 'I.Hist'], [/^social\s+work/i, 'S.Work'], [/^islamic\s+studies/i, 'I.Stud'],
+    [/^home\s+science/i, 'H.Sci'], [/^logic\b/i, 'Logic'],
+  ]
+  const short = labels.find(([pattern]) => pattern.test(name))?.[1]
+  if (!short) return name.replace(/\s*\([^)]*[\u0980-\u09ff][^)]*\)\s*$/u, '').trim()
+  const paper = subject.paper_group_id ? null : name.match(/\b(1st|first|2nd|second)\s+paper\b/i)
+  return paper ? `${short} ${/^(1st|first)$/i.test(paper[1]) ? '1' : '2'}` : short
+}
+
+export interface ExamResultColumn {
+  field: 'written_marks' | 'creative_marks' | 'practical_marks'
+  label: string
+  maximum: number
+}
+
+export function examResultColumns(subject: ExamSubject, totalOnly: boolean): ExamResultColumn[] {
+  if (totalOnly) return [{ field: 'written_marks', label: 'Marks', maximum: subject.written_max }]
+  const columns: ExamResultColumn[] = [
+    { field: 'written_marks', label: 'MCQ', maximum: subject.written_max },
+    { field: 'creative_marks', label: 'CQ', maximum: subject.creative_max },
+    // Preserve practical marks for regular exams that include that component.
+    ...(subject.practical_max > 0 ? [{ field: 'practical_marks' as const, label: 'Prac', maximum: subject.practical_max }] : []),
+  ]
+  return columns.filter(column => column.maximum !== 0)
+}
+
+export function examResultComponentText(row: ExamResultReportRow, subject: ExamSubject, column: ExamResultColumn, mark?: MarkRow) {
+  if (!row.subjects[subject.id]) return '—'
+  if (row.subjects[subject.id].absent) return 'Absent'
+  if (column.maximum <= 0 || mark?.[column.field] == null) return '—'
+  return String(mark[column.field])
+}
+
 export function orderResultSubjects(subjects: ExamSubject[]) {
   const priority = (subject: ExamSubject) => {
     const code = (subject.result_subject_paper_groups?.code ?? subject.subjects.code).split('+')[0].trim()

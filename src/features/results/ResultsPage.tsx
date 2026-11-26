@@ -30,10 +30,13 @@ import type { ClassGroup, ResultExamType, StudentResultPayload, Student, Subject
 import { downloadCsv } from '@/lib/csv'
 import { SimpleDialog } from '@/features/results/ResultControls'
 import { SubjectMarksEntry } from './SubjectMarksEntry'
+import { ExamResultsTable } from './ExamResultsTable'
 import { ExamScheduleManager } from '@/features/results/ExamScheduleManager'
 import { StudentResultsPage } from '@/features/results/StudentResultsPage'
 import {
   examSubjectTotal,
+  examResultColumns,
+  examResultComponentText,
   orderResultSubjects,
   examSubjectConfigValues,
   validExamSubjectConfig,
@@ -499,18 +502,13 @@ function StaffResults() {
     return rows.map(row => ({ ...row, position: positions.get(row.id) ?? null }))
   }, [studentsQuery.data, examSubjectsQuery.data, examMarksQuery.data, curriculumByStudentId, courseOptionsQuery.data, paperGroupsQuery.data, selectedExam?.count_fourth_subject, totalOnly])
 
-  const examSubjectResultText = (row: ExamResultReportRow, subject: ExamSubject) => {
-    const result = row.subjects[subject.id]
-    if (!result?.complete) return '—'
-    if (result.absent) return 'Absent'
-    return `${result.obtained} / ${result.totalMax}`
-  }
-
   const exportExamResults = () => {
     if (!selectedExam || !examResultRows.length || !examSubjectsQuery.data) return
+    const columns = resultSubjects.flatMap(subject => examResultColumns(subject, totalOnly).map(column => ({ subject, column })))
+    const marks = new Map((examMarksQuery.data ?? []).map(mark => [`${mark.student_id}:${mark.exam_subject_id}`, mark]))
     const headers = [
       'SN', 'Class', 'Exam', 'Exam Date', 'Roll', 'Student', 'Admission Number',
-      ...resultSubjects.map(subject => `${examSubjectName(subject)} (${examSubjectCode(subject)}) / ${examSubjectTotal(subject)}`),
+      ...columns.map(({ subject, column }) => `${examSubjectName(subject)} (${examSubjectCode(subject)}) ${column.label} / ${column.maximum}`),
       'Total', ...(!totalOnly ? ['GPA', 'Grade'] : []), 'Position', ...(!totalOnly ? ['Failed Subjects'] : []),
     ]
     const rows = examResultRows.map((row, index) => [
@@ -521,7 +519,7 @@ function StaffResults() {
       row.roll,
       row.name,
       row.admission,
-      ...resultSubjects.map(subject => examSubjectResultText(row, subject)),
+      ...columns.map(({ subject, column }) => examResultComponentText(row, subject, column, marks.get(`${row.id}:${subject.id}`))),
       row.complete ? `${row.totalObtained} / ${row.totalMax}` : '',
       ...(!totalOnly ? [row.gpa, row.grade] : []),
       row.position,
@@ -536,7 +534,13 @@ function StaffResults() {
     if (!examResultRows.length) return
     const pageStyle = document.createElement('style')
     pageStyle.id = 'exam-results-page-style'
-    pageStyle.textContent = '@page { size: A4 landscape; margin: 10mm; }'
+    pageStyle.textContent = `@page {
+      size: A4 landscape;
+      margin: 10mm;
+      @bottom-left { content: ""; }
+      @bottom-center { content: ""; }
+      @bottom-right { content: ""; }
+    }`
     document.head.appendChild(pageStyle)
     const cleanup = () => {
       document.body.classList.remove('student-report-printing')
@@ -918,7 +922,7 @@ function StaffResults() {
                   : examMarksQuery.error ? <ErrorState message={(examMarksQuery.error as Error).message} />
                     : studentsQuery.error ? <ErrorState message={(studentsQuery.error as Error).message} />
                       : examResultRows.length === 0 ? <EmptyState title="No students found" description="No students belong to this exam roster." />
-                        : <div className="min-w-0 max-w-full"><Table className="w-max min-w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_td]:px-1 [&_td]:py-1.5"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 w-12 min-w-12 bg-background">Roll</TableHead><TableHead className="sticky left-12 z-20 min-w-28 max-w-28 border-r bg-background sm:min-w-40 sm:max-w-40">Student</TableHead>{resultSubjects.map(subject => <TableHead key={subject.id} className="min-w-14 text-center" title={examSubjectName(subject)}><span className="block">{examSubjectCode(subject)}</span><span className="block text-[9px] font-normal text-muted-foreground">/{examSubjectTotal(subject)}</span></TableHead>)}<TableHead className="min-w-16 text-center">Total</TableHead>{!totalOnly && <><TableHead className="min-w-12 text-center">GPA</TableHead><TableHead className="min-w-14 text-center">Grade</TableHead></>}<TableHead className="min-w-10 text-center">Pos.</TableHead></TableRow></TableHeader><TableBody>{examResultRows.map(row => <TableRow key={row.id}><TableCell className="sticky left-0 z-10 bg-card font-semibold">{row.roll ?? '—'}</TableCell><TableCell className="sticky left-12 z-10 max-w-28 truncate border-r bg-card font-medium sm:max-w-40" title={row.name}>{row.name}</TableCell>{resultSubjects.map(subject => <TableCell key={subject.id} className={`text-center text-[11px] ${row.subjects[subject.id]?.absent ? 'bg-red-50 font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300' : ''}`}>{examSubjectResultText(row, subject)}</TableCell>)}<TableCell className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</TableCell>{!totalOnly && <><TableCell className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</TableCell><TableCell className="text-center"><Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge></TableCell></>}<TableCell className="text-center font-semibold">{row.position ?? '—'}</TableCell></TableRow>)}</TableBody></Table></div>}
+                        : <div className="min-w-0 max-w-full"><ExamResultsTable subjects={resultSubjects} rows={examResultRows} marks={examMarksQuery.data ?? []} totalOnly={totalOnly} /></div>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1072,11 +1076,7 @@ function StaffResults() {
               <h2>Student Results</h2>
               <p>{totalOnly ? "Subject totals and class position" : "Subject totals, overall result, GPA, grade, and class position"}</p>
             </div>
-            <table className="print-summary-table exam-results-print-table">
-              <thead><tr><th>SN</th><th>Roll</th><th>Student</th><th>Admission</th>{resultSubjects.map(subject => <th key={subject.id}>{examSubjectCode(subject)}<br />/{examSubjectTotal(subject)}</th>)}<th>Total</th>{!totalOnly && <><th>GPA</th><th>Grade</th></>}<th>Pos.</th></tr></thead>
-              <tbody>{examResultRows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.roll ?? '-'}</td><td>{row.name}</td><td>{row.admission}</td>{resultSubjects.map(subject => <td key={subject.id} className={row.subjects[subject.id]?.absent ? 'bg-red-50 font-semibold text-red-700' : undefined}>{examSubjectResultText(row, subject)}</td>)}<td>{row.complete ? `${row.totalObtained}/${row.totalMax}` : '-'}</td>{!totalOnly && <><td>{row.gpa == null ? '-' : row.gpa.toFixed(2)}</td><td>{row.grade}</td></>}<td>{row.position ?? '-'}</td></tr>)}</tbody>
-            </table>
-            <p className="print-footnote">A dash indicates an incomplete result. Subject columns show obtained marks over the configured maximum.</p>
+            <ExamResultsTable subjects={resultSubjects} rows={examResultRows} marks={examMarksQuery.data ?? []} totalOnly={totalOnly} print />
           </section>
         </div>
       )}
