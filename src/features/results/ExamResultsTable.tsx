@@ -8,7 +8,10 @@ export function ExamResultsTable({ subjects, rows, marks, totalOnly, print = fal
   subjects: ExamSubject[]; rows: ExamResultReportRow[]; marks: MarkRow[]; totalOnly: boolean; print?: boolean
 }) {
   const Root = print ? 'table' : Table
-  const groups = subjects.map(subject => ({ subject, columns: examResultColumns(subject, totalOnly) }))
+  const groups = subjects.map(subject => ({ subject, columns: examResultColumns(subject, totalOnly), hasFourth: rows.some(row => row.subjects[subject.id]?.role === 'fourth') }))
+  const columnWeight = (field: string, hasFourth: boolean) => hasFourth && (field === 'total' || totalOnly) ? 1.8 : 1
+  const totalColumnWeight = groups.reduce((sum, group) => sum + group.columns.reduce((weight, column) => weight + columnWeight(column.field, group.hasFourth), 0), 0)
+  const fourthMarker = <span className="result-fourth-marker ml-0.5 text-[8px] font-medium sm:text-[9px]"> (4th)</span>
   const markByStudentSubject = new Map(marks.map(mark => [`${mark.student_id}:${mark.exam_subject_id}`, mark]))
   const stickyRoll = print ? '' : 'sticky left-0 z-20 w-12 min-w-12 bg-card'
   const stickyStudent = print ? 'result-student-name' : 'sticky left-12 z-20 min-w-28 max-w-28 border-r bg-card sm:min-w-40 sm:max-w-40'
@@ -17,7 +20,7 @@ export function ExamResultsTable({ subjects, rows, marks, totalOnly, print = fal
   return <Root className={print ? 'exam-results-print-table' : 'w-max min-w-full border-collapse text-[10px] sm:text-xs [&_th]:px-1 [&_th]:py-1 [&_td]:px-1 [&_td]:py-1.5 [&_td]:whitespace-nowrap'}>
     {print && <colgroup>
       <col style={{ width: '2.5%' }} /><col style={{ width: '4%' }} /><col style={{ width: '16%' }} />
-      {groups.flatMap(({ subject, columns }) => columns.map(column => <col key={`${subject.id}:${column.field}`} />))}
+      {groups.flatMap(({ subject, columns, hasFourth }) => columns.map(column => <col key={`${subject.id}:${column.field}`} style={{ width: `${(totalOnly ? 69 : 60) * columnWeight(column.field, hasFourth) / totalColumnWeight}%` }} />))}
       <col style={{ width: '5%' }} />{!totalOnly && <><col style={{ width: '3.5%' }} /><col style={{ width: '5.5%' }} /></>}<col style={{ width: '3.5%' }} />
     </colgroup>}
     <thead><tr className="border-b">
@@ -41,9 +44,10 @@ export function ExamResultsTable({ subjects, rows, marks, totalOnly, print = fal
       <td className={`${stickyRoll} font-semibold`}>{row.roll ?? '—'}</td>
       <td className={`${stickyStudent} truncate font-medium`} title={row.name}>{row.name}</td>
       {groups.map(({ subject, columns }) => row.subjects[subject.id]?.absent
-        ? <td key={subject.id} colSpan={columns.length} className={`text-center ${groupBorder} ${absent}`}>Absent</td>
+        ? <td key={subject.id} colSpan={columns.length} className={`text-center ${groupBorder} ${absent}`}>Absent{row.subjects[subject.id]?.role === 'fourth' && fourthMarker}</td>
         : <Fragment key={subject.id}>{columns.map((column, columnIndex) => <td key={column.field} className={`text-center tabular-nums ${columnIndex === columns.length - 1 ? groupBorder : ''}`}>
           {examResultComponentText(row, subject, column, markByStudentSubject.get(`${row.id}:${subject.id}`))}
+          {row.subjects[subject.id]?.role === 'fourth' && (column.field === 'total' || totalOnly) && fourthMarker}
         </td>)}</Fragment>)}
       <td className="text-center font-semibold">{row.complete ? `${row.totalObtained}/${row.totalMax}` : '—'}</td>
       {!totalOnly && <><td className="text-center font-semibold">{row.gpa == null ? '—' : row.gpa.toFixed(2)}</td><td className="text-center">{print ? row.grade : <Badge className="px-1.5 py-0 text-[10px]" variant={!row.complete ? 'secondary' : row.grade === 'F' ? 'destructive' : 'default'}>{row.grade}</Badge>}</td></>}

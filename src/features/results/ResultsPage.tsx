@@ -45,6 +45,7 @@ import {
   isTotalPassExam,
   buildExamSubjectCatalogue,
   examSubjectAppliesToStudent,
+  examSubjectRoleForStudent,
   calculateOfficialGpa,
   gradeSubject,
   subjectSectionsPassed,
@@ -452,6 +453,7 @@ function StaffResults() {
         }
         const grade = gradeSubject(obtained, totalMax, subject.pass_mark, Boolean(mark?.is_absent), subjectSectionsPassed(subject, componentMarks))
         return [subject.id, {
+          role: studentCurriculum ? examSubjectRoleForStudent(subject, studentCurriculum, courseOptionsQuery.data ?? [], paperGroupsQuery.data ?? []) : null,
           obtained,
           ...componentMarks,
           totalMax,

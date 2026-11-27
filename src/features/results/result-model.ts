@@ -35,6 +35,7 @@ export interface MarkRow {
 }
 
 export interface ExamResultSubjectCell {
+  role?: ExamSubjectRole | null
   obtained: number
   creativeMarks: number
   writtenMarks: number

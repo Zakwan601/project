@@ -29,7 +29,7 @@ const subjects = model.orderResultSubjects([
   creative_max: 10, written_max: 10, practical_max: 0 })))
 const rows = Array.from({ length: 35 }, (_, index) => ({ id: `student-${index}`, name: index === 0 ? 'MD. ABU BAKAR SIDDIQUE' : `Student Example ${index + 1}`,
   admission: `28${String(601 + index)}`, roll: 28601 + index,
-  subjects: Object.fromEntries(subjects.map(subject => [subject.id, { obtained: 10, absent: index === 1 && subject.id === subjects[0].id, complete: index !== 2 }])),
+  subjects: Object.fromEntries(subjects.map((subject, subjectIndex) => [subject.id, { role: subjectIndex === 3 + index % 7 ? 'fourth' : 'main', obtained: 10, absent: index === 1 && subject.id === subjects[0].id, complete: index !== 2 }])),
   totalObtained: 140, totalMax: 200, complete: index !== 2, grade: index === 2 ? 'Incomplete' : 'A', gpa: index === 2 ? null : 4, position: index + 1 }))
 const marks = rows.flatMap((row, i) => subjects.map(subject => ({ id: `${row.id}:${subject.id}`, student_id: row.id,
   exam_subject_id: subject.id, creative_marks: i === 2 ? 6 : 10, written_marks: i === 2 ? null : 0,
@@ -61,6 +61,7 @@ for (const printMode of [false, true]) {
   assert.equal((mixed.match(/scope="col"/g) ?? []).length, 28, 'Only the two zero-maximum component columns disappear in screen and print')
 }
 for (const html of [screen, print]) {
+  assert.equal((html.match(/\(4th\)/g) ?? []).length, rows.length, 'Label each student’s chosen fourth subject once beside its total, including pending totals')
   assert.equal((html.match(/scope="colgroup"/g) ?? []).length, 10)
   assert.equal((html.match(/scope="col"/g) ?? []).length, 30)
   assert.equal((html.match(/<tbody><tr/g) ?? []).length, 1)
@@ -72,6 +73,12 @@ assert.doesNotMatch(print, />ID<\/th>/)
 assert.ok(print.includes('result-absent'))
 assert.ok(screen.includes('bg-red-50'))
 assert.equal((print.split('<tbody>')[1].match(/<tr/g) ?? []).length, 35)
+const absentFourthRow = { ...rows[0], subjects: Object.fromEntries(subjects.map((subject,index)=>[subject.id,{...rows[0].subjects[subject.id],role:index===0?'fourth':'main',absent:index===0}])) }
+for (const printMode of [false,true]) {
+  const absentFourth = renderToStaticMarkup(React.createElement(context.exports.ExamResultsTable,{...props,rows:[absentFourthRow],print:printMode}))
+  assert.match(absentFourth, />Absent<span[^>]*> \(4th\)<\/span><\/td>/)
+  assert.equal((absentFourth.match(/\(4th\)/g)??[]).length,1)
+}
 
 const ranked = model.positionExamResults([
   { ...rows[0], id: 'high-total', failedSubjects: 0, gpa: 3, totalObtained: 180 },
@@ -95,6 +102,7 @@ if (previewIndex >= 0) {
     columns:[...table.tBodies[0].rows[0].cells].reduce((sum,cell)=>sum+cell.colSpan,0),
     allRowsAligned:[...table.tBodies[0].rows].every(row=>[...row.cells].every(cell=>Math.abs(cell.getBoundingClientRect().top-row.getBoundingClientRect().top)<1)),
     clippedNumbers:[...table.tBodies[0].querySelectorAll('td')].filter(cell=>/^\\d+(\\.\\d+)?$/.test(cell.textContent)&&cell.scrollWidth>cell.clientWidth+1).length};
+  report.clippedFourthMarks=[...table.tBodies[0].querySelectorAll('td')].filter(cell=>cell.querySelector('.result-fourth-marker')&&cell.scrollWidth>cell.clientWidth+1).length;
   document.body.dataset.printCheck=JSON.stringify(report);
   </script></body></html>`)
 }
